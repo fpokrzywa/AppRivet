@@ -52,6 +52,9 @@ jobs:
       - name: Fuzz publication intent
         if: runner.os == 'Linux'
         run: go test ./internal/admission -run='^$' -fuzz=FuzzPublicationIntent -fuzztime=10000x -parallel=2 -timeout=60s
+      - name: Fuzz append intent
+        if: runner.os == 'Linux'
+        run: go test ./internal/admission -run='^$' -fuzz=FuzzAppendIntent -fuzztime=10000x -parallel=2 -timeout=60s
       - name: Fuzz source snapshot verification
         if: runner.os == 'Linux'
         run: go test ./internal/snapshot -run='^$' -fuzz=FuzzVerify -fuzztime=10000x -parallel=2 -timeout=60s

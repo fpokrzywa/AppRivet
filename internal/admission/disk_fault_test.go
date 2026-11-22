@@ -234,67 +234,6 @@ func TestDiskFullBeforeImageRetries(t *testing.T) {
 	}
 }
 
-func TestDiskFullOwnershipAppendFailsClosed(t *testing.T) {
-	for _, format := range []string{"legacy", "segmented"} {
-		for _, mode := range []string{"zero", "partial", "short", "sync"} {
-			t.Run(format+"/"+mode, func(t *testing.T) {
-				f := newDiskFaultFixture(t, format == "segmented")
-				ctx := context.Background()
-				tx, err := f.store.begin(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-				path := filepath.Join(f.store.Dir, tx.fileName)
-				before := readFaultFile(t, path)
-				tx.file = diskFaultFile{tx.file, mode}
-				err = tx.append(ctx, event{Kind: "recover", At: stamp(*f.clock), ID: f.owner.ReservationID, Owner: &f.owner, Stopped: true})
-				tx.close()
-				code(t, err, "commit_uncertain")
-				after := readFaultFile(t, path)
-				if !bytes.HasPrefix(after, before) {
-					t.Fatal("fault changed earlier events")
-				}
-				if mode == "zero" {
-					if !bytes.Equal(after, before) {
-						t.Fatal("zero-byte failure changed active history")
-					}
-					f.assertHistory(t)
-					return
-				}
-				if mode != "sync" {
-					if len(after) <= len(before) {
-						t.Fatal("expected a torn append")
-					}
-					_, err = f.store.Reserve(ctx, "developer", f.policy, f.request, f.archive)
-					code(t, err, "state_corrupt")
-					_, err = f.store.CheckOwner(ctx, "developer", f.owner, f.policy, f.archive)
-					code(t, err, "state_corrupt")
-					_, err = f.store.InspectRepair(ctx)
-					code(t, err, "repair_unavailable")
-					if !bytes.Equal(after, readFaultFile(t, path)) {
-						t.Fatal("failed checks rewrote a torn event")
-					}
-					return
-				}
-				// After a full write with an uncertain sync, reopening must see the
-				// exact recovery tuple. Retrying recovery must not append twice.
-				view, err := f.store.RecoveryStatus(ctx, "developer")
-				if err != nil || view.JournalSequence != f.before.JournalSequence+1 || len(view.Reservations) != 1 || view.Reservations[0].Status != "recovered" || !f.owner.matches(view.Reservations[0]) {
-					t.Fatalf("lost complete recovery: %+v, %v", view, err)
-				}
-				if _, err = f.store.Recover(ctx, "developer", f.owner, true); err != nil {
-					t.Fatal(err)
-				}
-				_, err = f.store.Reserve(ctx, "developer", f.policy, f.request, f.archive)
-				code(t, err, "replay_detected")
-				if !bytes.Equal(after, readFaultFile(t, path)) {
-					t.Fatal("retry appended to recovered history")
-				}
-			})
-		}
-	}
-}
-
 func TestDiskFullControlWriteRetainsRepairEvidence(t *testing.T) {
 	for _, action := range []string{"migrate", "compact"} {
 		for _, mode := range []string{"zero", "partial", "short", "sync"} {

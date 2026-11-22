@@ -29,6 +29,28 @@ func (t *transaction) stageEvidence(name string, body []byte) (stagedFile, error
 	return stagedFile{name: name, info: staged.info}, nil
 }
 
+func (t *transaction) syncEvidence(stage stagedFile, body []byte) error {
+	f, err := rootedFile(t.root, stage.name)
+	if err != nil {
+		return err
+	}
+	info, err := f.Stat()
+	if err != nil || !os.SameFile(info, stage.info) {
+		f.Close()
+		return stateIO()
+	}
+	err = syncMatchingEvidence(f, body)
+	stable := unchanged(t.root, stage.name, f)
+	closeErr := f.Close()
+	if err != nil {
+		return err
+	}
+	if !stable || closeErr != nil {
+		return stateIO()
+	}
+	return nil
+}
+
 // An intent binds the exact pre-publication authority to one prepared successor.
 // Hashes detect corruption; they do not authenticate a hostile storage owner.
 type publicationIntent struct {

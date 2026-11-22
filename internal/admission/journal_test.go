@@ -62,10 +62,12 @@ func TestJournalCommitUncertaintyAndCancellationBoundary(t *testing.T) {
 				code(t, err, "commit_uncertain")
 			}
 			s.Clock = func() time.Time { return testNow.Add(time.Second) }
-			_, err = s.Status(context.Background(), "developer", "")
-			if mode == "partial" {
-				code(t, err, "state_corrupt")
-			} else if err != nil {
+			if mode != "cancel_after_sync" {
+				_, err = s.Status(context.Background(), "developer", "")
+				code(t, err, "append_pending")
+				repairPendingAppend(t, s)
+			}
+			if _, err = s.Status(context.Background(), "developer", ""); err != nil {
 				t.Fatal(err)
 			}
 		})

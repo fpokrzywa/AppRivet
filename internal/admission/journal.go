@@ -297,12 +297,39 @@ func (s Store) begin(ctx context.Context) (*transaction, error) {
 			tx.close()
 		}
 	}()
-	if _, err = tx.root.Lstat(pendingName); err == nil {
-		return nil, failure("publication_pending", "manifest publication requires repair inspection before normal operations")
-	} else if !os.IsNotExist(err) {
-		return nil, stateIO()
+	if err = requireNoPending(tx.root, pendingName, "publication_pending", "manifest publication requires repair inspection"); err != nil {
+		return nil, err
 	}
-	b, err := io.ReadAll(io.LimitReader(tx.file, maxJournalBytes+1))
+	if err = requireNoPending(tx.root, appendPendingName, "append_pending", "journal append requires append repair inspection"); err != nil {
+		return nil, err
+	}
+	b, err := tx.selectJournal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.replayActive(b, tx.manifest != nil); err != nil {
+		return nil, err
+	}
+	if err = cancelled(ctx); err != nil {
+		return nil, err
+	}
+	ok = true
+	return tx, nil
+}
+
+func requireNoPending(root *os.Root, name, code, message string) error {
+	if _, err := root.Lstat(name); err == nil {
+		return failure(code, message)
+	} else if !os.IsNotExist(err) {
+		return stateIO()
+	}
+	return nil
+}
+
+// Select and read the active file. Replay of its bytes is deferred so repair
+// can validate the exact recorded prefix before interpreting a torn tail.
+func (t *transaction) selectJournal(ctx context.Context) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(t.file, maxJournalBytes+1))
 	if err != nil {
 		return nil, stateIO()
 	}
@@ -311,23 +338,19 @@ func (s Store) begin(ctx context.Context) (*transaction, error) {
 		if parseErr != nil {
 			return nil, parseErr
 		}
-		tx.control = tx.file
-		tx.file = nil
-		tx.manifest = &m
-		tx.fileName = m.Active
-		if err = tx.loadManifest(ctx, m); err != nil {
+		t.control = t.file
+		t.file = nil
+		t.manifest = &m
+		t.fileName = m.Active
+		if err = t.loadSealedHistory(ctx, m); err != nil {
 			return nil, err
 		}
-	} else {
-		tx.activeEvents, err = replaySegment(&tx.state, b, false)
-		if err != nil {
-			return nil, err
-		}
-		tx.size = int64(len(b))
-		tx.historyBytes = tx.size
+		return t.openActive(m)
 	}
-	ok = true
-	return tx, nil
+	if len(b) > maxJournalBytes {
+		return nil, corrupt()
+	}
+	return b, nil
 }
 func (t *transaction) observe(ctx context.Context, now time.Time) error {
 	if err := cancelled(ctx); err != nil {
@@ -366,15 +389,19 @@ func (t *transaction) append(ctx context.Context, e event) error {
 	if err := cancelled(ctx); err != nil {
 		return err
 	}
-	if _, err := t.file.Seek(0, io.SeekEnd); err != nil {
+	if size, err := t.file.Seek(0, io.SeekEnd); err != nil || size != t.size {
 		return stateIO()
 	}
-	n, err := t.file.Write(b)
-	if err != nil || n != len(b) {
-		return failure("commit_uncertain", "journal write failed; retain state and query status before retrying")
+	intent := appendIntent{SchemaVersion: 1, Active: t.fileName, ManifestSHA256: t.activeManifestHash(), Offset: t.size, Record: b}
+	marker, err := t.stageEvidence(appendPendingName, appendIntentBytes(intent))
+	if err != nil {
+		return err
 	}
-	if err = t.file.Sync(); err != nil {
-		return failure("commit_uncertain", "journal sync failed; retain state and query status before retrying")
+	if syncStoreDirectory(t.root) != nil {
+		return appendUncertain()
+	}
+	if err = t.finishAppend(marker, b); err != nil {
+		return err
 	}
 	t.state = next
 	t.size += int64(len(b))

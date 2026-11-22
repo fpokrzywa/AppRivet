@@ -87,12 +87,43 @@ func TestDiskFullLinuxTmpfs(t *testing.T) {
 		}
 		free := fillFaultTmpfs(t, f.store.Dir)
 		_, err := f.store.Recover(ctx, "developer", f.owner, true)
-		code(t, err, "commit_uncertain")
+		code(t, err, "state_io") // No space even for the append intent.
 		f.assertHistory(t)
 		free()
 		receipt, err := f.store.Recover(ctx, "developer", f.owner, true)
 		if err != nil || len(receipt.Reservations) != 1 || receipt.Reservations[0].Status != "recovered" || !f.owner.matches(receipt.Reservations[0]) {
 			t.Fatalf("failed to recover exact owner: %+v, %v", receipt, err)
+		}
+		_, err = f.store.Reserve(ctx, "developer", f.policy, f.request, f.archive)
+		code(t, err, "replay_detected")
+	})
+
+	t.Run("append_repair", func(t *testing.T) {
+		f := newDiskFaultFixture(t, true)
+		if _, err := f.store.Compact(ctx); err != nil {
+			t.Fatal(err)
+		}
+		path := interruptRecoveryAppend(t, f, "zero")
+		plan, err := f.store.InspectAppendRepair(ctx)
+		if err != nil || plan.PresentBytes != 0 {
+			t.Fatal(plan, err)
+		}
+		pin := AppendRepairExpect{plan.IntentSHA256, plan.ActiveSHA256}
+		free := fillFaultTmpfs(t, f.store.Dir)
+		_, err = f.store.RepairAppend(ctx, pin)
+		code(t, err, "commit_uncertain")
+		if len(readFaultFile(t, path)) != 0 {
+			t.Fatal("full volume changed an empty active file")
+		}
+		_, err = f.store.RecoveryStatus(ctx, "developer")
+		code(t, err, "append_pending")
+		free()
+		if _, err = f.store.RepairAppend(ctx, pin); err != nil {
+			t.Fatal(err)
+		}
+		after, err := f.store.RecoveryStatus(ctx, "developer")
+		if err != nil || after.JournalSequence != plan.JournalSequence || after.JournalSHA256 != plan.JournalSHA256 || len(after.Reservations) != 1 || !f.owner.matches(after.Reservations[0]) || after.Reservations[0].Status != "recovered" {
+			t.Fatal(after, err)
 		}
 		_, err = f.store.Reserve(ctx, "developer", f.policy, f.request, f.archive)
 		code(t, err, "replay_detected")

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased: recovery for interrupted journal appends
+
+- Record each validated append before writing its event. Add read-only inspection and explicit, hash-pinned completion for the exact missing bytes, preserving replay keys and ownership history.
+- Cover process exits during append and repair, stale and incompatible evidence, concurrent repair, expired claimed capacity and kernel `ENOSPC`. Older tears without intent still fail closed.
+
 ## Unreleased: journal disk-full fault tests
 
 - Add injected write, sync and process interruption tests and an isolated Linux tmpfs test that triggers kernel `ENOSPC`.

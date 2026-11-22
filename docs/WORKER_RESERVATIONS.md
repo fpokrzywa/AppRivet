@@ -54,7 +54,7 @@ The observed UTC time watermark is persisted. A clock earlier than that watermar
 
 Legacy/active-segment bounds are 16 MiB and 16,384 events, with 4,096 bytes per event and 4,096 lifetime reservations. Explicit migration enables bounded compressed history with unchanged global event sequences; see JOURNAL_MAINTENANCE.md for cumulative limits. Time observations count as events. Full state fails closed, including maintenance/release/recovery operations that would append. The read-only `recovery-status` command can inspect a valid full journal. Records are never silently evicted. Explicit compaction preserves all replay and ownership history and reclaims only the append budget. Directory relocation and automatic damaged-state repair remain unsupported; deleting the directory and starting again is not a safe recovery procedure.
 
-Cancellation before a reservation append consumes no request. Once a full write has synced, success wins over cancellation. Write/sync failure returns `commit_uncertain`: the event may be recorded. Retain state and query status before any retry; if the journal is damaged, stop and inspect it. Never truncate a partial tail automatically. Test-injected write failures establish this behavior, not power-loss durability. Initialization does not fsync directory entries; catastrophic loss of newly created state requires operational recovery rather than automatic reinitialization.
+Cancellation before the append intent is published consumes no request. Once the event is synced and the intent is cleared, success wins over cancellation. A failure after intent publication may return `commit_uncertain`. If the intent remains, use [append repair](APPEND_REPAIR.md) to inspect and complete the exact recorded event. If the intent is absent, query the original request ID or retain damaged bytes for investigation. Never truncate a partial tail. Unix syncs the store directory around publication. Durability of the newly created store in its parent and Windows directory metadata remain deployment gaps.
 
 ## Errors
 
@@ -68,6 +68,7 @@ All store errors exit 4 except invalid arguments (2) and cancellation before com
 | state_busy | Lock acquisition exceeded five seconds |
 | state_corrupt | Invalid or incomplete journal; no reset performed |
 | state_full | Journal or lifetime replay-history limit reached |
+| append_pending | Interrupted event publication needs append repair inspection |
 | clock_rollback | Clock precedes persisted watermark |
 | replay_detected / request_conflict | Consumed nonce/request or conflicting request ID |
 | capacity_exceeded | Aggregate count or byte budget exhausted |

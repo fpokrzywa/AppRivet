@@ -189,6 +189,28 @@ func TestReservationProcessHelper(t *testing.T) {
 	var err error
 	if strings.HasPrefix(mode, "claim:") {
 		_, err = s.Claim(context.Background(), "developer", strings.TrimPrefix(mode, "claim:"), r.RequestID, os.Getenv("APPRIVET_TEST_POLICY"), os.Getenv("APPRIVET_TEST_ARCHIVE"))
+	} else if mode == "crash-append" || mode == "crash-append-repair" {
+		ctx := context.Background()
+		var tx *transaction
+		if mode == "crash-append" {
+			tx, err = s.begin(ctx)
+			if err == nil {
+				tx.file = crashPublication{tx.file}
+				err = tx.append(ctx, event{Kind: "observe", At: stamp(testNow)})
+				tx.close()
+			}
+		} else {
+			tx, err = s.openLocked(ctx)
+			if err == nil {
+				var proof appendProof
+				proof, err = tx.proveAppend(ctx, testNow)
+				if err == nil {
+					tx.file = crashPublication{tx.file}
+					_, err = tx.repairAppend(ctx, proof, AppendRepairExpect{proof.report.IntentSHA256, proof.report.ActiveSHA256})
+				}
+				tx.close()
+			}
+		}
 	} else if mode == "crash-migrate" || mode == "crash-marker" {
 		var tx *transaction
 		tx, err = s.begin(context.Background())

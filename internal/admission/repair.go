@@ -102,23 +102,8 @@ func (t *transaction) repair(ctx context.Context, p repairProof, expect RepairEx
 	}
 	// A complete marker may have been left by a crash between Write and Sync.
 	// Re-establish its durability before risking another control-file rewrite.
-	marker, err := rootedFile(t.root, pendingName)
-	if err != nil {
+	if err := t.syncEvidence(p.pending, p.pendingBody); err != nil {
 		return RepairReport{}, err
-	}
-	info, statErr := marker.Stat()
-	if statErr != nil || !os.SameFile(info, p.pending.info) {
-		marker.Close()
-		return RepairReport{}, stateIO()
-	}
-	err = syncMatchingEvidence(marker, p.pendingBody)
-	stable := unchanged(t.root, pendingName, marker)
-	closeErr := marker.Close()
-	if err != nil {
-		return RepairReport{}, err
-	}
-	if !stable || closeErr != nil {
-		return RepairReport{}, stateIO()
 	}
 	if err := syncStoreDirectory(t.root); err != nil {
 		return RepairReport{}, stateIO()
@@ -164,6 +149,9 @@ func syncMatchingEvidence(f journalFile, expected []byte) error {
 
 func (t *transaction) proveRepair(ctx context.Context, now time.Time) (repairProof, error) {
 	var proof repairProof
+	if err := requireNoPending(t.root, appendPendingName, "append_pending", "journal append requires append repair inspection"); err != nil {
+		return proof, err
+	}
 	if _, err := t.root.Lstat(pendingName); os.IsNotExist(err) {
 		return proof, failure("repair_unavailable", "no publication intent is pending; prepared files alone cannot authorize repair")
 	}

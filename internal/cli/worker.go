@@ -30,7 +30,7 @@ func (a App) runWorker(ctx context.Context, args []string, jsonMode bool) int {
 		return helpResult()
 	}
 	command := args[0]
-	if command == "repair-status" || command == "repair" {
+	if command == "repair-status" || command == "repair" || command == "append-repair-status" || command == "append-repair" {
 		return a.runWorkerRepair(ctx, args, jsonMode)
 	}
 	if command == "claim" || command == "check-owner" || command == "recover" || command == "recovery-status" {

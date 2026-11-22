@@ -67,3 +67,21 @@ func TestWorkerRepairCLI(t *testing.T) {
 		t.Fatal(raw)
 	}
 }
+
+func TestWorkerAppendRepairCLIArguments(t *testing.T) {
+	dir, _ := workerInputs(t)
+	for _, command := range []string{"append-repair-status", "append-repair"} {
+		exit, _, raw := invoke(t, dir, "worker", command, "--help", "--json")
+		if exit != 0 || !strings.Contains(raw, "worker append-repair") {
+			t.Fatal(raw)
+		}
+		exit, _, raw = invoke(t, dir, "worker", command, "--state", "store", "--force", "--json")
+		if exit != 2 {
+			t.Fatal(raw)
+		}
+	}
+	exit, _, raw := invoke(t, dir, "worker", "append-repair", "--state", "store", "--json")
+	if exit != 2 {
+		t.Fatal(raw)
+	}
+}

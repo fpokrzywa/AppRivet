@@ -93,6 +93,20 @@ func unpackSegment(packed []byte, d historySegment) ([]byte, error) {
 	return b, nil
 }
 func (t *transaction) loadManifest(ctx context.Context, m journalManifest) error {
+	if err := t.loadSealedHistory(ctx, m); err != nil {
+		return err
+	}
+	b, err := t.openActive(m)
+	if err != nil {
+		return err
+	}
+	if err = t.replayActive(b, true); err != nil {
+		return err
+	}
+	return cancelled(ctx)
+}
+
+func (t *transaction) loadSealedHistory(ctx context.Context, m journalManifest) error {
 	for _, d := range m.Segments {
 		if err := cancelled(ctx); err != nil {
 			return err
@@ -124,9 +138,13 @@ func (t *transaction) loadManifest(ctx context.Context, m journalManifest) error
 	if t.state.sequence != m.SealedSequence || t.state.hash != m.Head || stamp(t.state.at) != m.At {
 		return corrupt()
 	}
+	return nil
+}
+
+func (t *transaction) openActive(m journalManifest) ([]byte, error) {
 	f, err := rootedFile(t.root, m.Active)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	t.file = f
 	limit := int64(maxJournalBytes)
@@ -135,18 +153,23 @@ func (t *transaction) loadManifest(ctx context.Context, m journalManifest) error
 	}
 	b, err := io.ReadAll(io.LimitReader(f, limit+1))
 	if err != nil {
-		return stateIO()
+		return nil, stateIO()
 	}
 	if int64(len(b)) > limit {
-		return corrupt()
+		return nil, corrupt()
 	}
-	t.activeEvents, err = replaySegment(&t.state, b, true)
+	return b, nil
+}
+
+func (t *transaction) replayActive(b []byte, allowEmpty bool) error {
+	n, err := replaySegment(&t.state, b, allowEmpty)
 	if err != nil {
 		return err
 	}
+	t.activeEvents = n
 	t.size = int64(len(b))
 	t.historyBytes += t.size
-	return cancelled(ctx)
+	return nil
 }
 func (t *transaction) identitiesUnchanged() bool {
 	return unchanged(t.root, "lock", t.lock) && unchanged(t.root, t.fileName, t.file) && (t.control == nil || unchanged(t.root, "journal.jsonl", t.control))

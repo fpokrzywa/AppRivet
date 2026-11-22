@@ -63,6 +63,8 @@ Usage:
   apprivet worker migrate --state DIR [--json]
   apprivet worker compact --state DIR [--json]
   apprivet worker repair-status --state DIR [--json]
+  apprivet worker append-repair-status --state DIR [--json]
+  apprivet worker append-repair --state DIR --expect-intent-sha256 HASH --expect-active-sha256 HASH [--json]
   apprivet worker repair --state DIR --expect-intent-sha256 HASH --expect-control-sha256 HASH --expect-history-sha256 HASH --expect-sequence N [--json]
   apprivet version [--json]
 
@@ -263,6 +265,10 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 		return exit
 	}
 	switch data := response.Data.(type) {
+	case admission.AppendRepairReport:
+		fmt.Fprintf(a.Out, "Append repair: %s\nEvent: %s\nSequence: %d\nEvent bytes present: %d/%d\nBytes written: %d\n", data.Mode, data.EventKind, data.JournalSequence, data.PresentBytes, data.EventBytes, data.BytesWritten)
+		fmt.Fprintf(a.Out, "Intent SHA-256: %s\nActive SHA-256: %s\nHistory SHA-256: %s\nClock rollback: %t\n", data.IntentSHA256, data.ActiveSHA256, data.JournalSHA256, data.ClockRollback)
+		fmt.Fprintln(a.Out, "Caller not authenticated. Execution not authorized.")
 	case admission.RepairReport:
 		fmt.Fprintf(a.Out, "Manifest repair: %s; changed=%t; control=%s; sequence=%d; retained reservations=%d\n", data.Mode, data.Changed, data.ControlState, data.JournalSequence, data.RetainedReservations)
 		fmt.Fprintf(a.Out, "Intent SHA-256: %s\nControl SHA-256: %s\nHistory SHA-256: %s\nClock rollback: %t\n", data.IntentSHA256, data.ControlSHA256, data.JournalSHA256, data.ClockRollback)

@@ -1,4 +1,5 @@
 """Credential-free CLI integration; only trusted example source is used."""
+import base64
 import datetime
 import hashlib
 import json
@@ -99,6 +100,35 @@ with tempfile.TemporaryDirectory(prefix="apprivet-smoke-", dir=base) as temporar
                   "--worker", claimed["worker_id"], "--claim", claimed["claim_id"], "--fence", claimed["fence"])
     checked = run("worker", "check-owner", *owner_args, "--policy", policy_path, "--archive", archive)["data"]
     assert checked["ownership_valid"] and not checked["authentication_verified"] and not checked["execution_authorized"]
+    # Build a disposable fixture for CLI dispatch. Go tests interrupt the
+    # actual publisher and repair writer across process boundaries.
+    active = state / "journal.jsonl"
+    prefix = active.read_bytes()
+    previous = json.loads(prefix.splitlines()[-1])
+
+    def canonical(obj):
+        return json.dumps(obj, separators=(",", ":")).encode("ascii")
+
+    event = dict(sequence=previous["sequence"] + 1, previous=previous["hash"],
+                 at=previous["at"], kind="observe", hash="")
+    event["hash"] = hashlib.sha256(canonical(event)).hexdigest()
+    record = canonical(event) + b"\n"
+    intent = dict(schema_version=1, active="journal.jsonl", manifest_sha256="",
+                  offset=len(prefix), record=base64.b64encode(record).decode("ascii"), hash="")
+    intent["hash"] = hashlib.sha256(canonical(intent)).hexdigest()
+    (state / "append.pending").write_bytes(canonical(intent) + b"\n")
+    active.write_bytes(prefix + record[:17])
+    assert run("worker", "recovery-status", "--state", state, "--principal", "ci-developer",
+               exit_code=4)["error"]["code"] == "append_pending"
+    append_plan = run("worker", "append-repair-status", "--state", state)["data"]
+    assert append_plan["present_bytes"] == 17 and not append_plan["changed"]
+    assert not append_plan["authentication_verified"] and not append_plan["execution_authorized"]
+    appended = run("worker", "append-repair", "--state", state,
+                   "--expect-intent-sha256", append_plan["intent_sha256"],
+                   "--expect-active-sha256", append_plan["active_sha256"])["data"]
+    assert appended["changed"] and appended["bytes_written"] == len(record) - 17
+    assert active.read_bytes() == prefix + record
+    assert run(*reserve_args, exit_code=4)["error"]["code"] == "replay_detected"
     pre_migration = run("worker", "recovery-status", "--state", state, "--principal", "ci-developer")["data"]
     migrated = run("worker", "migrate", "--state", state)["data"]
     assert migrated["changed"] and migrated["format"] == 2 and migrated["generation"] == 1
@@ -149,4 +179,4 @@ with tempfile.TemporaryDirectory(prefix="apprivet-smoke-", dir=base) as temporar
     assert run("worker", "compact", "--state", state)["data"]["changed"]
     assert run(*reserve_args, exit_code=4)["error"]["code"] == "replay_detected"
 
-print("Snapshot, admission, replay, ownership, recovery, lossless maintenance and intent-backed repair checks passed.")
+print("Snapshot, admission, replay, ownership, maintenance, manifest repair and append repair checks passed.")

@@ -1,5 +1,11 @@
 # Verification record
 
+## Recovery for interrupted journal appends
+
+The portable tests cover zero-byte, partial, short and complete-but-unsynced append states in both journal formats. Actual child processes exit during an append and during repair. The tests verify stale inspection refusal, single completion under contention, preserved request and nonce replay rejection, exact ownership and fences, expired claimed capacity, and read-only inspection. Malformed, oversized, duplicate, linked, wrong-path, wrong-manifest, wrong-fence and divergent-tail evidence is refused. A torn initial event can be completed only when the recorded initialization intent survives.
+
+The Linux 1 MiB tmpfs test obtains kernel `ENOSPC` while writing the repair suffix after intent publication, frees space and completes the exact event. Real CLI smoke exercises both repair commands using a synthetic torn append. CI also fuzzes the bounded canonical intent parser. Persistent filesystem quotas, delayed allocation, disk-full sync errors, power cuts and Windows metadata durability remain live gaps. See [append repair contract and boundaries](APPEND_REPAIR.md).
+
 ## Disk-full and interrupted journal writes
 
 Portable tests cover file creation, zero-byte writes, partial writes with `ENOSPC`, short writes and failed file syncs. Real subprocess exits interrupt staging of both the pending marker and the before-image. Migration and compaction tests verify that faults before the marker preserve the original journal, and that control-write faults after the marker leave enough evidence for explicit repair. Ownership append tests check both formats. A torn event blocks replay and ownership checks without modifying the stored bytes. A complete recovery event followed by a sync error can be observed on reopen, and retry does not append a second event.

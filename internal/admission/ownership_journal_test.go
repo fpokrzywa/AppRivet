@@ -99,11 +99,12 @@ func TestOwnershipUncertainClaimAndRecovery(t *testing.T) {
 				} else {
 					code(t, err, "commit_uncertain")
 				}
-				report, err := s.RecoveryStatus(context.Background(), "developer")
-				if mode == "partial" {
-					code(t, err, "state_corrupt")
-					return
+				if mode != "cancel_after_sync" {
+					_, err = s.RecoveryStatus(context.Background(), "developer")
+					code(t, err, "append_pending")
+					repairPendingAppend(t, s)
 				}
+				report, err := s.RecoveryStatus(context.Background(), "developer")
 				expected := "claimed"
 				if kind == "recover" {
 					expected = "recovered"
