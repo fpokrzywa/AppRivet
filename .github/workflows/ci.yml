@@ -41,6 +41,15 @@ jobs:
           trap 'if mountpoint -q "$scratch"; then sudo umount "$scratch"; fi; rmdir "$scratch"' EXIT
           sudo mount -t tmpfs -o "size=1m,nodev,nosuid,noexec,uid=$(id -u),gid=$(id -g),mode=0700" tmpfs "$scratch"
           APPRIVET_ENOSPC_TMPFS="$scratch" go test ./internal/admission -run '^TestDiskFullLinuxTmpfs$' -count=1 -v
+      - name: Exercise journal quota and sync on a disposable ext4 image
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          if ! sudo sh -c 'command -v setquota' >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends quota
+          fi
+          bash .github/scripts/linux-journal-faults.sh
       - name: Race detector
         if: runner.os != 'Windows'
         run: go test -race ./...

@@ -1,5 +1,9 @@
 # Verification record
 
+## Persistent Linux quota and disk-full sync
+
+The ext4 harness uses a bounded 32 MiB image and an unprivileged journal process. It checks persistent user quota after a clean unmount and remount, actual `EDQUOT` at the journal write with global capacity available, and repair retry after freeing quota. It also fills the volume between an accepted journal write and its native sync, records the native result, and separately injects `ENOSPC` at the application sync boundary. The assertions check exact completion, ownership and fence preservation, stale owner refusal, nonce and request replay rejection, and no duplicate event on retry. See [Linux test instructions and live gaps](LINUX_JOURNAL_FAULTS.md).
+
 ## Recovery for interrupted journal appends
 
 The portable tests cover zero-byte, partial, short and complete-but-unsynced append states in both journal formats. Actual child processes exit during an append and during repair. The tests verify stale inspection refusal, single completion under contention, preserved request and nonce replay rejection, exact ownership and fences, expired claimed capacity, and read-only inspection. Malformed, oversized, duplicate, linked, wrong-path, wrong-manifest, wrong-fence and divergent-tail evidence is refused. A torn initial event can be completed only when the recorded initialization intent survives.

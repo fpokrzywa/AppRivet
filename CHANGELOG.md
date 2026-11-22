@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased: persistent Linux journal fault testing
+
+- Exercise ext4 user quota after remount and native journal sync on a full loopback image. Test exact append recovery after kernel `EDQUOT` and a separately injected sync error.
+
 ## Unreleased: recovery for interrupted journal appends
 
 - Record each validated append before writing its event. Add read-only inspection and explicit, hash-pinned completion for the exact missing bytes, preserving replay keys and ownership history.
