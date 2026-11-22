@@ -53,6 +53,10 @@ jobs:
         run: |
           go build -o "$RUNNER_TEMP/apprivet" ./cmd/apprivet
           "$RUNNER_TEMP/apprivet" doctor --json
+      - name: Read-only device discovery smoke checks
+        run: |
+          "$RUNNER_TEMP/apprivet" devices --timeout 60s --json
+          "$RUNNER_TEMP/apprivet" devices --simulators --timeout 60s --json
       - name: Generate and validate original project
         working-directory: ${{ runner.temp }}
         run: |

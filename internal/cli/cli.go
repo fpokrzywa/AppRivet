@@ -9,9 +9,11 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/fpokrzywa/AppRivet/internal/build"
+	"github.com/fpokrzywa/AppRivet/internal/devices"
 	"github.com/fpokrzywa/AppRivet/internal/doctor"
 	"github.com/fpokrzywa/AppRivet/internal/project"
 	"github.com/fpokrzywa/AppRivet/internal/runner"
@@ -34,7 +36,7 @@ type Envelope struct {
 	Error         *Error `json:"error,omitempty"`
 }
 
-const help = `AppRivet - independent iOS development toolkit (Milestone 1)
+const help = `AppRivet - independent iOS development toolkit
 
 Usage:
   apprivet doctor [--json]
@@ -42,6 +44,8 @@ Usage:
   apprivet inspect [--project PATH] [--json]
   apprivet build [--project PATH] [--scheme NAME] --trust-project [--json]
   apprivet test [--project PATH] [--scheme NAME] --simulator UUID --trust-project [--json]
+  apprivet devices [--simulators] [--timeout 30s] [--json]
+  apprivet devices --from-json FILE [--simulators] [--json]
   apprivet version [--json]
 
 Build/test options:
@@ -49,9 +53,13 @@ Build/test options:
   --simulator UUID     Select a simulator; required for test
   --trust-project      Acknowledge project scripts execute as your OS user
 
+Device discovery is read-only. --simulators selects simctl; otherwise devicectl.
+--from-json inspects an offline report on any host, never a live device query.
+Discovery timeout defaults to 30s (maximum 5m). Listing is not authorization.
+
 Use --help with a command. --json is supported before or after the command.
-Windows/Linux: project creation and inspection only. iOS builds require a Mac
-with full Xcode. Remote execution, signing, devices, install, launch, and
+Windows/Linux: project preparation and offline report inspection. iOS builds and
+live discovery require a Mac with full Xcode. Remote execution, signing, install, launch, and
 publishing are not implemented. Build/test is simulator-only and not sandboxed.
 `
 
@@ -80,18 +88,24 @@ func (a App) Run(ctx context.Context, args []string) int {
 		response.Data = map[string]string{"help": help}
 		return a.emit(response, jsonMode, 0)
 	}
-	if command == "devices" || command == "install" || command == "launch" {
+	if command == "install" || command == "launch" {
 		return fail("not_implemented", command+" is planned after Milestone 1; use Xcode's official device workflow", 3)
 	}
-	if command != "doctor" && command != "init" && command != "inspect" && command != "build" && command != "test" && command != "version" {
+	if command != "doctor" && command != "init" && command != "inspect" && command != "build" && command != "test" && command != "version" && command != "devices" {
 		return fail("unknown_command", "unknown command; run apprivet help", 2)
 	}
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	projectPath, scheme, bundle, simulator := ".", "", "", ""
 	trust := false
+	simulators := false
+	fromJSON := ""
 	timeout := 15 * time.Minute
 	switch command {
+	case "devices":
+		fs.BoolVar(&simulators, "simulators", false, "list simulator inventory using simctl")
+		fs.StringVar(&fromJSON, "from-json", "", "inspect an offline tool JSON report")
+		fs.DurationVar(&timeout, "timeout", devices.DefaultTimeout, "discovery deadline, maximum 5m")
 	case "init":
 		fs.StringVar(&bundle, "bundle-id", "", "reverse-DNS bundle identifier")
 		// The documented init NAME --options form also works with Go's flag parser.
@@ -117,6 +131,15 @@ func (a App) Run(ctx context.Context, args []string) int {
 	if (command == "init" && fs.NArg() != 1) || (command != "init" && fs.NArg() != 0) {
 		return fail("invalid_arguments", "unexpected or missing positional argument; run apprivet "+command+" --help", 2)
 	}
+	emptyReportPath := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "from-json" && fromJSON == "" {
+			emptyReportPath = true
+		}
+	})
+	if emptyReportPath {
+		return fail("invalid_arguments", "--from-json requires a nonempty report path", 2)
+	}
 	if timeout <= 0 || timeout > 24*time.Hour {
 		return fail("invalid_arguments", "timeout must be greater than zero and at most 24h", 2)
 	}
@@ -124,6 +147,32 @@ func (a App) Run(ctx context.Context, args []string) int {
 		projectPath = filepath.Join(a.Dir, projectPath)
 	}
 	switch command {
+	case "devices":
+		if fromJSON != "" && !filepath.IsAbs(fromJSON) {
+			fromJSON = filepath.Join(a.Dir, fromJSON)
+		}
+		inventory, err := devices.List(ctx, a.OS, a.Runner, devices.Request{Simulators: simulators, FromJSON: fromJSON, Timeout: timeout})
+		if err != nil {
+			var detail *devices.Error
+			if errors.As(err, &detail) {
+				exit := 4
+				switch detail.Code {
+				case "invalid_arguments":
+					exit = 2
+				case "unsupported_platform", "unsupported_schema":
+					exit = 3
+				case "tool_failed", "discovery_failed":
+					exit = 5
+				case "timeout":
+					exit = 124
+				case "cancelled":
+					exit = 130
+				}
+				return fail(detail.Code, detail.Message, exit)
+			}
+			return fail("discovery_failed", "device discovery failed; no inventory accepted", 5)
+		}
+		response.Data = inventory
 	case "version":
 		response.Data = map[string]string{"version": a.Version}
 	case "doctor":
@@ -183,6 +232,27 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 		return exit
 	}
 	switch data := response.Data.(type) {
+	case devices.Inventory:
+		if data.Live {
+			fmt.Fprintf(a.Out, "Local %s inventory\n", data.Tool)
+		} else {
+			fmt.Fprintf(a.Out, "Offline report (%s); not a live device query\n", data.Tool)
+		}
+		fmt.Fprintln(a.Out, "Listing does not establish physical attachment, pairing permission or installation authorization.")
+		if len(data.Devices) == 0 {
+			fmt.Fprintln(a.Out, "No devices reported.")
+			break
+		}
+		table := tabwriter.NewWriter(a.Out, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(table, "KIND\tID\tNAME\tCONNECTION\tBOOT\tPAIRING\tAVAILABLE")
+		for _, d := range data.Devices {
+			available := "unknown"
+			if d.Available != nil {
+				available = fmt.Sprint(*d.Available)
+			}
+			fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", d.Kind, d.ID, d.Name, d.ConnectionState, d.BootState, d.PairingState, available)
+		}
+		_ = table.Flush()
 	case map[string]string:
 		if text, ok := data["help"]; ok {
 			fmt.Fprint(a.Out, text)

@@ -1,0 +1,18 @@
+{
+  "info": {"commandType": "devicectl.list.devices", "jsonVersion": 5, "outcome": "success", "version": "synthetic-modern"},
+  "result": {"devices": [
+    {"identifier": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+     "properties": {
+       "hardware": {"udid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "platform": "iOS", "reality": "simulated", "productType": "iPhone18,3"},
+       "state": {"name": "Simulator from CoreDevice", "bootState": "booting", "developerModeStatus": "disabled"},
+       "software": {"osVersionNumber": {"stringValue": "27.0", "majorVersion": 27}},
+       "connection": {"state": "disconnected", "pairingState": "unpaired", "transportType": "sameMachine"}
+     },
+     "deviceProperties": {"name": "STALE NAME", "developerModeStatus": "enabled"},
+     "hardwareProperties": {"reality": "physical"},
+     "connectionProperties": {"tunnelState": "connected", "pairingState": "paired"},
+     "_deprecationNotice": {"message": "Synthetic deprecated-field notice"}},
+    {"identifier": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+     "properties": {"hardware": {"platform": "iOS", "reality": "physical"}, "connection": {"state": "unavailable", "pairingState": "unsupported"}}}
+  ]}
+}

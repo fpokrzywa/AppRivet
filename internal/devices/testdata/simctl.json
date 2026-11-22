@@ -1,0 +1,9 @@
+{"devices": {
+  "com.apple.CoreSimulator.SimRuntime.iOS-18-0": [
+    {"udid": "dddddddd-dddd-dddd-dddd-dddddddddddd", "name": "Test Simulator", "state": "Booted", "isAvailable": true, "deviceTypeIdentifier": "com.apple.CoreSimulator.SimDeviceType.iPhone-16", "dataPath": "DO-NOT-EXPORT-PATH"},
+    {"udid": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee", "name": "Unavailable Simulator", "state": "Shutdown", "isAvailable": false, "availabilityError": "DO-NOT-EXPORT-ERROR"}
+  ],
+  "com.apple.CoreSimulator.SimRuntime.watchOS-11-0": [
+    {"udid": "ffffffff-ffff-ffff-ffff-ffffffffffff", "name": "Test Watch", "state": "Creating"}
+  ]
+}}

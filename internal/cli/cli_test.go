@@ -64,7 +64,10 @@ func TestCLIJSONErrors(t *testing.T) {
 		{[]string{"init"}, 2, "invalid_arguments"},
 		{[]string{"init", "A", "B"}, 2, "invalid_arguments"},
 		{[]string{"inspect", "--nonsense"}, 2, "invalid_arguments"},
-		{[]string{"devices"}, 3, "not_implemented"},
+		{[]string{"devices"}, 3, "unsupported_platform"},
+		{[]string{"devices", "--timeout", "6m"}, 2, "invalid_arguments"},
+		{[]string{"devices", "--from-json", ""}, 2, "invalid_arguments"},
+		{[]string{"devices", "--nonsense"}, 2, "invalid_arguments"},
 		{[]string{"install", "--device", "abc"}, 3, "not_implemented"},
 		{[]string{"launch", "--device", "abc"}, 3, "not_implemented"},
 		{[]string{"typo"}, 2, "unknown_command"},
@@ -76,6 +79,110 @@ func TestCLIJSONErrors(t *testing.T) {
 				t.Fatalf("%d %+v", exit, result)
 			}
 		})
+	}
+}
+
+func TestCLIOfflineDeviceReportsAreExplicit(t *testing.T) {
+	for _, sim := range []bool{false, true} {
+		root := t.TempDir()
+		fixtureName := "devicectl-modern.json"
+		if sim {
+			fixtureName = "simctl.json"
+		}
+		body, err := os.ReadFile(filepath.Join("..", "devices", "testdata", fixtureName))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "report.json"), body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		args := []string{"devices", "--from-json", "report.json", "--json"}
+		if sim {
+			args = append(args, "--simulators")
+		}
+		exit, result, _ := invoke(t, root, args...)
+		if exit != 0 {
+			t.Fatalf("%d %+v", exit, result)
+		}
+		data := result["data"].(map[string]any)
+		if data["live"] != false || data["source"] != "file" {
+			t.Fatalf("offline report labeled live: %+v", data)
+		}
+	}
+}
+
+type deviceRunner func(context.Context, runner.Spec) (runner.Result, error)
+
+func (f deviceRunner) Run(c context.Context, s runner.Spec) (runner.Result, error) { return f(c, s) }
+
+func TestCLILiveDevicesJSONAndHumanEmptyList(t *testing.T) {
+	for _, jsonMode := range []bool{false, true} {
+		var out, errOut bytes.Buffer
+		app := App{OS: "darwin", Dir: t.TempDir(), Out: &out, Err: &errOut, Runner: deviceRunner(func(_ context.Context, s runner.Spec) (runner.Result, error) {
+			if err := os.WriteFile(s.Args[4], []byte(`{"info":{"commandType":"devicectl.list.devices","outcome":"success"},"result":{"devices":[]}}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			return runner.Result{}, nil
+		})}
+		args := []string{"devices"}
+		if jsonMode {
+			args = append(args, "--json")
+		}
+		if exit := app.Run(context.Background(), args); exit != 0 || errOut.Len() != 0 {
+			t.Fatalf("%d %s", exit, errOut.String())
+		}
+		if jsonMode {
+			var env map[string]any
+			if err := json.Unmarshal(out.Bytes(), &env); err != nil {
+				t.Fatal(err)
+			}
+			data := env["data"].(map[string]any)
+			if data["live"] != true || len(data["devices"].([]any)) != 0 {
+				t.Fatal("bad live list")
+			}
+		} else {
+			if !strings.Contains(out.String(), "No devices reported") || !strings.Contains(out.String(), "authorization") {
+				t.Fatalf("misleading empty display: %s", out.String())
+			}
+		}
+	}
+}
+
+func TestCLIDeviceFailureCodes(t *testing.T) {
+	for _, tc := range []struct {
+		result runner.Result
+		exit   int
+		code   string
+	}{{runner.Result{TimedOut: true}, 124, "timeout"}, {runner.Result{Cancelled: true}, 130, "cancelled"}, {runner.Result{ExitCode: 1}, 5, "tool_failed"}, {runner.Result{}, 4, "invalid_report"}} {
+		var out, errOut bytes.Buffer
+		app := App{OS: "darwin", Dir: t.TempDir(), Out: &out, Err: &errOut, Runner: deviceRunner(func(context.Context, runner.Spec) (runner.Result, error) { return tc.result, nil })}
+		if exit := app.Run(context.Background(), []string{"devices", "--json"}); exit != tc.exit {
+			t.Fatalf("want %d got %d: %s", tc.exit, exit, out.String())
+		}
+		var env map[string]any
+		if err := json.Unmarshal(out.Bytes(), &env); err != nil {
+			t.Fatal(err)
+		}
+		if env["ok"] != false || env["error"].(map[string]any)["code"] != tc.code || env["data"] != nil || errOut.Len() != 0 {
+			t.Fatalf("bad failure response: %s %s", out.String(), errOut.String())
+		}
+	}
+}
+
+func TestCLIHumanOfflineDeviceTable(t *testing.T) {
+	var out, errOut bytes.Buffer
+	app := App{OS: "windows", Dir: t.TempDir(), Out: &out, Err: &errOut, Runner: forbidRunner{t}}
+	path, err := filepath.Abs(filepath.Join("..", "devices", "testdata", "devicectl-legacy.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exit := app.Run(context.Background(), []string{"devices", "--from-json", path}); exit != 0 {
+		t.Fatalf("%d %s", exit, errOut.String())
+	}
+	for _, want := range []string{"Offline report", "Lab iPhone", "physical", "disconnected", "unknown"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing %s: %s", want, out.String())
+		}
 	}
 }
 
