@@ -1,5 +1,9 @@
 # Verification record
 
+## Native Linux journal writeback errors
+
+The Linux device-mapper harness fails I/O to one initialized data block on a disposable ext4 image. It requires native `fsync` `EIO` after a buffered journal append and during a repair sync. After restoring the mapping and remounting, a valid exact prefix can be completed and divergent tail bytes must stay blocked without evidence loss. In a durable pending-event case, failed repair must retain the marker and subsequent repair must preserve the original journal head, replay rejection, worker, claim and fence across another clean remount. See [Linux native writeback tests and remaining gaps](LINUX_JOURNAL_FAULTS.md).
+
 ## Persistent Linux quota and disk-full sync
 
 The ext4 harness uses a bounded 32 MiB image and an unprivileged journal process. It checks persistent user quota after a clean unmount and remount, actual `EDQUOT` at the journal write with global capacity available, and repair retry after freeing quota. It also fills the volume between an accepted journal write and its native sync, records the native result, and separately injects `ENOSPC` at the application sync boundary. The assertions check exact completion, ownership and fence preservation, stale owner refusal, nonce and request replay rejection, and no duplicate event on retry. See [Linux test instructions and live gaps](LINUX_JOURNAL_FAULTS.md).

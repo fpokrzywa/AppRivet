@@ -50,6 +50,10 @@ jobs:
             sudo apt-get install -y --no-install-recommends quota
           fi
           bash .github/scripts/linux-journal-faults.sh
+      - name: Exercise native writeback errors on a disposable ext4 device
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash .github/scripts/linux-journal-writeback.sh
       - name: Race detector
         if: runner.os != 'Windows'
         run: go test -race ./...

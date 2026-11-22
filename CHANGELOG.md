@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased: native Linux journal writeback testing
+
+- Exercise real journal `fsync` `EIO` on a disposable ext4 device-mapper image. Verify recovery of a durable pending event and refusal of divergent persisted tails after device restoration.
+
 ## Unreleased: persistent Linux journal fault testing
 
 - Exercise ext4 user quota after remount and native journal sync on a full loopback image. Test exact append recovery after kernel `EDQUOT` and a separately injected sync error.
