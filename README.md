@@ -2,7 +2,7 @@
 
 An independent iOS development CLI, starting with environment diagnostics and SwiftUI project creation. Windows and Linux can create and inspect projects; iOS builds use official Xcode tools on a Mac. Remote Mac execution is planned, not implemented.
 
-Status: Milestone 1 in development. See [project status](docs/STATUS.md) for actual verification evidence and limitations. This is an early engineering preview, not a production signing service.
+Status: Milestone 1 code is implemented; live Mac acceptance is still open. Windows and Linux tests pass. GitHub Actions could not start because of an account billing/spending-limit restriction. See [project status](docs/STATUS.md) for evidence and limitations. This is an early engineering preview, not a production signing service.
 
 ## Principles
 
@@ -24,7 +24,17 @@ go build -o bin/apprivet ./cmd/apprivet
 
 On Windows use `go build -o bin/apprivet.exe ./cmd/apprivet`.
 
-Usage, supported commands, security boundaries, and Mac validation steps will be recorded in [CLI reference](docs/CLI.md). The [roadmap](docs/ROADMAP.md) separates Milestone 1 from future signing, devices, remote builds, and distribution.
+```sh
+bin/apprivet doctor
+bin/apprivet init MyFirstApp --bundle-id org.example.myfirstapp
+bin/apprivet inspect --project MyFirstApp --json
+# On a Mac with full Xcode, for trusted source:
+bin/apprivet build --project MyFirstApp --trust-project
+```
+
+Implemented commands: `doctor`, `init`, `inspect`, `build`, `test`, `version`, and `help`. Build/test are macOS simulator adapters awaiting live Xcode acceptance. `devices`, `install`, and `launch` explicitly return `not_implemented`. No signing, remote-build, or Apple credential capability is advertised as working.
+
+See the [CLI reference](docs/CLI.md) for flags, JSON, exit codes and security boundaries, and [verification](docs/VERIFICATION.md) for reproducible Mac tests. The [roadmap](docs/ROADMAP.md) separates Milestone 1 from future signing, devices, remote builds, and distribution.
 
 ## Documentation
 

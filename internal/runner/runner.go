@@ -47,7 +47,8 @@ func (Exec) Run(parent context.Context, spec Spec) (Result, error) {
 	cmd.Dir = spec.Dir
 	cmd.Env = childEnvironment()
 	cmd.WaitDelay = 2 * time.Second
-	configureProcess(cmd)
+	cleanup := configureProcess(cmd)
+	defer cleanup()
 	output := &limitedBuffer{}
 	cmd.Stdout = output
 	cmd.Stderr = output

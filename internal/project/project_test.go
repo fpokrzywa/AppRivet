@@ -49,6 +49,31 @@ func TestCreateProject(t *testing.T) {
 	}
 }
 
+func TestProjectNamesCannotCollideWithSwiftSyntaxOrFrameworks(t *testing.T) {
+	for _, name := range []string{"class", "import", "where", "SwiftUI", "XCTest", "Foundation"} {
+		t.Run(name, func(t *testing.T) {
+			info, err := Create(t.TempDir(), name, "org.example.app")
+			if err != nil {
+				t.Fatal(err)
+			}
+			pbx, err := os.ReadFile(filepath.Join(info.Path, "project.pbxproj"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			tests, err := os.ReadFile(filepath.Join(info.Root, name+"Tests", name+"Tests.swift"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Count(string(pbx), `PRODUCT_MODULE_NAME = "AppRivet_`+name+`";`) != 2 {
+				t.Fatal("app configurations lack a safe, explicit module name")
+			}
+			if !strings.Contains(string(tests), "@testable import AppRivet_"+name+"\n") {
+				t.Fatal("test import does not use safe app module name")
+			}
+		})
+	}
+}
+
 func TestCreateRejectsUnsafeNamesWithoutWrites(t *testing.T) {
 	for _, name := range []string{"", "../Escape", `..\Escape`, "a/b", "a b", "a\"b", "-App", "1App", "CON", "nul", "LPT1", "COM9", "App.", strings.Repeat("A", 51)} {
 		t.Run(name, func(t *testing.T) {

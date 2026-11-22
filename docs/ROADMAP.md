@@ -2,7 +2,7 @@
 
 | Milestone | Deliverable and exit evidence | State |
 | --- | --- | --- |
-| M1: foundation | Research, docs, portable doctor/init/inspect, simulator build/test adapter, automated tests, original example, CI | In progress |
+| M1: foundation | Research, docs, portable doctor/init/inspect, simulator build/test adapter, automated tests, original example, CI | Code implemented; live Mac acceptance blocked |
 | M2: local device workflow | Read-only devicectl discovery, Xcode-established signing, install/launch on explicitly authorized physical device; real Mac/device logs; trust/isolation policy resolved first | Planned |
 | M3: signing broker | OS credential store, endpoint/role matrix, rotation/revocation, approval-bound mutations, worker isolation penetration tests | Planned |
 | M4: remote Mac | mTLS pairing, per-user/project grants, queue, logs, cancellation, audit and artifacts; hostile upload/isolation tests | Planned |

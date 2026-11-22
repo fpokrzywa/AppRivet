@@ -1,5 +1,5 @@
 import XCTest
-@testable import HelloAppRivet
+@testable import AppRivet_HelloAppRivet
 
 final class HelloAppRivetTests: XCTestCase {
     func testGreetingUsesTheProvidedName() {

@@ -65,3 +65,8 @@ jobs:
         run: |
           SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for k,vs in d["devices"].items() if "iOS" in k for v in vs if v.get("isAvailable") and "iPhone" in v["name"]))')
           ./apprivet test --project CIApp --simulator "$SIMULATOR_ID" --trust-project --timeout 20m
+      - name: Validate framework-name collision regression
+        working-directory: ${{ runner.temp }}
+        run: |
+          ./apprivet init SwiftUI --bundle-id org.example.modulecollision
+          ./apprivet build --project SwiftUI --trust-project --timeout 10m

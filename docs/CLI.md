@@ -25,6 +25,8 @@ Outputs go into a fresh private temporary DerivedData directory, returned in the
 
 The default execution timeout is 15m, configurable with `--timeout` up to 24h. Interrupt/SIGTERM cancels execution; macOS/Linux use process-group termination. This cannot contain a deliberately escaping daemon; future remote workers require VM teardown. Windows does not execute Apple builds.
 
+Generated app modules are named `AppRivet_<ProjectName>` to avoid Swift keyword and framework-name collisions. The visible app and scheme retain the requested project name.
+
 ## JSON for coding agents
 
 Add `--json` before or after the command. Standard output contains exactly one JSON envelope; subprocess logs are in `data.execution.output`, not mixed into the stream. Exit status remains nonzero on failure. JSON mode writes no routine progress text to stderr. Reserved/unknown command errors are structured too.
