@@ -33,8 +33,41 @@ func TestHelperProcess(t *testing.T) {
 	case "env":
 		_ = json.NewEncoder(os.Stdout).Encode(os.Environ())
 		os.Exit(0)
+	case "json":
+		fmt.Fprint(os.Stdout, `{"name":"token=raw-value","devices":[]}`)
+		fmt.Fprint(os.Stderr, "password=stderr-secret")
+		os.Exit(0)
 	}
 	os.Exit(9)
+}
+
+func TestStructuredStdoutIsSeparateBoundedAndNeverSerialized(t *testing.T) {
+	spec := helper(t, "json")
+	spec.SeparateStdout = true
+	result, err := (Exec{}).Run(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report map[string]any
+	if err := json.Unmarshal([]byte(result.Stdout), &report); err != nil || report["name"] != "token=raw-value" {
+		t.Fatalf("structured stdout corrupted: %q %v", result.Stdout, err)
+	}
+	if strings.Contains(result.Output, "stderr-secret") || strings.Contains(result.Output, "raw-value") {
+		t.Fatal("diagnostic output leaked raw data")
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "raw-value") {
+		t.Fatal("raw stdout serialized into diagnostic result")
+	}
+	spec = helper(t, "flood")
+	spec.SeparateStdout = true
+	result, err = (Exec{}).Run(context.Background(), spec)
+	if err != nil || !result.StdoutTruncated || len(result.Stdout) > MaxOutput || result.Output != "" {
+		t.Fatalf("unbounded/separated capture failed: %v", err)
+	}
 }
 
 func helper(t *testing.T, mode string) Spec {

@@ -22,14 +22,19 @@ type Spec struct {
 	Args    []string
 	Dir     string
 	Timeout time.Duration
+	// SeparateStdout captures bounded raw stdout for a structured-data parser.
+	// Callers must never display it directly; Output remains redacted stderr.
+	SeparateStdout bool
 }
 
 type Result struct {
-	Output    string `json:"output"`
-	ExitCode  int    `json:"exit_code"`
-	Truncated bool   `json:"truncated"`
-	TimedOut  bool   `json:"timed_out"`
-	Cancelled bool   `json:"cancelled"`
+	Stdout          string `json:"-"`
+	StdoutTruncated bool   `json:"-"`
+	Output          string `json:"output"`
+	ExitCode        int    `json:"exit_code"`
+	Truncated       bool   `json:"truncated"`
+	TimedOut        bool   `json:"timed_out"`
+	Cancelled       bool   `json:"cancelled"`
 }
 
 type Runner interface {
@@ -52,8 +57,17 @@ func (Exec) Run(parent context.Context, spec Spec) (Result, error) {
 	output := &limitedBuffer{}
 	cmd.Stdout = output
 	cmd.Stderr = output
+	var stdout *limitedBuffer
+	if spec.SeparateStdout {
+		stdout = &limitedBuffer{}
+		cmd.Stdout = stdout
+	}
 	err := cmd.Run()
 	result := Result{Output: Redact(output.String()), Truncated: output.truncated, ExitCode: 0}
+	if stdout != nil {
+		result.Stdout = stdout.String()
+		result.StdoutTruncated = stdout.truncated
+	}
 	if ctx.Err() != nil {
 		result.ExitCode = -1
 		result.TimedOut = errors.Is(ctx.Err(), context.DeadlineExceeded)

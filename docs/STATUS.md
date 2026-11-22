@@ -49,3 +49,5 @@ Ruling: work directly in this initially empty dedicated repository; no existing 
 4. Keep remote builds, MCP, publishing and public distribution planned until their own acceptance evidence exists. License choice remains open.
 
 Commit history separates research, project generation, runner/adapters, CLI/CI and review fixes. Completed changes are committed; build outputs and local validation scratch remain ignored.
+
+Milestone 2 progress: read-only device parser/adapters and CLI implemented using original synthetic fixtures. Separate bounded structured stdout added to prevent redaction from corrupting JSON. Windows tests and vet pass; live Mac/device validation remains unverified. See docs/DEVICES.md and the M2 plan for scope and acceptance.
