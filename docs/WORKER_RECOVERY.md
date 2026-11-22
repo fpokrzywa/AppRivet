@@ -78,7 +78,7 @@ Existing policy, digest, quota, journal, clock and commit-uncertainty errors sti
 
 ## Evidence and remaining live validation
 
-Tests cover six-process claim races, durable ownership recovery after the winning process exits, principal/worker/claim/fence mismatches, expired claims retaining all budgets, current policy revocation/quota changes, changed archive bytes, cancellation, repeated recovery, old-owner refusal, replay retention, legacy canonical records, invalid correctly rehashed transitions, full journal inspection and injected partial-write/sync errors. Journal fuzz seeds now include claimed and recovered states. Actual CLI smoke exercises the workflow on each CI host. See [VERIFICATION](VERIFICATION.md) for completed runs.
+Tests cover six-process claim races, durable ownership recovery after the winning process exits, principal/worker/claim/fence mismatches, expired claims retaining all budgets, current policy revocation/quota changes, changed archive bytes, cancellation, repeated recovery, old-owner refusal, replay retention, legacy canonical records, invalid correctly rehashed transitions, full journal inspection and injected partial-write/sync errors. Journal fuzz seeds now include claimed and recovered states. Actual CLI smoke exercises the workflow on each CI host. All four jobs in [run 45061672025](https://github.com/fpokrzywa/AppRivet/actions/runs/45061672025) passed at code/smoke commit 9448180, including Windows/Linux/macOS tests and CLI smoke, Linux/macOS race checks, Linux journal fuzzing and the existing Mac simulator integration. See [VERIFICATION](VERIFICATION.md) for complete evidence.
 
 Still unimplemented or unvalidated:
 
