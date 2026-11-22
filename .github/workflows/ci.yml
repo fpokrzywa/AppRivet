@@ -40,6 +40,9 @@ jobs:
         run: go test ./internal/devices -run='^$' -fuzz=FuzzParse -fuzztime=10000x -parallel=2 -timeout=60s
       - name: Build CLI
         run: go build ./cmd/apprivet
+      - name: Fuzz publication intent
+        if: runner.os == 'Linux'
+        run: go test ./internal/admission -run='^$' -fuzz=FuzzPublicationIntent -fuzztime=10000x -parallel=2 -timeout=60s
       - name: Fuzz source snapshot verification
         if: runner.os == 'Linux'
         run: go test ./internal/snapshot -run='^$' -fuzz=FuzzVerify -fuzztime=10000x -parallel=2 -timeout=60s

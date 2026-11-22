@@ -1,0 +1,72 @@
+package admission
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"os"
+	"time"
+)
+
+const pendingName = "publication.pending"
+const maxIntentBytes = 4096
+
+// An intent binds the exact pre-publication authority to one prepared successor.
+// Hashes detect corruption; they do not authenticate a hostile storage owner.
+type publicationIntent struct {
+	SchemaVersion      int    `json:"schema_version"`
+	OperationID        string `json:"operation_id"`
+	PreparedManifest   string `json:"prepared_manifest"`
+	ManifestSHA256     string `json:"manifest_sha256"`
+	SourceFile         string `json:"source_file"`
+	SourceSHA256       string `json:"source_sha256"`
+	SourceActiveName   string `json:"source_active_name"`
+	SourceActiveSHA256 string `json:"source_active_sha256"`
+	SourceActiveBytes  int64  `json:"source_active_bytes"`
+	Sequence           int    `json:"sequence"`
+	Head               string `json:"head_sha256"`
+	RecordedAt         string `json:"recorded_at"`
+	Hash               string `json:"hash"`
+}
+
+func intentBytes(p publicationIntent) []byte {
+	p.Hash = ""
+	b, _ := json.Marshal(p)
+	p.Hash = sum(b)
+	b, _ = json.Marshal(p)
+	return append(b, '\n')
+}
+func parseIntent(b []byte) (publicationIntent, error) {
+	var p publicationIntent
+	if len(b) > maxIntentBytes || json.Unmarshal(b, &p) != nil {
+		return p, corrupt()
+	}
+	at, err := time.Parse(time.RFC3339Nano, p.RecordedAt)
+	if !bytes.Equal(b, intentBytes(p)) || p.SchemaVersion != 1 || !nonce.MatchString(p.OperationID) || p.PreparedManifest != "manifest-"+p.OperationID+".json" || p.SourceFile != "publication-source-"+p.OperationID+".bin" || !digest.MatchString(p.Hash) || !digest.MatchString(p.ManifestSHA256) || !digest.MatchString(p.SourceSHA256) || !digest.MatchString(p.SourceActiveSHA256) || !digest.MatchString(p.Head) || (p.SourceActiveName != "journal.jsonl" && !activeName.MatchString(p.SourceActiveName)) || p.SourceActiveBytes < 1 || p.SourceActiveBytes > maxJournalBytes || p.Sequence < 1 || p.Sequence > maxHistoryEvents || err != nil || at.IsZero() || stamp(at) != p.RecordedAt {
+		return publicationIntent{}, corrupt()
+	}
+	return p, nil
+}
+
+func readEvidence(root *os.Root, name string, limit int64) ([]byte, stagedFile, error) {
+	f, err := rootedFile(root, name)
+	if err != nil {
+		return nil, stagedFile{}, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, stagedFile{}, stateIO()
+	}
+	if info.Size() > limit {
+		return nil, stagedFile{}, corrupt()
+	}
+	b, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil {
+		return nil, stagedFile{}, stateIO()
+	}
+	if int64(len(b)) > limit || !unchanged(root, name, f) {
+		return nil, stagedFile{}, corrupt()
+	}
+	return b, stagedFile{name, info}, nil
+}

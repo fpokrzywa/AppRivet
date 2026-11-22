@@ -197,6 +197,24 @@ func TestReservationProcessHelper(t *testing.T) {
 			_, err = tx.maintain(context.Background(), testNow, "migrate")
 			tx.close()
 		}
+	} else if mode == "crash-repair" {
+		var tx *transaction
+		tx, err = s.openLocked(context.Background())
+		if err == nil {
+			var proof repairProof
+			proof, err = tx.proveRepair(context.Background(), testNow)
+			if err == nil {
+				tx.file = crashPublication{tx.file}
+				_, err = tx.repair(context.Background(), proof, repairExpectation(proof.report))
+			}
+			tx.close()
+		}
+	} else if mode == "repair" {
+		var plan RepairReport
+		plan, err = s.InspectRepair(context.Background())
+		if err == nil {
+			_, err = s.Repair(context.Background(), repairExpectation(plan))
+		}
 	} else if mode == "migrate" {
 		_, err = s.Migrate(context.Background())
 	} else if mode == "compact" {

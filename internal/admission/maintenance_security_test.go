@@ -279,7 +279,7 @@ func TestProcessCrashDuringPublicationFailsClosed(t *testing.T) {
 		t.Fatalf("expected crash exit, got %v", err)
 	}
 	_, err = s.RecoveryStatus(context.Background(), "developer")
-	code(t, err, "state_corrupt")
+	code(t, err, "publication_pending")
 	prepared, err := filepath.Glob(filepath.Join(s.Dir, "manifest-*.json"))
 	if err != nil || len(prepared) != 1 {
 		t.Fatalf("prepared evidence missing %v %v", prepared, err)
@@ -296,6 +296,17 @@ func TestProcessCrashDuringPublicationFailsClosed(t *testing.T) {
 	}
 	if _, err = replay(original); err != nil {
 		t.Fatal(err)
+	}
+	plan, err := s.InspectRepair(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Repair(context.Background(), repairExpectation(plan)); err != nil {
+		t.Fatal(err)
+	}
+	after, err := s.RecoveryStatus(context.Background(), "developer")
+	if err != nil || after.JournalSHA256 != before.JournalSHA256 || after.JournalSequence != before.JournalSequence {
+		t.Fatal("crash repair changed history", err)
 	}
 }
 
@@ -369,8 +380,19 @@ func TestMaintenancePublicationFaultsAndCommitCancellation(t *testing.T) {
 					code(t, err, "commit_uncertain")
 				}
 				after, err := s.RecoveryStatus(context.Background(), "developer")
-				if mode == "partial" {
-					code(t, err, "state_corrupt")
+				if mode != "cancel_after_sync" {
+					code(t, err, "publication_pending")
+					plan, inspectErr := s.InspectRepair(context.Background())
+					if inspectErr != nil {
+						t.Fatal(inspectErr)
+					}
+					if _, repairErr := s.Repair(context.Background(), repairExpectation(plan)); repairErr != nil {
+						t.Fatal(repairErr)
+					}
+					after, err = s.RecoveryStatus(context.Background(), "developer")
+					if err != nil || before.JournalSHA256 != after.JournalSHA256 || before.JournalSequence != after.JournalSequence {
+						t.Fatal("repair lost history", err)
+					}
 				} else if err != nil || before.JournalSHA256 != after.JournalSHA256 || before.JournalSequence != after.JournalSequence {
 					t.Fatalf("history lost %+v %v", after, err)
 				}

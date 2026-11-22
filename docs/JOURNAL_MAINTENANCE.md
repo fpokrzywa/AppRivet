@@ -42,12 +42,12 @@ Maintenance holds the same kernel lock used by normal reservations throughout th
 1. Validate all current history and reject a clock below the recorded watermark. Maintenance preserves that watermark; it does not append a new clock observation.
 2. Exclusively create a random-named compressed segment, empty append file and prepared manifest. Flush each with `File.Sync`.
 3. Reopen the staged layout, decompress and replay its entire history, and compare the complete derived state with the original. On Unix, sync directory entries before publication.
-4. Recheck lock/control/active identities and cancellation, then truncate/write/sync the existing control file under the lock. A completed sync is the publication boundary.
-5. Only after acknowledged publication, remove the superseded raw append file through an identity-checked rooted removal. Archives, the fixed lock and the control file are never deleted. Keep the prepared manifest.
+4. Retain a synced source-control backup and immutable publication intent. Recheck identities/cancellation, then create and sync the fixed pending intent before truncating/writing/syncing the existing control file under the lock.
+5. Clear and sync the pending marker before removing the superseded raw append file through an identity-checked rooted removal. Archives, the fixed lock and the control file are never deleted. Keep the prepared manifest, intent and source backup.
 
-This is **not a claim of cross-platform atomic replacement**. A process crash during the control-file rewrite can leave a partial manifest. That blocks every normal operation with `state_corrupt`; the verified history and prepared manifest remain for inspection. There is no automatic fallback, rollback, truncation repair or “pick the newest filename” recovery. An older manifest may describe stale ownership and must not be restored blindly.
+This is **not a claim of cross-platform atomic replacement**. A process crash during control-file rewrite can leave a partial manifest. A pending intent blocks normal operations with `publication_pending`; use [intent-backed repair inspection and repair](MANIFEST_REPAIR.md). Older tears without intent remain unsupported. There is no automatic fallback, rollback or “pick the newest filename” recovery. An older manifest may describe stale ownership and must not be restored blindly.
 
-Before publication starts, errors or cancellation preserve the original authority and attempt to remove only the operation's exclusively owned staged files. After publication begins, write/truncate/sync failure returns `commit_uncertain` and retains the staged files. Do not retry by deleting/reinitializing the store. A complete uncertain manifest can be verified by `recovery-status`; a partial one needs a separately designed controlled repair procedure. A synced publication wins over cancellation.
+Before pending-marker creation starts, errors or cancellation preserve the original authority and attempt to remove only the operation's exclusively owned staged files. After that boundary, publication failure returns `commit_uncertain` and retains evidence. Do not retry by deleting/reinitializing the store. While the marker remains, `repair-status` verifies both complete and partial uncertain publication; after marker clearance, ordinary `recovery-status` resolves a lost acknowledgement. A completed publication wins over cancellation.
 
 Successful output includes action, format, generation, global sequence/head hash, retained reservation count, manifest hash and prepared-manifest filename. `changed: false` identifies a no-op. `cleanup_pending: true` means redundant raw-file removal or the final directory sync did not complete; the published layout remains the selected history. Retain the store for inspection rather than deleting files by pattern.
 
@@ -55,7 +55,7 @@ On Windows, files are synced but no portable directory-entry flush or private DA
 
 ## Compatibility and authority
 
-The format upgrade modifies the existing control inode while holding the unchanged lock. Older AppRivet binaries reject the new manifest instead of appending legacy events; supported writers acquire that lock before opening the current journal. There is one selected append file. Prepared manifests and superseded files are evidence, not independently writable stores.
+The format upgrade modifies the existing control inode while holding the unchanged lock. Legacy-only binaries reject the new manifest instead of appending legacy events; supported writers acquire that lock before opening the current journal. The preceding format-2 implementation does not honor pending intents, so mixed-version operation is unsupported; see [repair compatibility checks](MANIFEST_REPAIR.md). There is one selected append file. Prepared manifests and superseded files are evidence, not independently writable stores.
 
 Legacy canonical records remain readable without migration. Downgrading a migrated store is unsupported. Copying/restoring the whole directory can still clone or roll back authority; local hashes and the store ID are not external rollback anchors. This work deliberately provides no relocation/export/import command that would imply safe handoff to another live store.
 
@@ -67,7 +67,7 @@ Security tests cover byte-identical history roundtrips, owner/replay/capacity pr
 
 Remaining gates:
 
-1. External rollback/clone anchoring, authenticated relocation/handoff, safe administrative repair of a torn manifest, long-term retention/migration beyond the cumulative limits, and deployment-specific power-cut/disk-full fault campaigns. No automatic repair or fallback is enabled.
+1. External rollback/clone anchoring, authenticated relocation/handoff, repair of older unanchored tears or damaged intent, retention beyond cumulative limits, and deployment-specific power-cut/disk-full fault campaigns. Explicit intent-backed repair is implemented; automatic fallback remains unavailable.
 2. Windows private ACL enforcement and metadata durability; hostile same-user/filesystem mutation and network/shared-filesystem locking are unsupported boundaries. Only trusted local storage is assumed.
 3. Authenticated principals/workers, trusted policy/approval deployment, atomic external side-effect fencing, live process/VM reconciliation and verified teardown. Maintenance preserves ownership records but cannot establish whether a process exists or stopped.
 4. Isolated Mac workers and signer separation under malicious source, physical-device pairing/state compatibility, signing, installation/launch and Apple account workflows. Hosted trusted-source simulator checks do not establish those properties.

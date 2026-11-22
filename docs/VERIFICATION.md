@@ -1,5 +1,19 @@
 # Verification record
 
+## Intent-backed manifest repair (2026-11-22)
+
+Local Windows tests and vet passed across all eight tested packages; admission coverage is 85.6%, CLI 88.5%. Native Windows publication-intent and journal-storage fuzz targets each completed 10,000 inputs. All eight Linux package executables passed in the restricted container, and all six macOS/Linux/Windows amd64/arm64 client cross-builds passed. Real CLI smoke exercised a synthetic torn control using the actual publisher's retained intent, pinned repair, saved damaged bytes, preserved claimed ownership and replay rejection. Hosted verification for this revision is pending; prior runs below verify their named commits only.
+
+Security tests cover recorded migration/compaction tears, exact source/empty/prefix/complete-target control states, valid later events on a complete target, retained replay keys and expired claimed capacity, stale inspection pins, malformed/duplicate/unknown/path-bearing intent, changed source/active/archive/target/lineage, competing generations, symlinks, bounded inventory, before-image collisions, clock rollback and cancellation. Injected truncate/write/sync failures cover repeated repair and late cancellation. Actual child processes exit during publication and repair; concurrent repairs yield one winner while reservations remain blocked or reject replay. Missing API and CLI tests failed before implementation and passed afterward.
+
+Independent review identified two retry durability gaps: matching existing before-images and a complete pending marker were not re-synced before control publication. Both are fixed with validation plus file sync before directory sync/control mutation. Regression tests cover complete leftover evidence and injected sync rejection. The reviewer verified both fixes and independently passed all repair tests, finding no residual actionable issues.
+
+The [repair contract and remaining live gates](MANIFEST_REPAIR.md) explicitly distinguish local process-crash/fault tests from power-cut and deployment durability. Older tears without intent, damaged evidence, external rollback/cloning, mixed-version writers, private Windows ACLs, authenticated execution/fencing/teardown, isolated Mac workers and physical-device/Apple credential workflows remain outside this validation.
+
+```sh
+go test ./internal/admission -run='^$' -fuzz=FuzzPublicationIntent -fuzztime=10000x -parallel=2 -timeout=60s
+```
+
 ## Safe journal migration and compaction (2026-11-22)
 
 Local Windows full tests and vet passed across all eight tested packages (admission coverage 86.3%, CLI 88.8%). Native Windows storage fuzzing completed 10,000 inputs. Real CLI smoke passed migration and compaction with a claimed job, preserved its owner tuple and event head, rejected stale ownership after recovery, and retained replay refusal. All eight compiled Linux test executables and six client cross-builds passed.

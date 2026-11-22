@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased: intent-backed manifest repair
+
+- Record a durable pending publication intent and source backup before replacing the journal control bytes; freeze normal operations until publication is finalized.
+- Add read-only `worker repair-status` and hash/sequence-pinned `worker repair`, retaining damaged bytes and every replay/ownership event. Reject ambiguous generations, changed source history and older unanchored tears.
+- Add crash/retry/concurrency, stale-evidence, corruption/path/bounds, clock/cancellation security tests, publication-intent fuzzing and real CLI repair smoke. Document unsupported power-cut, rollback, mixed-version, hardware and Apple-credential validation.
+
 ## Unreleased
 
 - Add explicit in-place journal migration and lossless compaction using bounded immutable compressed history, strict manifests and the existing kernel lock. Retain all replay/ownership events and global fences; no relocation or stale-history fallback.

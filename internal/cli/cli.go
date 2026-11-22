@@ -62,6 +62,8 @@ Usage:
   apprivet worker recover --state DIR --principal ID --reservation ID --worker ID --claim ID --fence N --confirmed-stopped [--json]
   apprivet worker migrate --state DIR [--json]
   apprivet worker compact --state DIR [--json]
+  apprivet worker repair-status --state DIR [--json]
+  apprivet worker repair --state DIR --expect-intent-sha256 HASH --expect-control-sha256 HASH --expect-history-sha256 HASH --expect-sequence N [--json]
   apprivet version [--json]
 
 Build/test options:
@@ -78,6 +80,7 @@ Worker checks evaluate local policy offline; they do not authenticate or authori
 Reservations retain replay history and account for capacity; they launch no jobs.
 Expired claims retain capacity until exact-owner recovery. Recovery verifies no process termination.
 Migration upgrades the journal in place; compaction preserves all replay and ownership history.
+Repair requires a durable pending intent and exact inspection hashes; older unanchored tears remain blocked.
 
 Use --help with a command. --json is supported before or after the command.
 Windows/Linux: project preparation and offline report inspection. iOS builds and
@@ -260,6 +263,13 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 		return exit
 	}
 	switch data := response.Data.(type) {
+	case admission.RepairReport:
+		fmt.Fprintf(a.Out, "Manifest repair: %s; changed=%t; control=%s; sequence=%d; retained reservations=%d\n", data.Mode, data.Changed, data.ControlState, data.JournalSequence, data.RetainedReservations)
+		fmt.Fprintf(a.Out, "Intent SHA-256: %s\nControl SHA-256: %s\nHistory SHA-256: %s\nClock rollback: %t\n", data.IntentSHA256, data.ControlSHA256, data.JournalSHA256, data.ClockRollback)
+		fmt.Fprintln(a.Out, "Caller not authenticated; execution not authorized. All replay and ownership history retained.")
+		if data.BeforeImage != "" {
+			fmt.Fprintf(a.Out, "Saved control before-image: %s\n", data.BeforeImage)
+		}
 	case admission.MaintenanceReport:
 		fmt.Fprintf(a.Out, "Journal %s: changed=%t; format=%d; generation=%d; sequence=%d; history retained for %d reservations.\n", data.Action, data.Changed, data.Format, data.Generation, data.JournalSequence, data.RetainedReservations)
 		fmt.Fprintln(a.Out, "Caller not authenticated; execution not authorized. No history discarded or second store created.")

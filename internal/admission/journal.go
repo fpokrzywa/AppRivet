@@ -245,7 +245,7 @@ func unchanged(root *os.Root, name string, f interface{ Stat() (os.FileInfo, err
 	opened, err := f.Stat()
 	return err == nil && os.SameFile(named, opened)
 }
-func (s Store) begin(ctx context.Context) (*transaction, error) {
+func (s Store) openLocked(ctx context.Context) (*transaction, error) {
 	if err := cancelled(ctx); err != nil {
 		return nil, err
 	}
@@ -281,6 +281,25 @@ func (s Store) begin(ctx context.Context) (*transaction, error) {
 	tx.file, err = rootedFile(root, "journal.jsonl")
 	if err != nil {
 		return nil, err
+	}
+	ok = true
+	return tx, nil
+}
+func (s Store) begin(ctx context.Context) (*transaction, error) {
+	tx, err := s.openLocked(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ok := false
+	defer func() {
+		if !ok {
+			tx.close()
+		}
+	}()
+	if _, err = tx.root.Lstat(pendingName); err == nil {
+		return nil, failure("publication_pending", "manifest publication requires repair inspection before normal operations")
+	} else if !os.IsNotExist(err) {
+		return nil, stateIO()
 	}
 	b, err := io.ReadAll(io.LimitReader(tx.file, maxJournalBytes+1))
 	if err != nil {

@@ -106,6 +106,29 @@ with tempfile.TemporaryDirectory(prefix="apprivet-smoke-", dir=base) as temporar
     post_migration = run("worker", "recovery-status", "--state", state, "--principal", "ci-developer")["data"]
     for field in ("reservations", "journal_sequence", "journal_sha256", "recorded_at"):
         assert post_migration[field] == pre_migration[field]
+    # Synthetic torn-publication fixture using the publisher's actual retained
+    # intent. Process-exit crashes and write/sync faults are covered in Go tests.
+    operation_id = migrated["prepared_manifest"][len("manifest-"):-len(".json")]
+    (state / "publication.pending").write_bytes((state / f"publication-{operation_id}.intent.json").read_bytes())
+    torn = (state / "journal.jsonl").read_bytes()[:17]
+    (state / "journal.jsonl").write_bytes(torn)
+    assert run("worker", "recovery-status", "--state", state, "--principal", "ci-developer",
+               exit_code=4)["error"]["code"] == "publication_pending"
+    plan = run("worker", "repair-status", "--state", state)["data"]
+    assert not plan["changed"] and plan["control_state"] == "torn"
+    assert not plan["authentication_verified"] and not plan["execution_authorized"]
+    assert (state / "journal.jsonl").read_bytes() == torn
+    repaired = run("worker", "repair", "--state", state,
+                   "--expect-intent-sha256", plan["intent_sha256"],
+                   "--expect-control-sha256", plan["control_sha256"],
+                   "--expect-history-sha256", plan["journal_sha256"],
+                   "--expect-sequence", plan["journal_sequence"])["data"]
+    assert repaired["changed"] and repaired["control_rewritten"]
+    assert (state / repaired["before_image"]).read_bytes() == torn
+    post_repair = run("worker", "recovery-status", "--state", state, "--principal", "ci-developer")["data"]
+    for field in ("reservations", "journal_sequence", "journal_sha256", "recorded_at"):
+        assert post_repair[field] == post_migration[field]
+    assert run(*reserve_args, exit_code=4)["error"]["code"] == "replay_detected"
     assert not run("worker", "migrate", "--state", state)["data"]["changed"]
     assert run("worker", "check-owner", *owner_args, "--policy", policy_path, "--archive", archive)["data"]["ownership_valid"]
     compacted = run("worker", "compact", "--state", state)["data"]
@@ -126,4 +149,4 @@ with tempfile.TemporaryDirectory(prefix="apprivet-smoke-", dir=base) as temporar
     assert run("worker", "compact", "--state", state)["data"]["changed"]
     assert run(*reserve_args, exit_code=4)["error"]["code"] == "replay_detected"
 
-print("Snapshot, admission, replay, ownership, recovery, lossless migration and compaction checks passed.")
+print("Snapshot, admission, replay, ownership, recovery, lossless maintenance and intent-backed repair checks passed.")

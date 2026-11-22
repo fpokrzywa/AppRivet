@@ -1,6 +1,6 @@
 # Project status and handoff
 
-Updated: 2026-11-22. Read-only discovery, portable snapshots, digest-bound extraction, offline worker admission persistent local replay/capacity reservations, local ownership/recovery checks, and lossless in-place journal migration/compaction are implemented. The physical-device workflow and authenticated/isolated remote worker are not complete.
+Updated: 2026-11-22. Read-only discovery, portable snapshots, digest-bound extraction, offline worker admission persistent local replay/capacity reservations, local ownership/recovery checks, lossless in-place journal migration/compaction, and intent-backed torn-manifest repair are implemented. The physical-device workflow and authenticated/isolated remote worker are not complete.
 
 Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The owner changed visibility from private to public during this session; the change was verified. Standard hosted CI now starts, resolving the earlier billing admission failure. License selection remains open; no license, versioned binary release, payments or activation were added.
 
@@ -16,13 +16,14 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 - Persistent local replay protection and bounded worker reservations with init/reserve/status/release, kernel process locks, policy rechecking and retained request/nonce history. No jobs execute. See [WORKER_RESERVATIONS](WORKER_RESERVATIONS.md).
 - Exclusive local claims, exact worker/claim/fence checks, retained capacity after claim expiry, explicit accounting recovery and read-only journal recovery inspection. No process execution or termination is implied. See [WORKER_RECOVERY](WORKER_RECOVERY.md).
 - Explicit in-place journal format migration and lossless compaction, with immutable compressed history, preserved global fences, bounded decoding and fail-closed publication. See [JOURNAL_MAINTENANCE](JOURNAL_MAINTENANCE.md).
+- Intent-backed torn-manifest inspection/repair with pinned hashes, complete history replay, retained before-images and refusal of ambiguous/changed evidence. Older unanchored tears remain blocked. See [MANIFEST_REPAIR](MANIFEST_REPAIR.md).
 - Research, parity matrix, architecture, threat model, ADRs, roadmap, contribution/security documentation and CI.
 
 ## Evidence
 
 | Check | Result |
 | --- | --- |
-| Current Windows tests, eight packages, and go vet | Passed; admission coverage 86.3%, snapshot 81.0%, CLI 88.8% |
+| Current Windows tests, eight packages, and go vet | Passed; admission coverage 85.6%, snapshot 81.0%, CLI 88.5% |
 | Linux runtime tests and six cross-builds | All eight Linux package suites and macOS/Linux/Windows amd64/arm64 client builds passed |
 | Linux parser fuzz smoke | 274,120 executions over 10 seconds without failure; no coverage guidance in this precompiled binary |
 | Native Windows/Linux coverage-guided fuzz | 10,000 inputs passed on each; Linux CI uses a 60-second outer deadline |
@@ -59,7 +60,7 @@ Independent reservation review found no P1/P2 issues. Its P3 request-conflict cl
 
 Independent ownership/recovery review found no actionable issues and independently passed the admission/CLI test suites and diff checks. Local ownership checks are not atomic enforcement of an external action, and recovery records an unverified stopped-worker assertion. No process launch, termination, authenticated supervisor or protected store recovery was added. See [WORKER_RECOVERY](WORKER_RECOVERY.md).
 
-Independent journal-maintenance review found no actionable issues and independently passed the admission/CLI suites. Publication is deliberately fail-closed rather than a claimed cross-platform atomic replacement; interrupted control writes retain verified history and prepared evidence but need a separately designed repair procedure. No external rollback anchor, relocation handoff, authenticated executor or Apple validation was added. See [JOURNAL_MAINTENANCE](JOURNAL_MAINTENANCE.md).
+The earlier journal-maintenance review found no actionable issues. Publication still makes no claim of cross-platform atomic replacement. New publications record durable intent before rewriting control; explicit pinned repair validates the complete history and preserves damaged bytes. Older unanchored tears remain blocked. No external rollback anchor, relocation handoff, authenticated executor or Apple validation was added. See [MANIFEST_REPAIR](MANIFEST_REPAIR.md).
 
 The reviewer could not establish physical-device compatibility, Mac file/cancellation behavior or physical state mappings from fixtures. Hosted discovery smoke now covers basic Mac tool invocation; the detailed physical-device matrix remains open. Local Linux testing supplies Unix behavior evidence, not Apple hardware evidence.
 

@@ -137,6 +137,12 @@ func (t *transaction) maintain(ctx context.Context, now time.Time, action string
 		return MaintenanceReport{}, err
 	}
 	preparedName := "manifest-" + id + ".json"
+	source := original
+	if t.manifest != nil {
+		source = manifestBytes(*t.manifest)
+	}
+	intent := publicationIntent{SchemaVersion: 1, OperationID: id, PreparedManifest: preparedName, ManifestSHA256: m.Hash, SourceFile: "publication-source-" + id + ".bin", SourceSHA256: sum(source), SourceActiveName: t.fileName, SourceActiveSHA256: sum(original), SourceActiveBytes: t.size, Sequence: t.state.sequence, Head: t.state.hash, RecordedAt: stamp(t.state.at)}
+	intentBody := intentBytes(intent)
 	var staged []stagedFile
 	publicationStarted := false
 	defer func() {
@@ -149,7 +155,7 @@ func (t *transaction) maintain(ctx context.Context, now time.Time, action string
 	for _, item := range []struct {
 		name string
 		data []byte
-	}{{d.Name, packed.Bytes()}, {m.Active, nil}, {preparedName, body}} {
+	}{{d.Name, packed.Bytes()}, {m.Active, nil}, {preparedName, body}, {intent.SourceFile, source}, {"publication-" + id + ".intent.json", intentBody}} {
 		if err = cancelled(ctx); err != nil {
 			return MaintenanceReport{}, err
 		}
@@ -191,8 +197,16 @@ func (t *transaction) maintain(ctx context.Context, now time.Time, action string
 		return MaintenanceReport{}, stateIO()
 	}
 	publicationStarted = true // From here, retain all artifacts on uncertainty.
+	pending, err := stageFile(t.root, pendingName, intentBody)
+	if err != nil || syncStoreDirectory(t.root) != nil {
+		return MaintenanceReport{}, publicationUncertain()
+	}
 	if err = publishManifest(control, body); err != nil {
 		return MaintenanceReport{}, err
+	}
+	// Preserve the original active file until the publication marker is cleared.
+	if !removeOwned(t.root, pending) || syncStoreDirectory(t.root) != nil {
+		return MaintenanceReport{}, publicationUncertain()
 	}
 	result.Changed = true
 	result.Generation = m.Generation
@@ -214,9 +228,7 @@ func (t *transaction) maintain(ctx context.Context, now time.Time, action string
 }
 
 func publishManifest(control journalFile, body []byte) error {
-	uncertain := func() error {
-		return failure("commit_uncertain", "manifest publication failed; retain prepared files and inspect state; never restore an older history automatically")
-	}
+	uncertain := publicationUncertain
 	if _, err := control.Seek(0, io.SeekStart); err != nil {
 		return uncertain()
 	}
@@ -231,4 +243,8 @@ func publishManifest(control journalFile, body []byte) error {
 		return uncertain()
 	}
 	return nil
+}
+
+func publicationUncertain() error {
+	return failure("commit_uncertain", "manifest publication is uncertain; retain all evidence and inspect repair status before retrying")
 }

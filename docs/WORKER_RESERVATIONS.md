@@ -16,7 +16,7 @@ All limits are positive. Maximums: 64 active reservations, per-principal count n
 apprivet worker init --state worker-state --config worker-limits.json --json
 ```
 
-Initialization requires a new directory. Existing files/directories are never reset. An interrupted or failed initialization can leave incomplete state for inspection; normal commands refuse it rather than initialize it automatically. Keep the store at a stable location. There is no repair or reset command. Explicit [in-place migration and lossless compaction](JOURNAL_MAINTENANCE.md) preserve every event and replay record.
+Initialization requires a new directory. Existing files/directories are never reset. An interrupted or failed initialization can leave incomplete state for inspection; normal commands refuse it rather than initialize it automatically. Keep the store at a stable location. There is no reset command. Explicit [in-place migration and lossless compaction](JOURNAL_MAINTENANCE.md) preserve every event and replay record. [Manifest repair](MANIFEST_REPAIR.md) handles only publications with a durable pending intent; it cannot repair initialization or damaged events.
 
 Add these fields to an [admission request](WORKER_ADMISSION.md):
 
