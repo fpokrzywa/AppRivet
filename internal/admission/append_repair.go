@@ -69,6 +69,7 @@ type AppendRepairReport struct {
 	PresentBytes           int    `json:"present_bytes"`
 	EventBytes             int    `json:"event_bytes"`
 	BytesWritten           int    `json:"bytes_written"`
+	BytesReasserted        int    `json:"bytes_reasserted"`
 	RecordedAt             string `json:"recorded_at"`
 	ObservedAt             string `json:"observed_at"`
 	ClockRollback          bool   `json:"clock_rollback"`
@@ -78,7 +79,7 @@ type appendProof struct {
 	report     AppendRepairReport
 	marker     stagedFile
 	markerBody []byte
-	missing    []byte
+	record     []byte
 	activeSize int64
 }
 
@@ -157,7 +158,7 @@ func (t *transaction) proveAppend(ctx context.Context, now time.Time) (appendPro
 	}
 	proof.marker = marker
 	proof.markerBody = body
-	proof.missing = intent.Record[len(tail):]
+	proof.record = intent.Record
 	proof.activeSize = int64(len(active))
 	proof.report = AppendRepairReport{
 		Mode: "local_append_repair_inspection", IntentSHA256: sum(body), ActiveSHA256: sum(active),
@@ -188,15 +189,23 @@ func (t *transaction) repairAppend(ctx context.Context, proof appendProof, expec
 	if end, err := t.file.Seek(0, io.SeekEnd); err != nil || end != proof.activeSize {
 		return AppendRepairReport{}, stateIO()
 	}
+	// fsync can report writeback failure even though the bytes remain visible
+	// in cache. A later descriptor can miss that error and have nothing to flush.
+	// Reassert the exact event within its verified range before syncing again.
+	start := proof.activeSize - int64(r.PresentBytes)
+	if offset, err := t.file.Seek(start, io.SeekStart); err != nil || offset != start {
+		return AppendRepairReport{}, stateIO()
+	}
 	if err := cancelled(ctx); err != nil {
 		return AppendRepairReport{}, err
 	}
-	if err := t.finishAppend(proof.marker, proof.missing); err != nil {
+	if err := t.finishAppend(proof.marker, proof.record); err != nil {
 		return AppendRepairReport{}, err
 	}
 	r.Mode = "local_append_repair"
 	r.Changed = true
-	r.BytesWritten = len(proof.missing)
+	r.BytesWritten = len(proof.record) - r.PresentBytes
+	r.BytesReasserted = r.PresentBytes
 	return r, nil
 }
 
@@ -207,12 +216,10 @@ func (t *transaction) activeManifestHash() string {
 	return ""
 }
 
-func (t *transaction) finishAppend(marker stagedFile, suffix []byte) error {
-	if len(suffix) != 0 {
-		n, err := t.file.Write(suffix)
-		if err != nil || n != len(suffix) {
-			return appendUncertain()
-		}
+func (t *transaction) finishAppend(marker stagedFile, record []byte) error {
+	n, err := t.file.Write(record)
+	if err != nil || n != len(record) {
+		return appendUncertain()
 	}
 	if t.file.Sync() != nil || !removeOwned(t.root, marker) || syncStoreDirectory(t.root) != nil {
 		return appendUncertain()

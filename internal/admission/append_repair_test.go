@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -24,6 +25,50 @@ func repairPendingAppend(t *testing.T, s Store) AppendRepairReport {
 		t.Fatal(err)
 	}
 	return result
+}
+
+func TestAppendRepairReassertsCompleteEventBeforeSync(t *testing.T) {
+	f := newDiskFaultFixture(t, true)
+	ctx := context.Background()
+	path := interruptRecoveryAppend(t, f, "sync")
+	active := readFaultFile(t, path)
+	tx, err := f.store.openLocked(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.close()
+	proof, err := tx.proveAppend(ctx, *f.clock)
+	if err != nil || proof.report.PresentBytes != proof.report.EventBytes {
+		t.Fatal(proof.report, err)
+	}
+	probe := &appendSyncNeedsWrite{journalFile: tx.file, want: active[len(active)-proof.report.EventBytes:]}
+	tx.file = probe
+	plan := proof.report
+	repaired, err := tx.repairAppend(ctx, proof, AppendRepairExpect{plan.IntentSHA256, plan.ActiveSHA256})
+	if err != nil || !repaired.Changed || repaired.BytesWritten != 0 || repaired.BytesReasserted != proof.report.EventBytes {
+		t.Fatalf("repair did not sync the reasserted event: %+v, %v", repaired, err)
+	}
+	if !bytes.Equal(active, readFaultFile(t, path)) {
+		t.Fatal("repair rewrote earlier history or changed the event")
+	}
+}
+
+type appendSyncNeedsWrite struct {
+	journalFile
+	want  []byte
+	wrote bool
+}
+
+func (f *appendSyncNeedsWrite) Write(data []byte) (int, error) {
+	f.wrote = bytes.Equal(data, f.want)
+	return f.journalFile.Write(data)
+}
+
+func (f *appendSyncNeedsWrite) Sync() error {
+	if !f.wrote {
+		return errors.New("sync did not see the intended event reasserted")
+	}
+	return f.journalFile.Sync()
 }
 
 func interruptRecoveryAppend(t *testing.T, f diskFaultFixture, mode string) string {

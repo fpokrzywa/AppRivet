@@ -3,6 +3,7 @@
 ## Unreleased: native Linux journal writeback testing
 
 - Exercise real journal `fsync` `EIO` on a disposable ext4 device-mapper image. Verify recovery of a durable pending event and refusal of divergent persisted tails after device restoration.
+- Rewrite the exact verified event at its recorded offset during repair so cached bytes from failed writeback cannot substitute for a new sync.
 
 ## Unreleased: persistent Linux journal fault testing
 

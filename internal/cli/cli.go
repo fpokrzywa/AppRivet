@@ -266,7 +266,7 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 	}
 	switch data := response.Data.(type) {
 	case admission.AppendRepairReport:
-		fmt.Fprintf(a.Out, "Append repair: %s\nEvent: %s\nSequence: %d\nEvent bytes present: %d/%d\nBytes written: %d\n", data.Mode, data.EventKind, data.JournalSequence, data.PresentBytes, data.EventBytes, data.BytesWritten)
+		fmt.Fprintf(a.Out, "Append repair: %s\nEvent: %s\nSequence: %d\nEvent bytes present: %d/%d\nBytes added: %d\nIdentical bytes rewritten: %d\n", data.Mode, data.EventKind, data.JournalSequence, data.PresentBytes, data.EventBytes, data.BytesWritten, data.BytesReasserted)
 		fmt.Fprintf(a.Out, "Intent SHA-256: %s\nActive SHA-256: %s\nHistory SHA-256: %s\nClock rollback: %t\n", data.IntentSHA256, data.ActiveSHA256, data.JournalSHA256, data.ClockRollback)
 		fmt.Fprintln(a.Out, "Caller not authenticated. Execution not authorized.")
 	case admission.RepairReport:

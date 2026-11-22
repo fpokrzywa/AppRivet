@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,7 +20,8 @@ func TestLinuxJournalWriteback(t *testing.T) {
 	}
 	checkExt4TestDir(t, dir)
 	t.Setenv("TMPDIR", dir)
-	t.Run("append_fsync", testNativeAppendWriteback)
+	t.Run("append_fsync", func(t *testing.T) { testNativeAppendWriteback(t, false) })
+	t.Run("append_retry_cached", func(t *testing.T) { testNativeAppendWriteback(t, true) })
 	t.Run("repair_fsync", testNativeRepairWriteback)
 }
 
@@ -90,7 +90,7 @@ func invokeWritebackAppend(t *testing.T, f diskFaultFixture, probe ext4JournalPr
 	return tx.append(ctx, event{Kind: "recover", At: stamp(*f.clock), ID: f.owner.ReservationID, Owner: &f.owner, Stopped: true})
 }
 
-func testNativeAppendWriteback(t *testing.T) {
+func testNativeAppendWriteback(t *testing.T, retryCached bool) {
 	f, path := newWritebackFixture(t)
 	ctx := context.Background()
 	prefix := readFaultFile(t, path)
@@ -132,6 +132,25 @@ func testNativeAppendWriteback(t *testing.T) {
 	// independent read of what the backing filesystem actually persisted.
 	if visible, err := os.ReadFile(path); err == nil {
 		t.Logf("before remount exact complete event visible: %t", bytes.Equal(visible, append(bytes.Clone(prefix), record...)))
+	}
+	if retryCached {
+		// On this kernel, the full event may still be visible after failed
+		// writeback. Successful repair must make those bytes durable today.
+		plan, err := f.store.InspectAppendRepair(ctx)
+		if err == nil {
+			result, err := f.store.RepairAppend(ctx, AppendRepairExpect{plan.IntentSHA256, plan.ActiveSHA256})
+			if err != nil || result.JournalSHA256 != e.Hash || result.BytesWritten+result.BytesReasserted != len(record) {
+				t.Fatal("could not sync the verified event after device restoration", result, err)
+			}
+			runWritebackControl(t, "remount")
+			if !bytes.Equal(readFaultFile(t, path), append(bytes.Clone(prefix), record...)) {
+				t.Fatal("repair acknowledged a cached event that did not survive remount")
+			}
+			assertExt4Repaired(t, f, path, e.Hash)
+			t.Logf("same-mount retry persisted the event after native EIO: %d identical bytes reasserted", result.BytesReasserted)
+			return
+		}
+		t.Logf("same-mount inspection refused the evidence: %v", err)
 	}
 	runWritebackControl(t, "remount")
 	actual := readFaultFile(t, path)
@@ -189,23 +208,29 @@ func testNativeRepairWriteback(t *testing.T) {
 		}
 		defer tx.close()
 		proof, err := tx.proveAppend(ctx, *f.clock)
-		if err != nil || len(proof.missing) != 0 {
+		if err != nil || proof.report.PresentBytes != proof.report.EventBytes {
 			t.Fatalf("expected a fully persisted pending event: %v", err)
 		}
-		tx.file = ext4JournalProbe{journalFile: tx.file, sync: func(file journalFile) error {
-			runWritebackControl(t, "fault", block)
-			defer runWritebackControl(t, "restore")
-			// Redirty the already durable event bytes without changing the
-			// file or its size so the native sync must write the faulted block.
-			if _, err := file.Seek(-int64(plan.EventBytes), io.SeekEnd); err != nil {
-				t.Fatal(err)
-			}
-			if n, err := file.Write(actual[len(actual)-plan.EventBytes:]); err != nil || n != plan.EventBytes {
-				t.Fatalf("could not dirty the existing data block: %d, %v", n, err)
-			}
-			nativeErr = file.Sync()
-			return nativeErr
-		}}
+		tx.file = ext4JournalProbe{
+			journalFile: tx.file,
+			write: func(file journalFile, data []byte) (int, error) {
+				if !bytes.Equal(data, actual[len(actual)-plan.EventBytes:]) {
+					t.Fatal("repair tried to write past the recorded event")
+				}
+				runWritebackControl(t, "fault", block)
+				n, err := file.Write(data)
+				if err != nil || n != len(data) {
+					runWritebackControl(t, "restore")
+					t.Fatalf("buffered repair write failed before fsync: %d, %v", n, err)
+				}
+				return n, nil
+			},
+			sync: func(file journalFile) error {
+				defer runWritebackControl(t, "restore")
+				nativeErr = file.Sync()
+				return nativeErr
+			},
+		}
 		_, err = tx.repairAppend(ctx, proof, pin)
 		code(t, err, "commit_uncertain")
 	}()
@@ -218,7 +243,7 @@ func testNativeRepairWriteback(t *testing.T) {
 		t.Fatal("failed re-sync changed durable event bytes or intent")
 	}
 	result := repairPendingAppend(t, f.store)
-	if result.BytesWritten != 0 || result.JournalSHA256 != plan.JournalSHA256 {
+	if result.BytesWritten != 0 || result.BytesReasserted != plan.EventBytes || result.JournalSHA256 != plan.JournalSHA256 {
 		t.Fatal("retry did not finalize the exact complete event", result)
 	}
 	runWritebackControl(t, "remount")

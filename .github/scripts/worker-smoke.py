@@ -127,6 +127,7 @@ with tempfile.TemporaryDirectory(prefix="apprivet-smoke-", dir=base) as temporar
                    "--expect-intent-sha256", append_plan["intent_sha256"],
                    "--expect-active-sha256", append_plan["active_sha256"])["data"]
     assert appended["changed"] and appended["bytes_written"] == len(record) - 17
+    assert appended["bytes_reasserted"] == 17
     assert active.read_bytes() == prefix + record
     assert run(*reserve_args, exit_code=4)["error"]["code"] == "replay_detected"
     pre_migration = run("worker", "recovery-status", "--state", state, "--principal", "ci-developer")["data"]

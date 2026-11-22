@@ -205,7 +205,7 @@ func TestReservationProcessHelper(t *testing.T) {
 				var proof appendProof
 				proof, err = tx.proveAppend(ctx, testNow)
 				if err == nil {
-					tx.file = crashPublication{tx.file}
+					tx.file = diskFaultFile{tx.file, "exit-progress"}
 					_, err = tx.repairAppend(ctx, proof, AppendRepairExpect{proof.report.IntentSHA256, proof.report.ActiveSHA256})
 				}
 				tx.close()

@@ -28,8 +28,12 @@ func (f diskFaultFile) Write(b []byte) (int, error) {
 			err = syscall.ENOSPC
 		}
 		return n, err
-	case "exit":
-		if _, err := f.journalFile.Write(b[:len(b)/2]); err != nil || f.journalFile.Sync() != nil {
+	case "exit", "exit-progress":
+		written := len(b) / 2
+		if f.mode == "exit-progress" {
+			written = 3 * len(b) / 4
+		}
+		if _, err := f.journalFile.Write(b[:written]); err != nil || f.journalFile.Sync() != nil {
 			os.Exit(85)
 		}
 		os.Exit(86)
