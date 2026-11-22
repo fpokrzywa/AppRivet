@@ -58,7 +58,7 @@ Recovery verifies principal and every ownership field under the lock, then appen
 
 Cancellation before the append changes no ownership. A fully synced append wins over cancellation. Write/sync failure is `commit_uncertain`: retain the store and inspect it before retrying. A complete but uncertain event can be inspected; an incomplete event blocks all operations. No partial-tail truncation or replay-history deletion is implemented.
 
-Full or clock-regressed stores can be inspected but cannot bypass the normal mutation checks to claim or recover. There is no capacity reserved for recovery events, automatic compaction, repair or secure migration. If the journal fills, stop admitting work and use an independently designed recovery procedure; deleting state to free capacity defeats replay protection. This bounded local prototype is not a production scheduler.
+Full or clock-regressed stores can be inspected but cannot bypass the normal mutation checks to claim or recover. There is no capacity reserved for recovery events or automatic repair. [Explicit in-place migration and compaction](JOURNAL_MAINTENANCE.md) can reclaim a full append segment while preserving every event and fence. Cumulative history/segment limits still fail closed; deleting state to free capacity defeats replay protection. This bounded local prototype is not a production scheduler.
 
 ## Compatibility and errors
 
@@ -84,5 +84,5 @@ Still unimplemented or unvalidated:
 
 1. Authenticated principal/worker identities, protected policy deployment and trusted approval/teardown evidence. Local flags are not this boundary.
 2. Real execution supervision, atomic side-effect fencing, artifact publication, restart reconciliation against live process/VM identity, and verified termination. No claimed record proves a process exists or stopped.
-3. Rollback/clone-resistant storage and fencing, power-cut durability, secure migration/compaction, disk-full recovery, rate limits, private Windows ACL enforcement and deployment-specific filesystem behavior. A copied or rolled-back store can preserve stale ownership; hashes do not prevent this.
+3. Rollback/clone-resistant storage and fencing, power-cut durability, authenticated relocation, administrative repair, disk-full recovery, rate limits, private Windows ACL enforcement and deployment-specific filesystem behavior. A copied or rolled-back store can preserve stale ownership; hashes do not prevent this.
 4. Isolated Mac workers and signer separation under malicious project code; physical-device pairing/state compatibility, signing, installation/launch and Apple account workflows. Hosted trusted-source simulator tests do not validate these gates.

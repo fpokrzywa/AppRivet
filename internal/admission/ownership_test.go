@@ -162,7 +162,7 @@ func TestOwnershipMalformedInputAndCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := ownerOf(got.Reservations[0])
-	for _, mutate := range []func(*Ownership){func(o *Ownership) { o.Fence = 0 }, func(o *Ownership) { o.Fence = maxEvents + 1 }, func(o *Ownership) { o.ClaimID = "bad" }, func(o *Ownership) { o.ReservationID = "bad" }, func(o *Ownership) { o.WorkerID = "" }} {
+	for _, mutate := range []func(*Ownership){func(o *Ownership) { o.Fence = 0 }, func(o *Ownership) { o.Fence = maxHistoryEvents + 1 }, func(o *Ownership) { o.ClaimID = "bad" }, func(o *Ownership) { o.ReservationID = "bad" }, func(o *Ownership) { o.WorkerID = "" }} {
 		bad := owner
 		mutate(&bad)
 		_, err = s.CheckOwner(ctx, "developer", bad, p, a)

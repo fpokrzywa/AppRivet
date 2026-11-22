@@ -116,13 +116,13 @@ func TestJournalFullAndReplacementFailClosed(t *testing.T) {
 	tx.size = maxJournalBytes
 	code(t, tx.observe(ctx, testNow.Add(time.Second)), "state_full")
 	tx.size = int64(len(original))
-	tx.state.sequence = maxEvents
+	tx.activeEvents = maxEvents
 	code(t, tx.observe(ctx, testNow.Add(time.Second)), "state_full")
 	got, _ := os.ReadFile(filepath.Join(s.Dir, "journal.jsonl"))
 	if !bytes.Equal(original, got) {
 		t.Fatal("full state mutated")
 	}
-	tx.state.sequence = 1
+	tx.activeEvents = 1
 	// Replacement is tested where renaming an open file is supported.
 	path := filepath.Join(s.Dir, "journal.jsonl")
 	if err = os.Rename(path, path+".old"); err != nil {

@@ -17,7 +17,7 @@ type Ownership struct {
 }
 
 func (o Ownership) valid() bool {
-	return nonce.MatchString(o.ReservationID) && identifier.MatchString(o.WorkerID) && nonce.MatchString(o.ClaimID) && o.Fence > 0 && o.Fence <= maxEvents
+	return nonce.MatchString(o.ReservationID) && identifier.MatchString(o.WorkerID) && nonce.MatchString(o.ClaimID) && o.Fence > 0 && o.Fence <= maxHistoryEvents
 }
 func (o Ownership) matches(j Reservation) bool {
 	return o.ReservationID == j.ID && o.WorkerID == j.WorkerID && o.ClaimID == j.ClaimID && o.Fence == j.Fence
@@ -238,7 +238,7 @@ func (s Store) RecoveryStatus(ctx context.Context, principal string) (RecoveryRe
 			report.Reservations = append(report.Reservations, j.current(viewAt))
 		}
 	}
-	if !unchanged(tx.root, "lock", tx.lock) || !unchanged(tx.root, "journal.jsonl", tx.file) {
+	if !tx.identitiesUnchanged() {
 		return RecoveryReport{}, stateIO()
 	}
 	if err = cancelled(ctx); err != nil {

@@ -99,6 +99,17 @@ with tempfile.TemporaryDirectory(prefix="apprivet-smoke-", dir=base) as temporar
                   "--worker", claimed["worker_id"], "--claim", claimed["claim_id"], "--fence", claimed["fence"])
     checked = run("worker", "check-owner", *owner_args, "--policy", policy_path, "--archive", archive)["data"]
     assert checked["ownership_valid"] and not checked["authentication_verified"] and not checked["execution_authorized"]
+    pre_migration = run("worker", "recovery-status", "--state", state, "--principal", "ci-developer")["data"]
+    migrated = run("worker", "migrate", "--state", state)["data"]
+    assert migrated["changed"] and migrated["format"] == 2 and migrated["generation"] == 1
+    assert not migrated["authentication_verified"] and not migrated["execution_authorized"]
+    post_migration = run("worker", "recovery-status", "--state", state, "--principal", "ci-developer")["data"]
+    for field in ("reservations", "journal_sequence", "journal_sha256", "recorded_at"):
+        assert post_migration[field] == pre_migration[field]
+    assert not run("worker", "migrate", "--state", state)["data"]["changed"]
+    assert run("worker", "check-owner", *owner_args, "--policy", policy_path, "--archive", archive)["data"]["ownership_valid"]
+    compacted = run("worker", "compact", "--state", state)["data"]
+    assert compacted["changed"] and compacted["generation"] == 2
     before = (state / "journal.jsonl").read_bytes()
     inspection = run("worker", "recovery-status", "--state", state, "--principal", "ci-developer")["data"]
     assert inspection["mode"] == "local_recovery_inspection" and not inspection["execution_authorized"]
@@ -112,5 +123,7 @@ with tempfile.TemporaryDirectory(prefix="apprivet-smoke-", dir=base) as temporar
     assert run("worker", "check-owner", *owner_args, "--policy", policy_path, "--archive", archive,
                exit_code=4)["error"]["code"] == "ownership_conflict"
     assert run(*reserve_args, exit_code=4)["error"]["code"] == "replay_detected"
+    assert run("worker", "compact", "--state", state)["data"]["changed"]
+    assert run(*reserve_args, exit_code=4)["error"]["code"] == "replay_detected"
 
-print("Snapshot, admission, reservation/replay, exclusive ownership and explicit recovery checks passed.")
+print("Snapshot, admission, replay, ownership, recovery, lossless migration and compaction checks passed.")

@@ -1,5 +1,17 @@
 # Verification record
 
+## Safe journal migration and compaction (2026-11-22)
+
+Local Windows full tests and vet passed across all eight tested packages (admission coverage 86.3%, CLI 88.8%). Native Windows storage fuzzing completed 10,000 inputs. Real CLI smoke passed migration and compaction with a claimed job, preserved its owner tuple and event head, rejected stale ownership after recovery, and retained replay refusal. All eight compiled Linux test executables and six client cross-builds passed.
+
+Security tests verify byte-identical archived history, all-event replay, capacity retention, full-segment maintenance and global fences beyond 16,384, concurrent maintenance/reservation processes, strict manifest/path/size checks, missing/corrupt/linked/reordered segments, single-member gzip and expansion limits, publication truncate/write/sync faults, cancellation after commit, and an actual child-process exit during a partial control-file publication. The crashed store refuses normal operations while the prepared manifest and verified history remain intact. Missing API/CLI tests failed before implementation and passed afterward.
+
+Independent review found no actionable issues and independently passed the admission/CLI suites. Hosted CI results are pending. [JOURNAL_MAINTENANCE](JOURNAL_MAINTENANCE.md#evidence-and-remaining-live-validation) records the remaining limits: no automatic torn-manifest repair/fallback, no relocation or external rollback/clone anchor, bounded lifetime history, Windows metadata/ACL and power-cut validation, authenticated ownership and live execution teardown, or Apple hardware/signing guarantees. Migration is an in-place format upgrade; compaction is lossless segment sealing.
+
+```sh
+go test ./internal/admission -run='^$' -fuzz=FuzzJournalStorage -fuzztime=10000x -parallel=2 -timeout=60s
+```
+
 ## Reservation recovery and ownership (2026-11-22)
 
 Local Windows tests and vet passed across all eight tested packages; admission coverage is 86.6%, CLI 88.9%. Native Windows journal fuzzing completed 10,000 inputs with reserved/claimed/recovered state seeds. Real CLI smoke passed exclusive claim, current-owner checking, read-only recovery inspection, ordinary-release refusal, stopped-assertion requirement, explicit recovery, old-owner refusal and retained request replay protection. All eight compiled Linux package test executables and six client cross-builds passed.

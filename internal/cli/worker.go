@@ -20,7 +20,7 @@ func (a App) runWorker(ctx context.Context, args []string, jsonMode bool) int {
 		return a.emit(response, jsonMode, exit)
 	}
 	badArgs := func() int {
-		return failure("invalid_arguments", "use worker init/check/reserve/status/release --help; no execution command is available", 2)
+		return failure("invalid_arguments", "use worker --help for admission, ownership, recovery and maintenance commands; no execution command is available", 2)
 	}
 	helpResult := func() int { response.Data = map[string]string{"help": help}; return a.emit(response, jsonMode, 0) }
 	if len(args) == 0 {
@@ -44,6 +44,7 @@ func (a App) runWorker(ctx context.Context, args []string, jsonMode bool) int {
 		fs.StringVar(&archive, "archive", "", "snapshot archive")
 	case "init":
 		fs.StringVar(&configPath, "config", "", "trusted local limits file")
+	case "migrate", "compact":
 	case "status", "release":
 		fs.StringVar(&principal, "principal", "", "operator-supplied principal; not authentication")
 		if command == "status" {
@@ -78,6 +79,10 @@ func (a App) runWorker(ctx context.Context, args []string, jsonMode bool) int {
 	var err error
 	store := admission.Store{Dir: resolve(state)}
 	switch command {
+	case "migrate":
+		response.Data, err = store.Migrate(ctx)
+	case "compact":
+		response.Data, err = store.Compact(ctx)
 	case "init":
 		var config admission.Config
 		config, err = admission.LoadConfig(resolve(configPath))

@@ -189,6 +189,18 @@ func TestReservationProcessHelper(t *testing.T) {
 	var err error
 	if strings.HasPrefix(mode, "claim:") {
 		_, err = s.Claim(context.Background(), "developer", strings.TrimPrefix(mode, "claim:"), r.RequestID, os.Getenv("APPRIVET_TEST_POLICY"), os.Getenv("APPRIVET_TEST_ARCHIVE"))
+	} else if mode == "crash-migrate" {
+		var tx *transaction
+		tx, err = s.begin(context.Background())
+		if err == nil {
+			tx.file = crashPublication{tx.file}
+			_, err = tx.maintain(context.Background(), testNow, "migrate")
+			tx.close()
+		}
+	} else if mode == "migrate" {
+		_, err = s.Migrate(context.Background())
+	} else if mode == "compact" {
+		_, err = s.Compact(context.Background())
 	} else {
 		_, err = s.Reserve(context.Background(), "developer", os.Getenv("APPRIVET_TEST_POLICY"), r, os.Getenv("APPRIVET_TEST_ARCHIVE"))
 	}

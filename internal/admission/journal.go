@@ -74,7 +74,7 @@ func (s *journalState) capacity(principal string, n int64, now time.Time) bool {
 }
 func (s *journalState) apply(e event) error {
 	now, err := time.Parse(time.RFC3339Nano, e.At)
-	if err != nil || now.IsZero() || stamp(now) != e.At || now.Before(s.at) || e.Sequence != s.sequence+1 || e.Previous != s.hash {
+	if err != nil || now.IsZero() || stamp(now) != e.At || now.Before(s.at) || e.Sequence != s.sequence+1 || e.Sequence > maxHistoryEvents || e.Previous != s.hash {
 		return corrupt()
 	}
 	hash := e.Hash
@@ -146,30 +146,40 @@ func (s *journalState) apply(e event) error {
 }
 func replay(b []byte) (journalState, error) {
 	var s journalState
+	_, err := replaySegment(&s, b, false)
+	if err != nil {
+		return journalState{}, err
+	}
+	return s, nil
+}
+func replaySegment(s *journalState, b []byte, allowEmpty bool) (int, error) {
+	if len(b) == 0 && allowEmpty {
+		return 0, nil
+	}
 	if len(b) == 0 || len(b) > maxJournalBytes || b[len(b)-1] != '\n' {
-		return s, corrupt()
+		return 0, corrupt()
 	}
 	lines := bytes.Split(b[:len(b)-1], []byte{'\n'})
 	if len(lines) > maxEvents {
-		return s, corrupt()
+		return 0, corrupt()
 	}
 	for _, line := range lines {
 		if len(line) > maxEventBytes {
-			return journalState{}, corrupt()
+			return 0, corrupt()
 		}
 		var e event
 		if json.Unmarshal(line, &e) != nil {
-			return journalState{}, corrupt()
+			return 0, corrupt()
 		}
 		canonical, _ := json.Marshal(e)
 		if !bytes.Equal(line, canonical) {
-			return journalState{}, corrupt()
+			return 0, corrupt()
 		}
 		if err := s.apply(e); err != nil {
-			return journalState{}, err
+			return 0, err
 		}
 	}
-	return s, nil
+	return len(lines), nil
 }
 
 type journalFile interface {
@@ -177,19 +187,28 @@ type journalFile interface {
 	Stat() (os.FileInfo, error)
 	Sync() error
 	Close() error
+	Truncate(int64) error
 }
 
 type transaction struct {
-	root  *os.Root
-	lock  *os.File
-	file  journalFile
-	state journalState
-	size  int64
+	root         *os.Root
+	lock         *os.File
+	file         journalFile
+	state        journalState
+	size         int64
+	control      journalFile
+	fileName     string
+	manifest     *journalManifest
+	activeEvents int
+	historyBytes int64
 }
 
 func (t *transaction) close() {
 	if t.file != nil {
 		t.file.Close()
+	}
+	if t.control != nil {
+		t.control.Close()
 	}
 	if t.lock != nil {
 		unlockFile(t.lock)
@@ -238,7 +257,7 @@ func (s Store) begin(ctx context.Context) (*transaction, error) {
 	if err != nil {
 		return nil, stateIO()
 	}
-	tx := &transaction{root: root}
+	tx := &transaction{root: root, fileName: "journal.jsonl"}
 	ok := false
 	defer func() {
 		if !ok {
@@ -267,11 +286,26 @@ func (s Store) begin(ctx context.Context) (*transaction, error) {
 	if err != nil {
 		return nil, stateIO()
 	}
-	tx.state, err = replay(b)
-	if err != nil {
-		return nil, err
+	if bytes.HasPrefix(b, []byte(`{"schema_version":`)) {
+		m, parseErr := parseManifest(b)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		tx.control = tx.file
+		tx.file = nil
+		tx.manifest = &m
+		tx.fileName = m.Active
+		if err = tx.loadManifest(ctx, m); err != nil {
+			return nil, err
+		}
+	} else {
+		tx.activeEvents, err = replaySegment(&tx.state, b, false)
+		if err != nil {
+			return nil, err
+		}
+		tx.size = int64(len(b))
+		tx.historyBytes = tx.size
 	}
-	tx.size = int64(len(b))
 	ok = true
 	return tx, nil
 }
@@ -297,7 +331,7 @@ func (t *transaction) append(ctx context.Context, e event) error {
 	e.Hash = sum(b)
 	b, _ = json.Marshal(e)
 	b = append(b, '\n')
-	if t.state.sequence >= maxEvents || len(b) > maxEventBytes+1 || t.size+int64(len(b)) > maxJournalBytes {
+	if t.activeEvents >= maxEvents || t.state.sequence >= maxHistoryEvents || len(b) > maxEventBytes+1 || t.size+int64(len(b)) > maxJournalBytes || t.historyBytes+int64(len(b)) > maxHistoryBytes {
 		return failure("state_full", "reservation journal is full; replay history was retained")
 	}
 	// Validate the next transition before writing, without mutating live state.
@@ -306,7 +340,7 @@ func (t *transaction) append(ctx context.Context, e event) error {
 	if err := next.apply(e); err != nil {
 		return err
 	}
-	if !unchanged(t.root, "lock", t.lock) || !unchanged(t.root, "journal.jsonl", t.file) {
+	if !t.identitiesUnchanged() {
 		return stateIO()
 	}
 	if err := cancelled(ctx); err != nil {
@@ -324,6 +358,8 @@ func (t *transaction) append(ctx context.Context, e event) error {
 	}
 	t.state = next
 	t.size += int64(len(b))
+	t.activeEvents++
+	t.historyBytes += int64(len(b))
 	return nil
 }
 
@@ -356,7 +392,7 @@ func (s Store) Init(ctx context.Context, c Config) error {
 	if err != nil {
 		return stateIO()
 	}
-	tx := &transaction{root: root}
+	tx := &transaction{root: root, fileName: "journal.jsonl"}
 	defer tx.close()
 	tx.lock, err = root.OpenFile("lock", os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
 	if err != nil {

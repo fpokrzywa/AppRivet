@@ -1,6 +1,6 @@
 # Project status and handoff
 
-Updated: 2026-11-22. Read-only discovery, portable snapshots, digest-bound extraction, offline worker admission persistent local replay/capacity reservations, and local ownership/recovery checks are implemented. The physical-device workflow and authenticated/isolated remote worker are not complete.
+Updated: 2026-11-22. Read-only discovery, portable snapshots, digest-bound extraction, offline worker admission persistent local replay/capacity reservations, local ownership/recovery checks, and lossless in-place journal migration/compaction are implemented. The physical-device workflow and authenticated/isolated remote worker are not complete.
 
 Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The owner changed visibility from private to public during this session; the change was verified. Standard hosted CI now starts, resolving the earlier billing admission failure. License selection remains open; no license, versioned binary release, payments or activation were added.
 
@@ -15,6 +15,7 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 - Read-only offline admission checks for exact grant/principal/project/operation/digest bindings, time windows and per-snapshot quotas; decisions explicitly do not authenticate or authorize execution.
 - Persistent local replay protection and bounded worker reservations with init/reserve/status/release, kernel process locks, policy rechecking and retained request/nonce history. No jobs execute. See [WORKER_RESERVATIONS](WORKER_RESERVATIONS.md).
 - Exclusive local claims, exact worker/claim/fence checks, retained capacity after claim expiry, explicit accounting recovery and read-only journal recovery inspection. No process execution or termination is implied. See [WORKER_RECOVERY](WORKER_RECOVERY.md).
+- Explicit in-place journal format migration and lossless compaction, with immutable compressed history, preserved global fences, bounded decoding and fail-closed publication. See [JOURNAL_MAINTENANCE](JOURNAL_MAINTENANCE.md).
 - Research, parity matrix, architecture, threat model, ADRs, roadmap, contribution/security documentation and CI.
 
 ## Evidence

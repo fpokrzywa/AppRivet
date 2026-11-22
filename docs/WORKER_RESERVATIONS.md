@@ -16,7 +16,7 @@ All limits are positive. Maximums: 64 active reservations, per-principal count n
 apprivet worker init --state worker-state --config worker-limits.json --json
 ```
 
-Initialization requires a new directory. Existing files/directories are never reset. An interrupted or failed initialization can leave incomplete state for inspection; normal commands refuse it rather than initialize it automatically. Keep the store at a stable location. There is no repair, reset, compaction or migration command.
+Initialization requires a new directory. Existing files/directories are never reset. An interrupted or failed initialization can leave incomplete state for inspection; normal commands refuse it rather than initialize it automatically. Keep the store at a stable location. There is no repair or reset command. Explicit [in-place migration and lossless compaction](JOURNAL_MAINTENANCE.md) preserve every event and replay record.
 
 Add these fields to an [admission request](WORKER_ADMISSION.md):
 
@@ -52,7 +52,7 @@ The journal is canonical JSON Lines with sequential events and a SHA-256 chain. 
 
 The observed UTC time watermark is persisted. A clock earlier than that watermark freezes operations with `clock_rollback`; expiry cannot be undone by a subsequently observed backward step. This is not a secure clock: an undetected rollback, a large forward jump or operator clock tampering remains outside the guarantee. Status and some rejected requests append time observations, so status is not read-only.
 
-Bounds are 16 MiB, 16,384 events, 4,096 bytes per event and 4,096 lifetime reservations, whichever is reached first. Time observations count as events. Full state fails closed, including maintenance/release/recovery operations that would append. The read-only `recovery-status` command can inspect a valid full journal. Records are never silently evicted. Future rotation must preserve replay protection and coordinate outstanding grants; deleting the directory and starting again is not a safe recovery procedure.
+Legacy/active-segment bounds are 16 MiB and 16,384 events, with 4,096 bytes per event and 4,096 lifetime reservations. Explicit migration enables bounded compressed history with unchanged global event sequences; see JOURNAL_MAINTENANCE.md for cumulative limits. Time observations count as events. Full state fails closed, including maintenance/release/recovery operations that would append. The read-only `recovery-status` command can inspect a valid full journal. Records are never silently evicted. Explicit compaction preserves all replay and ownership history and reclaims only the append budget. Directory relocation and automatic damaged-state repair remain unsupported; deleting the directory and starting again is not a safe recovery procedure.
 
 Cancellation before a reservation append consumes no request. Once a full write has synced, success wins over cancellation. Write/sync failure returns `commit_uncertain`: the event may be recorded. Retain state and query status before any retry; if the journal is damaged, stop and inspect it. Never truncate a partial tail automatically. Test-injected write failures establish this behavior, not power-loss durability. Initialization does not fsync directory entries; catastrophic loss of newly created state requires operational recovery rather than automatic reinitialization.
 

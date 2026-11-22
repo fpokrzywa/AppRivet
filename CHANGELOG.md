@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add explicit in-place journal migration and lossless compaction using bounded immutable compressed history, strict manifests and the existing kernel lock. Retain all replay/ownership events and global fences; no relocation or stale-history fallback.
+- Add full-journal, process-concurrency/crash, publication-fault, gzip/path/corruption security tests and storage fuzz/CLI CI coverage. Document cumulative limits, torn-manifest recovery and live durability gaps.
+
 - Add durable exclusive claims, worker/claim/fence ownership checks with current policy and snapshot verification, and exact-owner recovery with an explicitly unverified stopped-worker assertion. Claimed capacity remains held after expiry.
 - Add read-only recovery inspection for valid full/clock-regressed journals, legacy compatibility, process-contention/failure/security tests and CLI smoke. Document external fencing, supervisor/teardown, storage and Apple validation gaps.
 

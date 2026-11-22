@@ -60,6 +60,8 @@ Usage:
   apprivet worker check-owner --state DIR --principal ID --reservation ID --worker ID --claim ID --fence N --policy FILE --archive FILE [--json]
   apprivet worker recovery-status --state DIR --principal ID [--json]
   apprivet worker recover --state DIR --principal ID --reservation ID --worker ID --claim ID --fence N --confirmed-stopped [--json]
+  apprivet worker migrate --state DIR [--json]
+  apprivet worker compact --state DIR [--json]
   apprivet version [--json]
 
 Build/test options:
@@ -75,6 +77,7 @@ Extraction requires a matching digest and a new destination; it executes no code
 Worker checks evaluate local policy offline; they do not authenticate or authorize execution.
 Reservations retain replay history and account for capacity; they launch no jobs.
 Expired claims retain capacity until exact-owner recovery. Recovery verifies no process termination.
+Migration upgrades the journal in place; compaction preserves all replay and ownership history.
 
 Use --help with a command. --json is supported before or after the command.
 Windows/Linux: project preparation and offline report inspection. iOS builds and
@@ -257,6 +260,12 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 		return exit
 	}
 	switch data := response.Data.(type) {
+	case admission.MaintenanceReport:
+		fmt.Fprintf(a.Out, "Journal %s: changed=%t; format=%d; generation=%d; sequence=%d; history retained for %d reservations.\n", data.Action, data.Changed, data.Format, data.Generation, data.JournalSequence, data.RetainedReservations)
+		fmt.Fprintln(a.Out, "Caller not authenticated; execution not authorized. No history discarded or second store created.")
+		if data.CleanupPending {
+			fmt.Fprintln(a.Out, "Redundant-file cleanup or directory sync is pending; retain the store for inspection.")
+		}
 	case admission.Receipt:
 		fmt.Fprintln(a.Out, "Local reservation accounting; caller not authenticated, execution not authorized.")
 		writeReservations(a.Out, data.Reservations)
