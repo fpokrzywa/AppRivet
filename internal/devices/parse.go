@@ -275,6 +275,18 @@ func jsonValue(decoder *json.Decoder, depth int) error {
 				return err
 			}
 			name, ok := key.(string)
+			// Struct decoding matches keys case-insensitively as well. Refuse
+			// aliases such as devices/Devices before they can overwrite a field.
+			name = strings.Map(func(r rune) rune {
+				// SimpleFold also covers Unicode aliases such as long s / S.
+				lowest := r
+				for next := unicode.SimpleFold(r); next != r; next = unicode.SimpleFold(next) {
+					if next < lowest {
+						lowest = next
+					}
+				}
+				return lowest
+			}, name)
 			if !ok || seen[name] {
 				return invalidReport()
 			}

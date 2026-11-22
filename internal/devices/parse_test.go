@@ -101,6 +101,8 @@ func TestDuplicateJSONKeysCannotHideDevicesOrFailures(t *testing.T) {
 		{envelope(`[{"identifier":"device-a","identifier":"device-b"}]`), false},
 		{strings.Replace(envelope(`[{"identifier":"a"}]`), `"devices":[{"identifier":"a"}]`, `"devices":[{"identifier":"a"}],"devices":[]`, 1), false},
 		{`{"devices":{"runtime":[],"runtim\u0065":[]}}`, true},
+		{`{"devices":{"runtime":[{"udid":"device-a"}]},"Devices":{}}`, true},
+		{`{"devices":{"runtime":[{"udid":"device-a"}]},"device\u017f":{}}`, true},
 	}
 	for _, tc := range cases {
 		inv, err := Parse([]byte(tc.body), tc.sim)

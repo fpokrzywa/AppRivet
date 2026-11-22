@@ -35,6 +35,9 @@ jobs:
       - name: Race detector
         if: runner.os != 'Windows'
         run: go test -race ./...
+      - name: Fuzz device reports
+        if: runner.os == 'Linux'
+        run: go test ./internal/devices -run='^$' -fuzz=FuzzParse -fuzztime=15s -parallel=2
       - name: Build CLI
         run: go build ./cmd/apprivet
 
