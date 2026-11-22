@@ -54,4 +54,6 @@ These errors use exit 4; invalid arguments use 2 and cancellation before publica
 - Authenticated workers/principals, trusted policy deployment, external side-effect fencing, live process/VM reconciliation and verified teardown remain unimplemented. Repair preserves ownership accounting; it cannot establish that a worker is stopped.
 - Isolated Mac execution under malicious source, signer separation, physical-device USB/Wi-Fi/pairing states, signing, install/launch and Apple account workflows still need live validation. Hosted trusted-source simulator CI covers only the existing generated app/build/test path.
 
+All four jobs in [run 45067510656](https://github.com/fpokrzywa/AppRivet/actions/runs/45067510656) passed at code/workflow commit `cebca8c`: Windows/Linux/macOS tests and repair CLI smoke, Unix race checks, six Linux fuzz targets (10,000 inputs each), and the existing trusted-source simulator integration. Independent review identified two retry durability gaps; both were fixed and re-reviewed. The subsequent handoff is documentation-only.
+
 See [verification evidence](VERIFICATION.md), [journal maintenance](JOURNAL_MAINTENANCE.md) and [ownership/recovery](WORKER_RECOVERY.md).
