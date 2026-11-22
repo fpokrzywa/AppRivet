@@ -76,7 +76,7 @@ All store errors exit 4 except invalid arguments (2) and cancellation before com
 
 ## Validation and remaining live gates
 
-Automated security tests cover cross-process contention, process-death lock recovery, replay after restart/release/expiry, exact deadline boundaries, observed clock rollback, global/per-principal counts, byte budgets, policy revocation/quota changes during verification, cancellation, malformed state, partial writes, sync uncertainty, file replacement, private POSIX modes and strict parsing. Native journal fuzzing and CLI smoke run in CI. See [VERIFICATION](VERIFICATION.md) for actual completed runs.
+Automated security tests cover cross-process contention, process-death lock recovery, replay after restart/release/expiry, exact deadline boundaries, observed clock rollback, global/per-principal counts, byte budgets, policy revocation/quota changes during verification, cancellation, malformed state, partial writes, sync uncertainty, file replacement, private POSIX modes and strict parsing. Native journal fuzzing and CLI smoke run in CI. All four jobs in [run 45059896975](https://github.com/fpokrzywa/AppRivet/actions/runs/45059896975) passed at code/workflow commit d2bb5a9, including Windows/Linux/macOS reservation tests and CLI smoke, Linux/macOS race checks, Linux journal fuzzing and the existing Mac simulator integration. See [VERIFICATION](VERIFICATION.md) for complete evidence.
 
 Still required before a live worker:
 

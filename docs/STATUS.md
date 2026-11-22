@@ -20,7 +20,7 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 
 | Check | Result |
 | --- | --- |
-| Current Windows tests, eight packages, and go vet | Passed; admission coverage 89.0%, snapshot 81.0%, CLI 88.1% |
+| Current Windows tests, eight packages, and go vet | Passed; admission coverage 86.2%, snapshot 81.0%, CLI 89.0% |
 | Linux runtime tests and six cross-builds | All eight Linux package suites and macOS/Linux/Windows amd64/arm64 client builds passed |
 | Linux parser fuzz smoke | 274,120 executions over 10 seconds without failure; no coverage guidance in this precompiled binary |
 | Native Windows/Linux coverage-guided fuzz | 10,000 inputs passed on each; Linux CI uses a 60-second outer deadline |
@@ -31,6 +31,8 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 | Snapshot hosted CI | [Run 45055091739](https://github.com/fpokrzywa/AppRivet/actions/runs/45055091739), commit 5807712: all four jobs passed; snapshot CLI roundtrips on Windows/Linux/macOS, Linux/macOS race checks, 10,000 native Linux fuzz inputs for each device/snapshot target, and existing Mac discovery/build/XCTest/regression checks |
 | Extraction/admission local checks | Real Windows process-level create/inspect/extract/hash/no-overwrite/admission/denial smoke passed; native snapshot and admission JSON fuzz each completed 10,000 inputs |
 | Extraction/admission hosted CI | [Run 45057268258](https://github.com/fpokrzywa/AppRivet/actions/runs/45057268258), commit 54e796c: all four jobs passed; Windows/Linux/macOS tests, vet and real CLI smoke, Linux/macOS race checks, 10,000 native Linux inputs for each device/snapshot/admission fuzz target, and Mac build/XCTest from extracted original source |
+| Reservation local checks | Full Windows suite/vet, 10,000 journal fuzz inputs, real reservation/recovery CLI smoke, eight Linux test executables and six client cross-builds passed |
+| Reservation hosted CI | [Run 45059896975](https://github.com/fpokrzywa/AppRivet/actions/runs/45059896975), commit d2bb5a9: all four jobs passed; Windows/Linux/macOS tests/vet/CLI smoke, Linux/macOS race checks, all four Linux fuzz targets (at least 10,000 inputs each), Mac discovery, extracted-source build/XCTest and framework-name collision build |
 | Mac discovery smoke | devicectl 506.7 / JSON v3 returned zero devices; simctl returned 132 shutdown simulators across iOS/tvOS/watchOS/xrOS |
 | Original SwiftUI app build | Passed with Xcode 16.4 (16F6), iOS Simulator SDK 18.5, hosted macOS arm64 |
 | Simulator XCTest / module-collision build | One XCTest passed on iPhone 16 Pro / iOS 18.5; generated SwiftUI-named app built successfully |
@@ -47,6 +49,8 @@ Independent snapshot review found one cancellation-at-final-EOF defect, reproduc
 
 Independent extraction/admission review found no P1/P2 issues. Its P3 enabled-field presence discrepancy was resolved by explicitly documenting and testing omission as disabled (only explicit true permits eligibility). The reviewer reproduced inherited broad read permissions on Windows: numeric modes do not establish private DACLs. Access-controlled destination ancestry and temporary storage are prerequisites; ACL hardening and hostile same-user races are not guaranteed. At that reviewed revision, authentication, replay prevention, reservations, revocation at use and execution authorization were absent. The subsequent local reservation implementation is described in WORKER_RESERVATIONS.md; authentication and execution remain absent. No unresolved minor review findings.
 
+Independent reservation review found no P1/P2 issues. Its P3 request-conflict classification finding was reproduced with a failing regression and fixed by checking request IDs before nonce collisions. Full Windows tests and vet passed after correction. No unresolved review findings. The local store still assumes trusted identity input, filesystem ownership and clock; it cannot defeat state rollback or enforce execution isolation.
+
 The reviewer could not establish physical-device compatibility, Mac file/cancellation behavior or physical state mappings from fixtures. Hosted discovery smoke now covers basic Mac tool invocation; the detailed physical-device matrix remains open. Local Linux testing supplies Unix behavior evidence, not Apple hardware evidence.
 
 Engineering decisions: continue in the clean dedicated repository; add simulator discovery and offline inspection as useful credential-free work; reject ambiguous reports rather than return partial or misleading inventory. Trade-off: explicit null known fields and future schema versions require an adapter update, and install/launch remain unavailable until their own authorization/isolation validation.
@@ -55,7 +59,7 @@ CI reliability observation: [run 45052339395](https://github.com/fpokrzywa/AppRi
 
 ## Next work
 
-1. Keep all CI checks green for subsequent changes. Implementation/workflow commit 54e796c passed; the following handoff commit changes documentation only. Preserve the observed simulator timing caveat; no billing workaround is required.
+1. Keep all CI checks green for subsequent changes. Implementation/workflow commit d2bb5a9 passed all four jobs in run 45059896975; the following handoff commit changes documentation only. Preserve the observed simulator timing caveat; no billing workaround is required.
 2. Validate USB/Wi-Fi/disconnected/unpaired/locked/Developer Mode-disabled and older devices against Apple's actual reports. Add carefully sanitized captures with provenance; current committed fixtures are synthetic.
 3. Design and test the credential-free worker/signing boundary and trusted human approvals before enabling signing or device mutations. Discovery cannot authorize installation. Keep Apple passwords and private keys out of the CLI.
 4. Continue M2 installation/launch only with the required hardware/signing evidence. Remote builds, MCP and release distribution retain their separate acceptance gates.
