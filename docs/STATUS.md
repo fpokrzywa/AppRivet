@@ -11,3 +11,5 @@ Ruling: implement the explicitly requested first-session Milestone 1, including 
 Ruling: use the dedicated empty repository directly; no existing codebase requires a separate worktree. Keep license undecided and remote repository private.
 
 Task 2 complete: original embedded SwiftUI/Xcode template and passive project detection implemented. go test ./... passed on Windows with Go 1.27.4. Symlink tests executed successfully. Mac template compilation remains unverified. Private repository created and visibility verified at https://github.com/fpokrzywa/AppRivet. Toolchain archive SHA256: 178ab98950ac69ab25069307dc6ade79f3816e414cce95b4da166a115cde1e7e.
+
+Task 3 complete: bounded/redacted process runner, macOS process-group cancellation, read-only doctor, and simulator-only build/test adapters implemented. go test ./... and go vet ./... passed locally. Apple command behavior is mocked at the process boundary; no local Xcode available.
