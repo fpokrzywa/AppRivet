@@ -20,7 +20,7 @@ func (a App) runWorker(ctx context.Context, args []string, jsonMode bool) int {
 		return a.emit(response, jsonMode, exit)
 	}
 	badArgs := func() int {
-		return failure("invalid_arguments", "use worker check --policy FILE --request FILE --principal ID --archive FILE; no execution command is available", 2)
+		return failure("invalid_arguments", "use worker init/check/reserve/status/release --help; no execution command is available", 2)
 	}
 	helpResult := func() int { response.Data = map[string]string{"help": help}; return a.emit(response, jsonMode, 0) }
 	if len(args) == 0 {
@@ -29,23 +29,38 @@ func (a App) runWorker(ctx context.Context, args []string, jsonMode bool) int {
 	if args[0] == "--help" || args[0] == "-h" {
 		return helpResult()
 	}
-	if args[0] != "check" {
+	command := args[0]
+	fs := flag.NewFlagSet("worker "+command, flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var policyPath, requestPath, principal, archive, state, configPath, requestID, reservationID string
+	switch command {
+	case "check", "reserve":
+		fs.StringVar(&policyPath, "policy", "", "trusted local policy file")
+		fs.StringVar(&requestPath, "request", "", "untrusted request file")
+		fs.StringVar(&principal, "principal", "", "hypothetical principal for offline evaluation; not authentication")
+		fs.StringVar(&archive, "archive", "", "snapshot archive")
+	case "init":
+		fs.StringVar(&configPath, "config", "", "trusted local limits file")
+	case "status", "release":
+		fs.StringVar(&principal, "principal", "", "operator-supplied principal; not authentication")
+		if command == "status" {
+			fs.StringVar(&requestID, "request-id", "", "optional request ID for recovery")
+		} else {
+			fs.StringVar(&reservationID, "reservation", "", "reservation ID to release")
+		}
+	default:
 		return badArgs()
 	}
-	fs := flag.NewFlagSet("worker check", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	var policyPath, requestPath, principal, archive string
-	fs.StringVar(&policyPath, "policy", "", "trusted local policy file")
-	fs.StringVar(&requestPath, "request", "", "untrusted request file")
-	fs.StringVar(&principal, "principal", "", "hypothetical principal for offline evaluation; not authentication")
-	fs.StringVar(&archive, "archive", "", "snapshot archive")
+	if command != "check" {
+		fs.StringVar(&state, "state", "", "initialized local reservation store")
+	}
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return helpResult()
 		}
 		return badArgs()
 	}
-	if fs.NArg() != 0 || policyPath == "" || requestPath == "" || principal == "" || archive == "" {
+	if fs.NArg() != 0 || (command != "check" && state == "") || ((command == "check" || command == "reserve") && (policyPath == "" || requestPath == "" || principal == "" || archive == "")) || (command == "init" && configPath == "") || ((command == "status" || command == "release") && principal == "") || (command == "release" && reservationID == "") {
 		return badArgs()
 	}
 	if ctx.Err() != nil {
@@ -57,13 +72,34 @@ func (a App) runWorker(ctx context.Context, args []string, jsonMode bool) int {
 		}
 		return filepath.Join(a.Dir, p)
 	}
-	p, err := admission.LoadPolicy(resolve(policyPath))
-	var r admission.Request
-	if err == nil {
+	var err error
+	store := admission.Store{Dir: resolve(state)}
+	switch command {
+	case "init":
+		var config admission.Config
+		config, err = admission.LoadConfig(resolve(configPath))
+		if err == nil {
+			err = store.Init(ctx, config)
+		}
+		response.Data = admission.Receipt{Mode: "local_reservation", Reservations: []admission.Reservation{}}
+	case "status":
+		response.Data, err = store.Status(ctx, principal, requestID)
+	case "release":
+		response.Data, err = store.Release(ctx, principal, reservationID)
+	case "check", "reserve":
+		var r admission.Request
 		r, err = admission.LoadRequest(resolve(requestPath))
-	}
-	if err == nil {
-		response.Data, err = admission.Check(ctx, time.Now(), principal, p, r, resolve(archive))
+		if err == nil {
+			if command == "reserve" {
+				response.Data, err = store.Reserve(ctx, principal, resolve(policyPath), r, resolve(archive))
+			} else {
+				var p admission.Policy
+				p, err = admission.LoadPolicy(resolve(policyPath))
+				if err == nil {
+					response.Data, err = admission.Check(ctx, time.Now(), principal, p, r, resolve(archive))
+				}
+			}
+		}
 	}
 	if err != nil {
 		var detail *admission.Error

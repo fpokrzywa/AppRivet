@@ -52,6 +52,10 @@ Usage:
   apprivet snapshot inspect --archive FILE [--expect-sha256 HEX] [--json]
   apprivet snapshot extract --archive FILE --destination DIR --expect-sha256 HEX [--json]
   apprivet worker check --policy FILE --request FILE --principal ID --archive FILE [--json]
+  apprivet worker init --state DIR --config FILE [--json]
+  apprivet worker reserve --state DIR --policy FILE --request FILE --principal ID --archive FILE [--json]
+  apprivet worker status --state DIR --principal ID [--request-id ID] [--json]
+  apprivet worker release --state DIR --principal ID --reservation ID [--json]
   apprivet version [--json]
 
 Build/test options:
@@ -65,6 +69,7 @@ Discovery timeout defaults to 30s (maximum 5m). Listing is not authorization.
 Snapshots package explicitly listed files and verify integrity on any host.
 Extraction requires a matching digest and a new destination; it executes no code.
 Worker checks evaluate local policy offline; they do not authenticate or authorize execution.
+Reservations retain replay history and account for capacity; they launch no jobs.
 
 Use --help with a command. --json is supported before or after the command.
 Windows/Linux: project preparation and offline report inspection. iOS builds and
@@ -247,6 +252,11 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 		return exit
 	}
 	switch data := response.Data.(type) {
+	case admission.Receipt:
+		fmt.Fprintln(a.Out, "Local reservation accounting; caller not authenticated, execution not authorized.")
+		for _, r := range data.Reservations {
+			fmt.Fprintf(a.Out, "%s: %s; request: %s; expires: %s; bytes: %d\n", r.ID, r.Status, r.RequestID, r.ExpiresAt, r.ReservedBytes)
+		}
 	case snapshot.Extraction:
 		fmt.Fprintf(a.Out, "Extracted source: %s\nSHA-256: %s\nFiles: %d\n", data.Destination, data.Snapshot.SHA256, len(data.Snapshot.Files))
 		fmt.Fprintln(a.Out, "No code executed. Integrity is not authorization or proof of safe/buildable source.")

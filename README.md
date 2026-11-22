@@ -40,7 +40,7 @@ Implemented commands: `doctor`, `init`, `inspect`, `build`, `test`, `devices`, `
 
 Portable `snapshot create`, `snapshot inspect` and `snapshot extract` package, verify and materialize explicitly selected source files without execution or credentials. Extraction requires a matching expected digest and a new destination. See [source snapshots](docs/SNAPSHOTS.md) for format limits and filesystem prerequisites. A valid snapshot is not proof of a complete or safe build.
 
-`worker check` evaluates local principal/project/digest/time/quota bindings against a policy and snapshot. It is an [offline admission check](docs/WORKER_ADMISSION.md), not authentication, execution permission or a running worker service.
+`worker check` evaluates local principal/project/digest/time/quota bindings against a policy and snapshot. It is an [offline admission check](docs/WORKER_ADMISSION.md). `worker init/reserve/status/release` add [persistent replay protection and capacity accounting](docs/WORKER_RESERVATIONS.md), without authentication, execution permission or a running worker service.
 
 See the [CLI reference](docs/CLI.md) for flags, JSON, exit codes and security boundaries, and [verification](docs/VERIFICATION.md) for reproducible Mac tests. The [roadmap](docs/ROADMAP.md) separates Milestone 1 from future signing, devices, remote builds, and distribution.
 

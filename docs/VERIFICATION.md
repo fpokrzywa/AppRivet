@@ -1,5 +1,17 @@
 # Verification record
 
+## Replay protection and local reservations (2026-11-22)
+
+Local Windows tests and vet passed across all eight tested packages; admission coverage is 86.2%, CLI 89.0%. Native Windows journal fuzzing completed 10,000 inputs. The real CLI smoke passed extraction/admission plus init, reserve, exact replay refusal, status recovery, release, retained nonce refusal and a fresh reservation. All eight compiled Linux package test executables passed in the restricted container; all six macOS/Linux/Windows amd64/arm64 client cross-builds passed.
+
+Tests cover cross-process duplicate/capacity races (six claimants, one winner), lock release after process death, restart/release/expiry replay history, request conflicts, principal separation, actual-byte budgets, grant expiry clamping, post-verification policy revocation/quota changes, cancellation, observed clock rollback, journal bounds/canonical encoding/invalid transitions, missing/replaced/symlinked state, injected partial writes/sync failures and cancellation after sync. Missing APIs/CLI commands failed first, then passed after implementation. The Windows suite may skip symlink or open-file replacement cases when the host denies those operations; Unix CI exercises its platform behavior.
+
+Independent review found no P1/P2 issues. One P3 request-conflict/error-precedence inconsistency was reproduced with a failing two-record regression, then fixed; the full Windows suite and vet passed again. Hosted CI for this change is pending. Existing Mac checks remain enabled; no Mac/Apple execution property is inferred from the local tests. [WORKER_RESERVATIONS](WORKER_RESERVATIONS.md#validation-and-remaining-live-gates) records the deployment gaps, including authenticated identity, execution fencing/teardown, rollback-resistant storage, power-loss recovery, Windows ACL enforcement and physical devices/signing.
+
+```sh
+go test ./internal/admission -run='^$' -fuzz=FuzzReservationJournal -fuzztime=10000x -parallel=2 -timeout=60s
+```
+
 ## Safe extraction and offline admission (2026-11-22)
 
 Final [run 45057268258](https://github.com/fpokrzywa/AppRivet/actions/runs/45057268258) passed all four jobs at commit 54e796c. Windows/Linux/macOS tests, vet and real extraction/admission CLI smoke passed; Linux/macOS race checks passed; each native Linux device/snapshot/admission fuzz target completed 10,000 inputs. The hosted Mac successfully built the extracted original SwiftUI project, ran its single XCTest, and built the framework-name collision regression. The following handoff commit changes documentation only. This is local extraction plus ordinary trusted-source Mac build evidence, not authenticated or isolated worker execution.

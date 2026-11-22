@@ -46,7 +46,10 @@ jobs:
       - name: Fuzz admission policy JSON
         if: runner.os == 'Linux'
         run: go test ./internal/admission -run='^$' -fuzz=FuzzAdmissionJSON -fuzztime=10000x -parallel=2 -timeout=60s
-      - name: Source extraction and admission CLI smoke
+      - name: Fuzz reservation journal
+        if: runner.os == 'Linux'
+        run: go test ./internal/admission -run='^$' -fuzz=FuzzReservationJournal -fuzztime=10000x -parallel=2 -timeout=60s
+      - name: Source extraction, admission and reservation CLI smoke
         shell: bash
         run: |
           PYTHON=python3

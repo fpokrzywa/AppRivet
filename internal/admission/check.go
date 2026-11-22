@@ -23,14 +23,30 @@ func Check(ctx context.Context, now time.Time, principal string, p Policy, r Req
 	if err := cancelled(ctx); err != nil {
 		return Decision{}, err
 	}
+	g, err := checkGrant(now, principal, p, r)
+	if err != nil {
+		return Decision{}, err
+	}
+	report, err := inspectArchive(ctx, archive, r.SnapshotSHA256, g.Limits)
+	if cancelErr := cancelled(ctx); cancelErr != nil {
+		return Decision{}, cancelErr
+	}
+	if err != nil {
+		return Decision{}, err
+	}
+	end, _ := time.Parse(time.RFC3339Nano, g.ExpiresAt)
+	return Decision{Mode: "offline_policy_check", Eligible: true, Principal: principal, ProjectID: r.ProjectID, GrantID: r.GrantID, Operation: r.Operation, CheckedAt: now.UTC().Format(time.RFC3339Nano), ValidUntil: end.UTC().Format(time.RFC3339Nano), Snapshot: report}, nil
+}
+
+func checkGrant(now time.Time, principal string, p Policy, r Request) (Grant, error) {
 	if !identifier.MatchString(principal) || now.IsZero() {
-		return Decision{}, failure("invalid_arguments", "principal must be a portable identifier and the clock must be set")
+		return Grant{}, failure("invalid_arguments", "principal must be a portable identifier and the clock must be set")
 	}
 	if err := validatePolicy(p); err != nil {
-		return Decision{}, err
+		return Grant{}, err
 	}
 	if err := validateRequest(r); err != nil {
-		return Decision{}, err
+		return Grant{}, err
 	}
 	var selected *Grant
 	for i := range p.Grants {
@@ -39,8 +55,8 @@ func Check(ctx context.Context, now time.Time, principal string, p Policy, r Req
 			break
 		}
 	}
-	denied := func() (Decision, error) {
-		return Decision{}, failure("admission_denied", "no active matching grant permits this principal, project, operation and snapshot")
+	denied := func() (Grant, error) {
+		return Grant{}, failure("admission_denied", "no active matching grant permits this principal, project, operation and snapshot")
 	}
 	if selected == nil {
 		return denied()
@@ -51,14 +67,7 @@ func Check(ctx context.Context, now time.Time, principal string, p Policy, r Req
 	if !g.Enabled || g.Principal != principal || g.ProjectID != r.ProjectID || g.Operation != r.Operation || g.SnapshotSHA256 != r.SnapshotSHA256 || now.Before(start) || !now.Before(end) {
 		return denied()
 	}
-	report, err := inspectArchive(ctx, archive, r.SnapshotSHA256, g.Limits)
-	if cancelErr := cancelled(ctx); cancelErr != nil {
-		return Decision{}, cancelErr
-	}
-	if err != nil {
-		return Decision{}, err
-	}
-	return Decision{Mode: "offline_policy_check", Eligible: true, Principal: principal, ProjectID: r.ProjectID, GrantID: r.GrantID, Operation: r.Operation, CheckedAt: now.UTC().Format(time.RFC3339Nano), ValidUntil: end.UTC().Format(time.RFC3339Nano), Snapshot: report}, nil
+	return g, nil
 }
 
 type counter struct {
@@ -95,13 +104,17 @@ func inspectArchive(ctx context.Context, path, expected string, l Limits) (snaps
 	if err != nil {
 		return snapshot.Report{}, failure("invalid_archive", "archive failed canonical integrity or expected-digest verification")
 	}
-	if len(r.Files) > l.MaxFiles || r.TotalBytes > l.MaxSourceBytes {
-		return snapshot.Report{}, resourceLimit()
+	return r, checkLimits(r, l)
+}
+
+func checkLimits(r snapshot.Report, l Limits) error {
+	if len(r.Files) > l.MaxFiles || r.TotalBytes > l.MaxSourceBytes || r.ArchiveBytes > l.MaxArchiveBytes {
+		return resourceLimit()
 	}
 	for _, e := range r.Files {
 		if e.Size > l.MaxFileBytes {
-			return snapshot.Report{}, resourceLimit()
+			return resourceLimit()
 		}
 	}
-	return r, nil
+	return nil
 }

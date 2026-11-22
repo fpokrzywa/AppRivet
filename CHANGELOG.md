@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add local worker init/reserve/status/release with persistent principal-scoped replay history, bounded leases, aggregate capacity checks and policy rechecking before commit. No execution or authentication is implied.
+- Add canonical bounded reservation journal, cross-process kernel locks, clock watermark, fail-closed corruption/uncertainty handling, security tests and native fuzz/CLI CI coverage. Document recovery and live deployment gaps.
+
 - Add digest-required snapshot extraction using a stable verified copy, exclusive destination ownership, bounded writes, no link/metadata restoration and checked cleanup after failures or cancellation.
 - Add read-only offline worker admission checks binding grants to principal, project, extract operation, digest, validity window and resource caps; explicitly no authentication or execution authorization.
 - Add extraction/admission security tests and policy JSON fuzzing, real CLI smoke on each CI host, and hosted Mac build/XCTest from extracted original source. Document Windows ACL prerequisites and remaining authentication/isolation/replay gates.

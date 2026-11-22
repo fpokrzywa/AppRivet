@@ -62,4 +62,33 @@ with tempfile.TemporaryDirectory(prefix="apprivet-smoke-", dir=base) as temporar
                  "--principal", "ungranted-actor", "--archive", root / "missing.tar", exit_code=4)
     assert denied["error"]["code"] == "admission_denied"
 
-print("Snapshot create/inspect/extract hashes, no-overwrite, offline admission and denial checks passed.")
+    config_path, state = root / "config.json", root / "state"
+    config_path.write_text(json.dumps(dict(schema_version=1, max_active=2, max_per_principal=1,
+                                          max_reserved_bytes=8388608, max_lease_seconds=120)), encoding="utf-8")
+    run("worker", "init", "--state", state, "--config", config_path)
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    request.update(request_id="smoke-1", nonce="a" * 32, lease_seconds=60)
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+    reserve_args = ("worker", "reserve", "--state", state, "--policy", policy_path,
+                    "--request", request_path, "--principal", "ci-developer", "--archive", archive)
+    reserved = run(*reserve_args)["data"]
+    assert reserved["mode"] == "local_reservation"
+    assert not reserved["authentication_verified"] and not reserved["execution_authorized"]
+    job = reserved["reservations"][0]
+    assert job["status"] == "reserved"
+    assert job["reserved_bytes"] == created["data"]["archive_bytes"] + created["data"]["total_bytes"]
+    assert run(*reserve_args, exit_code=4)["error"]["code"] == "replay_detected"
+    recovered = run("worker", "status", "--state", state, "--principal", "ci-developer",
+                    "--request-id", "smoke-1")["data"]["reservations"]
+    assert recovered == [job]
+    released = run("worker", "release", "--state", state, "--principal", "ci-developer",
+                   "--reservation", job["id"])["data"]["reservations"][0]
+    assert released["status"] == "released"
+    request["request_id"] = "smoke-2"
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+    assert run(*reserve_args, exit_code=4)["error"]["code"] == "replay_detected"
+    request["nonce"] = "b" * 32
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+    assert run(*reserve_args)["data"]["reservations"][0]["status"] == "reserved"
+
+print("Snapshot hashes, extraction, admission, durable reservation/replay/recovery/release checks passed.")

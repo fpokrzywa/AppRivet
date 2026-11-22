@@ -39,6 +39,9 @@ type Request struct {
 	ProjectID      string `json:"project_id"`
 	Operation      string `json:"operation"`
 	SnapshotSHA256 string `json:"snapshot_sha256"`
+	RequestID      string `json:"request_id,omitempty"`
+	Nonce          string `json:"nonce,omitempty"`
+	LeaseSeconds   int    `json:"lease_seconds,omitempty"`
 }
 type Decision struct {
 	Mode                   string          `json:"mode"`
@@ -60,6 +63,7 @@ func failure(code, message string) error { return &Error{code, message} }
 
 var identifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 var digest = regexp.MustCompile(`^[a-f0-9]{64}$`)
+var nonce = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 func invalidPolicy() error {
 	return failure("invalid_policy", "policy is malformed, ambiguous or outside the supported schema and limits")
@@ -71,6 +75,11 @@ func invalidRequest() error {
 func validateRequest(r Request) error {
 	if r.SchemaVersion != 1 || !identifier.MatchString(r.GrantID) || !identifier.MatchString(r.ProjectID) || r.Operation != "extract" || !digest.MatchString(r.SnapshotSHA256) {
 		return invalidRequest()
+	}
+	if r.RequestID != "" || r.Nonce != "" || r.LeaseSeconds != 0 {
+		if !identifier.MatchString(r.RequestID) || !nonce.MatchString(r.Nonce) || r.LeaseSeconds < 1 || r.LeaseSeconds > 3600 {
+			return invalidRequest()
+		}
 	}
 	return nil
 }

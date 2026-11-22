@@ -95,3 +95,59 @@ func TestWorkerCLIRejectsExecutionAndMissingArguments(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkerReservationCLI(t *testing.T) {
+	dir, _ := workerInputs(t)
+	write := func(name string, value any) {
+		b, _ := json.Marshal(value)
+		if err := os.WriteFile(filepath.Join(dir, name), b, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("config.json", admission.Config{SchemaVersion: 1, MaxActive: 2, MaxPerPrincipal: 1, MaxReservedBytes: 1 << 20, MaxLeaseSeconds: 120})
+	r, err := admission.LoadRequest(filepath.Join(dir, "request.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.RequestID = "request-1"
+	r.Nonce = strings.Repeat("a", 32)
+	r.LeaseSeconds = 60
+	write("request.json", r)
+	exit, _, raw := invoke(t, dir, "worker", "init", "--state", "state", "--config", "config.json", "--json")
+	if exit != 0 {
+		t.Fatal(raw)
+	}
+	args := []string{"worker", "reserve", "--state", "state", "--policy", "policy.json", "--request", "request.json", "--principal", "developer", "--archive", "source.tar", "--json"}
+	exit, res, raw := invoke(t, dir, args...)
+	if exit != 0 {
+		t.Fatal(raw)
+	}
+	d := res["data"].(map[string]any)
+	if d["mode"] != "local_reservation" || d["authentication_verified"] != false || d["execution_authorized"] != false {
+		t.Fatal(raw)
+	}
+	id := d["reservations"].([]any)[0].(map[string]any)["id"].(string)
+	exit, res, raw = invoke(t, dir, args...)
+	if exit != 4 || res["error"].(map[string]any)["code"] != "replay_detected" || res["data"] != nil {
+		t.Fatal(raw)
+	}
+	exit, _, raw = invoke(t, dir, "worker", "status", "--state", "state", "--principal", "developer", "--request-id", "request-1", "--json")
+	if exit != 0 || !strings.Contains(raw, id) {
+		t.Fatal(raw)
+	}
+	exit, _, raw = invoke(t, dir, "worker", "release", "--state", "state", "--principal", "developer", "--reservation", id, "--json")
+	if exit != 0 || !strings.Contains(raw, "released") {
+		t.Fatal(raw)
+	}
+	for _, args := range [][]string{{"init", "--state", "state"}, {"status", "--state", "state"}, {"release", "--state", "state", "--principal", "developer"}, {"check", "--state", "state"}, {"status", "--state", "state", "--principal", "developer", "--archive", "source.tar"}} {
+		exit, _, raw = invoke(t, dir, append(append([]string{"worker"}, args...), "--json")...)
+		if exit != 2 {
+			t.Fatal(raw)
+		}
+	}
+	var out, errOut bytes.Buffer
+	app := App{Dir: dir, Out: &out, Err: &errOut, Runner: forbidRunner{t}}
+	if exit = app.Run(context.Background(), []string{"worker", "status", "--state", "state", "--principal", "developer"}); exit != 0 || !strings.Contains(out.String(), "not authenticated") || !strings.Contains(out.String(), "released") {
+		t.Fatalf("%d %s %s", exit, out.String(), errOut.String())
+	}
+}
