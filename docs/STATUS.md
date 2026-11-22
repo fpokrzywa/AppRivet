@@ -26,7 +26,7 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 | Actual Windows CLI | Offline CoreDevice/simulator reports succeed with live=false; live discovery refuses with exit 3 |
 | Prior milestone hosted CI | [Run 45053200343](https://github.com/fpokrzywa/AppRivet/actions/runs/45053200343), commit 7c3d011: all four jobs passed, including Windows/Linux/macOS Go tests, vet, Linux/macOS race checks and 10,000 native Linux device fuzz inputs |
 | Snapshot local CLI/fuzz | Real Windows example roundtrip and independent SHA-256 passed; final native Windows verifier fuzz completed 10,000 inputs |
-| Snapshot hosted CI | Pending new push; workflow adds native verification fuzzing and real CLI roundtrips on Windows/Linux/macOS |
+| Snapshot hosted CI | [Run 45055091739](https://github.com/fpokrzywa/AppRivet/actions/runs/45055091739), commit 5807712: all four jobs passed; snapshot CLI roundtrips on Windows/Linux/macOS, Linux/macOS race checks, 10,000 native Linux fuzz inputs for each device/snapshot target, and existing Mac discovery/build/XCTest/regression checks |
 | Mac discovery smoke | devicectl 506.7 / JSON v3 returned zero devices; simctl returned 132 shutdown simulators across iOS/tvOS/watchOS/xrOS |
 | Original SwiftUI app build | Passed with Xcode 16.4 (16F6), iOS Simulator SDK 18.5, hosted macOS arm64 |
 | Simulator XCTest / module-collision build | One XCTest passed on iPhone 16 Pro / iOS 18.5; generated SwiftUI-named app built successfully |
@@ -49,7 +49,7 @@ CI reliability observation: [run 45052339395](https://github.com/fpokrzywa/AppRi
 
 ## Next work
 
-1. Complete snapshot CI and record its exact commit/run. Preserve all prior Mac checks. Investigate recurrent simulator timeouts before claiming reliable unattended Mac operation; no billing workaround is required.
+1. Keep all CI checks green for subsequent changes. Snapshot implementation/workflow commit 5807712 passed; the following handoff commit changes documentation only. Preserve the observed simulator timing caveat even though this run passed; no billing workaround is required.
 2. Validate USB/Wi-Fi/disconnected/unpaired/locked/Developer Mode-disabled and older devices against Apple's actual reports. Add carefully sanitized captures with provenance; current committed fixtures are synthetic.
 3. Design and test the credential-free worker/signing boundary and trusted human approvals before enabling signing or device mutations. Discovery cannot authorize installation. Keep Apple passwords and private keys out of the CLI.
 4. Continue M2 installation/launch only with the required hardware/signing evidence. Remote builds, MCP and release distribution retain their separate acceptance gates.

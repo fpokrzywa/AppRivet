@@ -2,6 +2,8 @@
 
 ## Portable source snapshots (2026-11-22)
 
+Final [run 45055091739](https://github.com/fpokrzywa/AppRivet/actions/runs/45055091739) passed all four jobs at commit 5807712. Windows/Linux/macOS tests, vet and real snapshot CLI roundtrips passed; Linux/macOS race checks passed; native Linux device and snapshot fuzz targets each completed 10,000 inputs. Existing Mac discovery, original SwiftUI app build, simulator XCTest and framework-name collision regression passed. The following handoff commit changes documentation only. Local verification also passed all seven Linux package executables in the restricted container, all six client cross-builds, and a real Windows CLI example roundtrip whose archive digest was independently checked with PowerShell Get-FileHash. The final Windows native snapshot fuzz run completed 10,000 inputs after the cancellation fix.
+
 Windows tests and vet passed across seven packages; snapshot coverage is 83.5%. Tests cover canonical deterministic archives, independent per-file/archive hashes, tampering/truncation/metadata/manifest/trailing bytes, archive links, path/case/prefix/device-name conflicts, credential filenames, byte/count quotas, source symlink refusal, cancellation, no overwrite and partial-output cleanup. CLI tests run with a subprocess-forbidding runner. Tests failed before the package/CLI implementations existed. Additional console-name and final-EOF cancellation regressions failed before their fixes.
 
 The snapshot reviewer found the final-EOF cancellation edge and no other material defect. That finding is fixed with a deterministic reader regression. Same-user filesystem races, content-level secret detection and source buildability remain outside the contract. Live cross-platform CI evidence is recorded in STATUS after it completes; source packaging neither requires nor validates Apple credentials, physical devices, extraction, signing or isolated workers.
@@ -91,13 +93,13 @@ The local test used the already-installed `python:3.12-slim-bookworm` image. The
 $env:GOOS = 'linux'
 $env:GOARCH = 'amd64'
 $env:CGO_ENABLED = '0'
-foreach ($package in @('project','runner','doctor','build','cli','devices')) {
+foreach ($package in @('project','runner','doctor','build','cli','devices','snapshot')) {
     go test -c -o "bin/linux-tests/$package.test" "./internal/$package"
     if ($LASTEXITCODE -ne 0) { throw "Compilation failed: $package" }
 }
 $testRoot = (Resolve-Path 'bin/linux-tests').Path
 $sourceRoot = (Resolve-Path 'internal').Path
-docker run --rm --network none --read-only --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:rw,size=512m --mount "type=bind,source=$testRoot,target=/tests,readonly" --mount "type=bind,source=$sourceRoot,target=/src,readonly" python:3.12-slim-bookworm sh -c 'for package in project runner doctor build cli devices; do cd /src/"$package" || exit 1; /tests/"$package".test || exit 1; done'
+docker run --rm --network none --read-only --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:rw,size=512m --mount "type=bind,source=$testRoot,target=/tests,readonly" --mount "type=bind,source=$sourceRoot,target=/src,readonly" python:3.12-slim-bookworm sh -c 'for package in project runner doctor build cli devices snapshot; do cd /src/"$package" || exit 1; /tests/"$package".test || exit 1; done'
 Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
 ```
 
