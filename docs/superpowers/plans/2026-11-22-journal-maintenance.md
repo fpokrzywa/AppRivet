@@ -22,8 +22,8 @@
 - [x] Write failing API tests for legacy migration, exact history preservation, compaction, replay/ownership/capacity preservation, full segment recovery and fences beyond 16,384. Implement bounded format parsing, replay and locked maintenance.
 - [x] Add corruption/path/gzip bounds, publication fault/cancellation, concurrency and compatibility security tests; CLI migrate/compact and real CI smoke; manifest/segment fuzz target.
 - [x] Update contracts and live gaps. Run full tests/vet/fuzz, Linux runtime and cross-builds; independent review and regression fixes.
-- [ ] Push implementation and observe all hosted CI jobs. Record exact successful code/run in a documentation-only handoff.
+- [x] Push implementation and observe all hosted CI jobs. Record exact successful code/run in a documentation-only handoff.
 
-Progress: missing API/CLI tests failed before implementation and now pass. Windows full suite/vet (admission 86.3%, CLI 88.8%), 10,000 native storage fuzz inputs, real CLI smoke, eight Linux test executables and six client cross-builds passed. Independent review found no actionable issues and independently passed admission/CLI tests. Hosted CI follows review.
+Progress: missing API/CLI tests failed before implementation and now pass. Windows full suite/vet (admission 86.3%, CLI 88.8%), 10,000 native storage fuzz inputs, real CLI smoke, eight Linux test executables and six client cross-builds passed. Independent review found no actionable issues and independently passed admission/CLI tests. Implementation/workflow commit efe2716 was pushed; all four jobs in run 45064383805 passed, including Windows/Linux/macOS tests/vet/CLI smoke, Unix race checks, five Linux fuzz targets and Mac discovery/build/XCTest/regression. Final evidence is recorded in a separate documentation-only handoff. All plan steps are complete.
 
 Ruling: maintenance retains prepared manifests and compressed evidence after any publication uncertainty; no automatic repair is added, because selecting an older manifest can restore stale ownership. Cumulative history/segment/reservation limits remain fixed and are not reset by compaction.

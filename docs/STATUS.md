@@ -22,7 +22,7 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 
 | Check | Result |
 | --- | --- |
-| Current Windows tests, eight packages, and go vet | Passed; admission coverage 86.6%, snapshot 81.0%, CLI 88.9% |
+| Current Windows tests, eight packages, and go vet | Passed; admission coverage 86.3%, snapshot 81.0%, CLI 88.8% |
 | Linux runtime tests and six cross-builds | All eight Linux package suites and macOS/Linux/Windows amd64/arm64 client builds passed |
 | Linux parser fuzz smoke | 274,120 executions over 10 seconds without failure; no coverage guidance in this precompiled binary |
 | Native Windows/Linux coverage-guided fuzz | 10,000 inputs passed on each; Linux CI uses a 60-second outer deadline |
@@ -37,6 +37,8 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 | Reservation hosted CI | [Run 45059896975](https://github.com/fpokrzywa/AppRivet/actions/runs/45059896975), commit d2bb5a9: all four jobs passed; Windows/Linux/macOS tests/vet/CLI smoke, Linux/macOS race checks, all four Linux fuzz targets (at least 10,000 inputs each), Mac discovery, extracted-source build/XCTest and framework-name collision build |
 | Ownership/recovery local checks | Full Windows suite/vet, 10,000 journal fuzz inputs with ownership seeds, real ownership/recovery CLI smoke, eight Linux package executables and six cross-builds passed |
 | Ownership/recovery hosted CI | [Run 45061672025](https://github.com/fpokrzywa/AppRivet/actions/runs/45061672025), commit 9448180: all four jobs passed; Windows/Linux/macOS tests/vet/CLI smoke, Linux/macOS race checks, all four Linux fuzz targets (at least 10,000 inputs each), Mac discovery, extracted-source build/XCTest and framework-name collision build |
+| Journal maintenance local checks | Full Windows suite/vet, 10,000 storage fuzz inputs, real claimed-job migration/compaction CLI smoke, eight Linux package executables and six cross-builds passed |
+| Journal maintenance hosted CI | [Run 45064383805](https://github.com/fpokrzywa/AppRivet/actions/runs/45064383805), commit efe2716: all four jobs passed; Windows/Linux/macOS tests/vet/CLI smoke, Linux/macOS race checks, all five Linux fuzz targets (at least 10,000 inputs each), Mac discovery, extracted-source build/XCTest and framework-name collision build |
 | Mac discovery smoke | devicectl 506.7 / JSON v3 returned zero devices; simctl returned 132 shutdown simulators across iOS/tvOS/watchOS/xrOS |
 | Original SwiftUI app build | Passed with Xcode 16.4 (16F6), iOS Simulator SDK 18.5, hosted macOS arm64 |
 | Simulator XCTest / module-collision build | One XCTest passed on iPhone 16 Pro / iOS 18.5; generated SwiftUI-named app built successfully |
@@ -57,6 +59,8 @@ Independent reservation review found no P1/P2 issues. Its P3 request-conflict cl
 
 Independent ownership/recovery review found no actionable issues and independently passed the admission/CLI test suites and diff checks. Local ownership checks are not atomic enforcement of an external action, and recovery records an unverified stopped-worker assertion. No process launch, termination, authenticated supervisor or protected store recovery was added. See [WORKER_RECOVERY](WORKER_RECOVERY.md).
 
+Independent journal-maintenance review found no actionable issues and independently passed the admission/CLI suites. Publication is deliberately fail-closed rather than a claimed cross-platform atomic replacement; interrupted control writes retain verified history and prepared evidence but need a separately designed repair procedure. No external rollback anchor, relocation handoff, authenticated executor or Apple validation was added. See [JOURNAL_MAINTENANCE](JOURNAL_MAINTENANCE.md).
+
 The reviewer could not establish physical-device compatibility, Mac file/cancellation behavior or physical state mappings from fixtures. Hosted discovery smoke now covers basic Mac tool invocation; the detailed physical-device matrix remains open. Local Linux testing supplies Unix behavior evidence, not Apple hardware evidence.
 
 Engineering decisions: continue in the clean dedicated repository; add simulator discovery and offline inspection as useful credential-free work; reject ambiguous reports rather than return partial or misleading inventory. Trade-off: explicit null known fields and future schema versions require an adapter update, and install/launch remain unavailable until their own authorization/isolation validation.
@@ -65,7 +69,7 @@ CI reliability observation: [run 45052339395](https://github.com/fpokrzywa/AppRi
 
 ## Next work
 
-1. Keep all CI checks green for subsequent changes. Implementation/smoke commit 9448180 passed all four jobs in run 45061672025; the following handoff commit changes documentation only. Preserve the observed simulator timing caveat; no billing workaround is required.
+1. Keep all CI checks green for subsequent changes. Implementation/workflow commit efe2716 passed all four jobs in run 45064383805; the following handoff commit changes documentation only. Preserve the observed simulator timing caveat; no billing workaround is required.
 2. Validate USB/Wi-Fi/disconnected/unpaired/locked/Developer Mode-disabled and older devices against Apple's actual reports. Add carefully sanitized captures with provenance; current committed fixtures are synthetic.
 3. Design and test the credential-free worker/signing boundary and trusted human approvals before enabling signing or device mutations. Discovery cannot authorize installation. Keep Apple passwords and private keys out of the CLI.
 4. Continue M2 installation/launch only with the required hardware/signing evidence. Remote builds, MCP and release distribution retain their separate acceptance gates.
