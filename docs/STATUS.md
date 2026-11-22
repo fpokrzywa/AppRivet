@@ -20,10 +20,10 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 | Current Windows tests, six packages, and go vet | Passed |
 | Current Linux runtime tests, six packages in restricted local container | Passed |
 | Linux parser fuzz smoke | 274,120 executions over 10 seconds without failure; no coverage guidance in this precompiled binary |
-| Native Windows coverage-guided fuzz | 10,000 inputs passed; CI uses the same execution count with a 60-second outer deadline |
+| Native Windows/Linux coverage-guided fuzz | 10,000 inputs passed on each; Linux CI uses a 60-second outer deadline |
 | Client cross-builds | macOS/Linux/Windows, amd64 and arm64 passed |
 | Actual Windows CLI | Offline CoreDevice/simulator reports succeed with live=false; live discovery refuses with exit 3 |
-| Hosted CI after public visibility change | [Run 45051791524](https://github.com/fpokrzywa/AppRivet/actions/runs/45051791524), commit 4f1ab4b: all four jobs passed, including Windows/Linux/macOS Go tests and Linux/macOS race checks |
+| Final hosted CI | [Run 45053200343](https://github.com/fpokrzywa/AppRivet/actions/runs/45053200343), commit 7c3d011: all four jobs passed, including Windows/Linux/macOS Go tests, vet, Linux/macOS race checks and 10,000 native Linux fuzz inputs |
 | Mac discovery smoke | devicectl 506.7 / JSON v3 returned zero devices; simctl returned 132 shutdown simulators across iOS/tvOS/watchOS/xrOS |
 | Original SwiftUI app build | Passed with Xcode 16.4 (16F6), iOS Simulator SDK 18.5, hosted macOS arm64 |
 | Simulator XCTest / module-collision build | One XCTest passed on iPhone 16 Pro / iOS 18.5; generated SwiftUI-named app built successfully |
@@ -44,7 +44,7 @@ CI reliability observation: [run 45052339395](https://github.com/fpokrzywa/AppRi
 
 ## Next work
 
-1. Keep all CI jobs green for subsequent code changes, including the bounded native Linux parser fuzz step. The first successful integration run above predates the final key-alias hardening and fuzz-step addition; the final follow-up run must also pass. Investigate recurrent simulator timeouts before claiming reliable unattended Mac operation. No billing workaround is currently required.
+1. Keep all CI jobs green for subsequent code changes. Final implementation and workflow commit 7c3d011 passed; the subsequent handoff update changes documentation only. Investigate recurrent simulator timeouts before claiming reliable unattended Mac operation. No billing workaround is currently required.
 2. Validate USB/Wi-Fi/disconnected/unpaired/locked/Developer Mode-disabled and older devices against Apple's actual reports. Add carefully sanitized captures with provenance; current committed fixtures are synthetic.
 3. Design and test the credential-free worker/signing boundary and trusted human approvals before enabling signing or device mutations. Discovery cannot authorize installation. Keep Apple passwords and private keys out of the CLI.
 4. Continue M2 installation/launch only with the required hardware/signing evidence. Remote builds, MCP and release distribution retain their separate acceptance gates.
