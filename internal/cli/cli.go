@@ -17,6 +17,7 @@ import (
 	"github.com/fpokrzywa/AppRivet/internal/doctor"
 	"github.com/fpokrzywa/AppRivet/internal/project"
 	"github.com/fpokrzywa/AppRivet/internal/runner"
+	"github.com/fpokrzywa/AppRivet/internal/snapshot"
 )
 
 type App struct {
@@ -46,6 +47,8 @@ Usage:
   apprivet test [--project PATH] [--scheme NAME] --simulator UUID --trust-project [--json]
   apprivet devices [--simulators] [--timeout 30s] [--json]
   apprivet devices --from-json FILE [--simulators] [--json]
+  apprivet snapshot create --root DIR --files-from LIST --output FILE [--json]
+  apprivet snapshot inspect --archive FILE [--expect-sha256 HEX] [--json]
   apprivet version [--json]
 
 Build/test options:
@@ -56,6 +59,8 @@ Build/test options:
 Device discovery is read-only. --simulators selects simctl; otherwise devicectl.
 --from-json inspects an offline report on any host, never a live device query.
 Discovery timeout defaults to 30s (maximum 5m). Listing is not authorization.
+Snapshots package explicitly listed files and verify integrity on any host.
+Snapshots do not extract, execute, upload, sign, or authorize source code.
 
 Use --help with a command. --json is supported before or after the command.
 Windows/Linux: project preparation and offline report inspection. iOS builds and
@@ -87,6 +92,9 @@ func (a App) Run(ctx context.Context, args []string) int {
 	if command == "help" || command == "--help" || command == "-h" {
 		response.Data = map[string]string{"help": help}
 		return a.emit(response, jsonMode, 0)
+	}
+	if command == "snapshot" {
+		return a.runSnapshot(ctx, filtered, jsonMode)
 	}
 	if command == "install" || command == "launch" {
 		return fail("not_implemented", command+" is planned after Milestone 1; use Xcode's official device workflow", 3)
@@ -232,6 +240,15 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 		return exit
 	}
 	switch data := response.Data.(type) {
+	case snapshot.Report:
+		fmt.Fprintf(a.Out, "Source snapshot: %s\nSHA-256: %s\nFiles: %d; source bytes: %d; archive bytes: %d\n", data.Format, data.SHA256, len(data.Files), data.TotalBytes, data.ArchiveBytes)
+		fmt.Fprintln(a.Out, "Integrity checked; not authorization or proof of safe/buildable source. No extraction or execution performed.")
+		table := tabwriter.NewWriter(a.Out, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(table, "PATH\tBYTES\tSHA-256")
+		for _, entry := range data.Files {
+			fmt.Fprintf(table, "%s\t%d\t%s\n", entry.Path, entry.Size, entry.SHA256)
+		}
+		_ = table.Flush()
 	case devices.Inventory:
 		if data.Live {
 			fmt.Fprintf(a.Out, "Local %s inventory\n", data.Tool)
