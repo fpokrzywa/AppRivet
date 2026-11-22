@@ -29,7 +29,7 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 | Snapshot local CLI/fuzz | Real Windows example roundtrip and independent SHA-256 passed; final native Windows verifier fuzz completed 10,000 inputs |
 | Snapshot hosted CI | [Run 45055091739](https://github.com/fpokrzywa/AppRivet/actions/runs/45055091739), commit 5807712: all four jobs passed; snapshot CLI roundtrips on Windows/Linux/macOS, Linux/macOS race checks, 10,000 native Linux fuzz inputs for each device/snapshot target, and existing Mac discovery/build/XCTest/regression checks |
 | Extraction/admission local checks | Real Windows process-level create/inspect/extract/hash/no-overwrite/admission/denial smoke passed; native snapshot and admission JSON fuzz each completed 10,000 inputs |
-| Extraction/admission hosted CI | Pending push; new checks include cross-platform real CLI smoke and hosted build/XCTest of extracted original source |
+| Extraction/admission hosted CI | [Run 45057268258](https://github.com/fpokrzywa/AppRivet/actions/runs/45057268258), commit 54e796c: all four jobs passed; Windows/Linux/macOS tests, vet and real CLI smoke, Linux/macOS race checks, 10,000 native Linux inputs for each device/snapshot/admission fuzz target, and Mac build/XCTest from extracted original source |
 | Mac discovery smoke | devicectl 506.7 / JSON v3 returned zero devices; simctl returned 132 shutdown simulators across iOS/tvOS/watchOS/xrOS |
 | Original SwiftUI app build | Passed with Xcode 16.4 (16F6), iOS Simulator SDK 18.5, hosted macOS arm64 |
 | Simulator XCTest / module-collision build | One XCTest passed on iPhone 16 Pro / iOS 18.5; generated SwiftUI-named app built successfully |
@@ -54,7 +54,7 @@ CI reliability observation: [run 45052339395](https://github.com/fpokrzywa/AppRi
 
 ## Next work
 
-1. Complete extraction/admission CI and record the tested commit/run. Preserve the observed simulator timing caveat; no billing workaround is required.
+1. Keep all CI checks green for subsequent changes. Implementation/workflow commit 54e796c passed; the following handoff commit changes documentation only. Preserve the observed simulator timing caveat; no billing workaround is required.
 2. Validate USB/Wi-Fi/disconnected/unpaired/locked/Developer Mode-disabled and older devices against Apple's actual reports. Add carefully sanitized captures with provenance; current committed fixtures are synthetic.
 3. Design and test the credential-free worker/signing boundary and trusted human approvals before enabling signing or device mutations. Discovery cannot authorize installation. Keep Apple passwords and private keys out of the CLI.
 4. Continue M2 installation/launch only with the required hardware/signing evidence. Remote builds, MCP and release distribution retain their separate acceptance gates.

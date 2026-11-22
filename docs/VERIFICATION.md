@@ -2,13 +2,15 @@
 
 ## Safe extraction and offline admission (2026-11-22)
 
+Final [run 45057268258](https://github.com/fpokrzywa/AppRivet/actions/runs/45057268258) passed all four jobs at commit 54e796c. Windows/Linux/macOS tests, vet and real extraction/admission CLI smoke passed; Linux/macOS race checks passed; each native Linux device/snapshot/admission fuzz target completed 10,000 inputs. The hosted Mac successfully built the extracted original SwiftUI project, ran its single XCTest, and built the framework-name collision regression. The following handoff commit changes documentation only. This is local extraction plus ordinary trusted-source Mac build evidence, not authenticated or isolated worker execution.
+
 Windows tests and vet passed across eight packages: snapshot coverage 81.0%, admission 89.0%, CLI 88.1%. All eight Linux test executables passed in the restricted container; six client cross-builds passed. Native Windows snapshot verification and admission JSON fuzz each completed 10,000 inputs. The real Windows CLI smoke passed create/inspect/extract, independently calculated file/archive hashes, existing-destination refusal, honest offline decisions and policy denial before nonexistent-archive access.
 
 Extraction and CLI tests failed for absent APIs/commands before implementation. Security cases cover tampering, traversal/links/metadata, mandatory digest, changed original archive after verification, concurrent destination ownership, cancellation/partial cleanup, refusal to recursively delete a replaced destination, preplanted files/links, and POSIX modes. Admission tests cover strict JSON, bindings, grant validity/expiry, disabled and omitted-enabled behavior, actual resource counts, wrong archive bytes, cancellation, symlinks and no subprocess execution. Fuzzing is bounded evidence, not exhaustive validation.
 
 Independent review found no P1/P2 issue. Its minor enabled-presence discrepancy was settled as documented default-disabled behavior with a regression test. The reviewer independently reproduced inherited Windows ACL permissions despite numeric mode requests; access-controlled temp/destination storage is required. These tests do not establish authenticated transport, policy deployment security, one-time approval, replay protection, reservations, worker isolation, credential separation or physical-device behavior.
 
-CI now performs real extraction/admission smoke on Windows/Linux/macOS, native Linux fuzzing for all three parsers, and build/XCTest from an extracted original SwiftUI project. Exact completed run evidence will be recorded in STATUS; configuration alone is not a validation result. Reproduce the new parser check with:
+CI performs real extraction/admission smoke on Windows/Linux/macOS, native Linux fuzzing for all three parsers, and build/XCTest from an extracted original SwiftUI project. The completed run above supplies that evidence. Reproduce the new parser check with:
 
 ```sh
 go test ./internal/admission -run='^$' -fuzz=FuzzAdmissionJSON -fuzztime=10000x -parallel=2 -timeout=60s
