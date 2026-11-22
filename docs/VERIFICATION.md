@@ -1,5 +1,19 @@
 # Verification record
 
+## Portable source snapshots (2026-11-22)
+
+Windows tests and vet passed across seven packages; snapshot coverage is 83.5%. Tests cover canonical deterministic archives, independent per-file/archive hashes, tampering/truncation/metadata/manifest/trailing bytes, archive links, path/case/prefix/device-name conflicts, credential filenames, byte/count quotas, source symlink refusal, cancellation, no overwrite and partial-output cleanup. CLI tests run with a subprocess-forbidding runner. Tests failed before the package/CLI implementations existed. Additional console-name and final-EOF cancellation regressions failed before their fixes.
+
+The snapshot reviewer found the final-EOF cancellation edge and no other material defect. That finding is fixed with a deterministic reader regression. Same-user filesystem races, content-level secret detection and source buildability remain outside the contract. Live cross-platform CI evidence is recorded in STATUS after it completes; source packaging neither requires nor validates Apple credentials, physical devices, extraction, signing or isolated workers.
+
+Native snapshot fuzzing uses a valid archive seed plus malformed inputs, with 10,000 executions and a 60-second outer deadline:
+
+```sh
+go test ./internal/snapshot -run='^$' -fuzz=FuzzVerify -fuzztime=10000x -parallel=2 -timeout=60s
+```
+
+CI also creates and inspects an archive from `examples/HelloAppRivet.snapshot-files` on each Go matrix host, comparing the complete JSON reports. This validates portable archive handling, not a build from an extracted snapshot. That workflow remains unimplemented. Detailed constraints and remaining evidence: [SNAPSHOTS](SNAPSHOTS.md).
+
 ## Milestone 2 update (2026-11-22)
 
 The owner changed the repository to public and hosted CI now starts. Final [run 45053200343](https://github.com/fpokrzywa/AppRivet/actions/runs/45053200343) passed all four jobs at commit 7c3d011: Windows/Linux/macOS Go tests and vet, Linux/macOS race checks, 10,000 native Linux coverage-guided fuzz inputs, read-only Mac device discovery, generated SwiftUI app build, simulator XCTest and framework-name collision build. Xcode 16.4 (16F6), iOS Simulator SDK 18.5, macOS arm64; one XCTest passed on iPhone 16 Pro / iOS 18.5. devicectl 506.7 / JSON v3 returned zero devices; simctl listed 132 shutdown simulators. The following handoff commit changes documentation only. The earlier billing failures below are historical. The first successful integration baseline was [run 45051791524](https://github.com/fpokrzywa/AppRivet/actions/runs/45051791524) at 4f1ab4b.

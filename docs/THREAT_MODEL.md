@@ -25,6 +25,14 @@ Security-focused tests cover invalid/path-like names, reserved Windows names, ex
 
 Security acceptance for remote work: demonstrate a malicious build cannot read a seeded signer key, contact the signer, escape source/artifact roots, impersonate another user, retain a job after cancellation, or overwrite logs. Until that evidence exists, remote/untrusted execution stays disabled.
 
+## Portable source-snapshot boundary
+
+Explicit file selection avoids automatic workspace collection. Common credential/VCS names are denied, but source content is packaged verbatim and is not scanned for secrets. Source and output filesystems must be trusted and quiescent; os.Root confinement, type/identity checks and consistency checks do not isolate a hostile same-user process or guarantee a transactional filesystem snapshot. Local hardlinked regular files are read as data, never exported as link records.
+
+Verification performs no extraction or execution. Streaming quotas and canonical reconstruction reject traversal, links, case/prefix collisions, hidden archive metadata, duplicate/mismatched manifests and appended bytes. Exclusive output creation prevents overwriting an existing file; normal failed/cancelled creation cleans up partial output. Abrupt termination or cleanup I/O failure can leave incomplete files. POSIX permissions and Windows ACL behavior differ; no cross-platform private-storage guarantee is claimed.
+
+Hashes prove content integrity, not sender identity, safe code, build completeness or permission to run/sign/install. A self-consistent attacker-created bundle is accepted unless its digest differs from a separately trusted expected digest. Authenticated transport, project grants, trusted human approval, isolated extraction/build workers and the signer boundary remain mandatory future gates. See SNAPSHOTS.md for exact supported paths, limits and limitations.
+
 ## Milestone 2 discovery boundary
 
 - Device JSON is untrusted data, including names that may contain terminal controls or text aimed at coding agents. Never execute or interpret it as instructions. Known display fields are sanitized; arbitrary metadata and raw error payloads are omitted.

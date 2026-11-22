@@ -16,3 +16,4 @@ xcuserdata/
 .env
 .env.*
 coverage.out
+*.tar

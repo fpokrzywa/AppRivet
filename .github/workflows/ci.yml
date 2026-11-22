@@ -40,6 +40,17 @@ jobs:
         run: go test ./internal/devices -run='^$' -fuzz=FuzzParse -fuzztime=10000x -parallel=2 -timeout=60s
       - name: Build CLI
         run: go build ./cmd/apprivet
+      - name: Fuzz source snapshot verification
+        if: runner.os == 'Linux'
+        run: go test ./internal/snapshot -run='^$' -fuzz=FuzzVerify -fuzztime=10000x -parallel=2 -timeout=60s
+      - name: Source snapshot CLI roundtrip
+        shell: bash
+        run: |
+          CLI=./apprivet
+          if [ "$RUNNER_OS" = Windows ]; then CLI=./apprivet.exe; fi
+          "$CLI" snapshot create --root examples/HelloAppRivet --files-from examples/HelloAppRivet.snapshot-files --output "$RUNNER_TEMP/source.tar" --json > "$RUNNER_TEMP/created.json"
+          "$CLI" snapshot inspect --archive "$RUNNER_TEMP/source.tar" --json > "$RUNNER_TEMP/verified.json"
+          diff "$RUNNER_TEMP/created.json" "$RUNNER_TEMP/verified.json"
 
   ios-simulator:
     runs-on: macos-15

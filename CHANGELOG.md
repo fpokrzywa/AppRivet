@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add portable source snapshot create/inspect commands with explicit selection, deterministic canonical archives, per-file/whole-archive hashes and optional expected digest verification.
+- Reject archive ambiguity, unsafe/colliding paths, links, common credential filenames and oversized inputs; preserve existing output and clean up failed creation.
+- Add snapshot security/CLI tests, native fuzzing and example roundtrips in every CI platform job. Remote execution, extraction, signing and authorization remain unimplemented.
+
 - Add read-only `devices` through devicectl and `devices --simulators` through simctl, with bounded capture, cleanup and cancellation.
 - Add cross-platform `devices --from-json` inspection with explicit offline provenance, privacy filtering and stable error codes.
 - Add original synthetic legacy/modern/simulator fixtures, parser/adapter/CLI tests and fuzz target; reject duplicate JSON keys and ambiguous null fallbacks.

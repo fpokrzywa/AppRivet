@@ -16,6 +16,7 @@ M1 supports simulator builds only, explicitly disables signing, and never passes
 | internal/project | Validate, render, discover projects | Evaluate Package.swift or overwrite projects |
 | internal/doctor | Check host, full Xcode, SDK and tools | Install tools or accept Apple agreements |
 | internal/devices | Read-only devicectl/simctl inventory and offline report normalization | Pair, install, infer authorization, or expose raw metadata |
+| internal/snapshot | Explicit source selection, bounded canonical archives and integrity verification | Extract, execute, upload, infer authorization or claim complete/buildable source |
 | internal/build | Simulator build/test orchestration | Sign, provision or publish |
 | internal/runner | Fixed executable invocation, cancellation, bounded/redacted output | Invoke a shell or claim isolation |
 | Future signing broker | Keychain references, policy, approved signing | Execute project scripts |
@@ -35,6 +36,8 @@ Maintain a capability table keyed by credential kind, role, membership, and endp
 Build in an ephemeral Mac VM or dedicated clean worker identity with no signing/API key access and restricted egress. Transfer only a validated artifact manifest to a distinct signer identity/host. Validate paths, hashes, executable types, entitlements, bundle IDs and dependencies; do not execute build hooks in the signer. Avoid broad codesign Keychain ACLs. A separate process under the same user is not adequate isolation. Prove this boundary with hostile build-script tests before enabling untrusted or AI-generated builds.
 
 ## Future remote protocol
+
+The portable source-snapshot boundary is now implemented independently of transport: explicit files, canonical TAR/manifest, quotas, path restrictions and optional expected archive digest. See SNAPSHOTS.md. This establishes a content format only; it supplies neither authenticated identities nor grants, isolation, extraction or execution. Future worker admission must reverify bytes against the authorized digest and apply its own policy.
 
 Developer-controlled agent, disabled until paired. TLS 1.3 plus mutually authenticated client certificates; short-lived pairing code verified through a trusted local Mac UI, fingerprint comparison, attempt limits, expiry and revocation. Bind identities to users and project grants server-side. No unauthenticated LAN discovery or insecure fallback.
 

@@ -1,6 +1,6 @@
 # CLI reference (schema 1)
 
-Implemented: doctor, init, inspect, build, test, devices, version, help. `install` and `launch` return `not_implemented`, exit 3; device mutation is not implemented.
+Implemented: doctor, init, inspect, build, test, devices, snapshot create/inspect, version, help. `install` and `launch` return `not_implemented`, exit 3; device mutation is not implemented.
 
 ```sh
 apprivet doctor
@@ -12,6 +12,8 @@ apprivet test --project MyFirstApp --trust-project --simulator SIMULATOR_UUID
 apprivet devices --json
 apprivet devices --simulators --json
 apprivet devices --from-json devices.json --json
+apprivet snapshot create --root MyFirstApp --files-from files.txt --output source.tar --json
+apprivet snapshot inspect --archive source.tar --json
 ```
 
 `init` works offline on all three platforms. Names are 1-50 ASCII letters/digits, start with a letter, and cannot be a reserved Windows filename. Bundle IDs default to `com.example.<lowercase-name>` and must be changed to an appropriate unique ID before device signing. Creation refuses existing destinations and does not initialize Git, install dependencies or sign in to Apple. A write failure can leave a partial new project; inspect it before removing it. Existing directories are never merged or overwritten.
@@ -33,6 +35,8 @@ Generated app modules are named `AppRivet_<ProjectName>` to avoid Swift keyword 
 `devices` performs read-only local discovery on a Mac. Default: CoreDevice inventory through devicectl, including remembered or disconnected records. `--simulators` selects simctl instead. `--from-json FILE` inspects the selected format offline on any host and marks `live: false`, `source: "file"`. Discovery timeout defaults to 30s, with a 5m maximum. Tool failure is never represented as an empty successful list. Unknown connectivity, pairing and developer-mode values remain unknown; discovery does not authorize installation. See [device contract, limits and live matrix](DEVICES.md).
 
 ## JSON for coding agents
+
+`snapshot create` packages explicitly listed files without executing them. `snapshot inspect` verifies the canonical archive and optional `--expect-sha256` digest without extracting it. Both work on every CLI host; the JSON envelope's command is `snapshot`. Existing outputs are never overwritten. See [source snapshot format, errors and limits](SNAPSHOTS.md). Integrity does not authorize execution, signing or device operations, and it does not prove a complete build input.
 
 Add `--json` before or after the command. Standard output contains exactly one JSON envelope; subprocess logs are in `data.execution.output`, not mixed into the stream. Exit status remains nonzero on failure. JSON mode writes no routine progress text to stderr. Reserved/unknown command errors are structured too.
 

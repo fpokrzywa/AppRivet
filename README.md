@@ -38,6 +38,8 @@ bin/apprivet devices --from-json internal/devices/testdata/devicectl-modern.json
 
 Implemented commands: `doctor`, `init`, `inspect`, `build`, `test`, `devices`, `version`, and `help`. Build/test target iOS Simulator. Device listing does not establish attachment, pairing permission or installation authorization. `install` and `launch` explicitly return `not_implemented`. Signing, remote builds and Apple credential management remain planned.
 
+Portable `snapshot create` and `snapshot inspect` also package explicitly selected source files and verify their hashes without extraction, execution or credentials. See [source snapshots](docs/SNAPSHOTS.md) for the example list, strict format/limits and integrity-versus-authorization boundary. A valid snapshot is not proof of a complete or safe build.
+
 See the [CLI reference](docs/CLI.md) for flags, JSON, exit codes and security boundaries, and [verification](docs/VERIFICATION.md) for reproducible Mac tests. The [roadmap](docs/ROADMAP.md) separates Milestone 1 from future signing, devices, remote builds, and distribution.
 
 ## Documentation
@@ -48,6 +50,7 @@ See the [CLI reference](docs/CLI.md) for flags, JSON, exit codes and security bo
 - [Threat model](docs/THREAT_MODEL.md)
 - [Architecture decisions](docs/adr/0001-foundation.md)
 - [Device discovery and live-validation matrix](docs/DEVICES.md)
+- [Portable source snapshots](docs/SNAPSHOTS.md)
 - [Contribution guide](CONTRIBUTING.md) and [security policy](SECURITY.md)
 
 No open-source license has been selected. Repository access does not grant a public redistribution license. No payments, activation, or license enforcement are implemented. AppRivet is not affiliated with or endorsed by Apple or Xtool.
