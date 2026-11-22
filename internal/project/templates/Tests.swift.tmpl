@@ -1,0 +1,8 @@
+import XCTest
+@testable import {{.Name}}
+
+final class {{.Name}}Tests: XCTestCase {
+    func testGreetingUsesTheProvidedName() {
+        XCTAssertEqual(Greeting.message(for: "Developer"), "Hello, Developer!")
+    }
+}
