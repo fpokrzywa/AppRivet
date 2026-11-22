@@ -1,6 +1,6 @@
 # Local replay protection and worker reservations
 
-These commands implement persistent local accounting. They do not run, extract, enqueue, authenticate, sign or install anything. `--principal` remains an operator-supplied assertion, never a network authentication mechanism. Every result reports `mode: "local_reservation"`, `authentication_verified: false` and `execution_authorized: false`.
+These commands implement persistent local accounting. [Recovery and ownership commands](WORKER_RECOVERY.md) extend this model without adding execution. They do not run, extract, enqueue, authenticate, sign or install anything. `--principal` remains an operator-supplied assertion, never a network authentication mechanism. Every result reports `mode: "local_reservation"`, `authentication_verified: false` and `execution_authorized: false`.
 
 ## Initialize and reserve
 
@@ -40,7 +40,7 @@ Omit `--request-id` to list that principal's retained reservations. Status never
 - Exact retries return `replay_detected`. Changed input with the same request ID returns `request_conflict`; a consumed nonce with a fresh ID returns `replay_detected`. Use status by request ID after a lost response. No second job is created.
 - Release is owner-bound and idempotent. Expiry and release retain replay history indefinitely within the store. Different principals have independent replay namespaces.
 - A fresh request ID and nonce may reuse an active grant. This is not a once-per-grant, once-per-digest or human-approval system.
-- Leases end at the earlier of the requested duration and grant expiry. At the exact expiry instant the status is `expired` and accounting capacity becomes available. Released records remain `released`.
+- Leases end at the earlier of the requested duration and grant expiry. At the exact expiry instant an unclaimed reservation becomes `expired` and accounting capacity becomes available. Claimed reservations instead become `recovery_required` and retain capacity until explicit exact-owner recovery. Released records remain `released`.
 - Global active count, per-principal active count and global logical byte capacity are checked together under the store lock. Bytes equal verified archive bytes plus source bytes. These are accounting limits, not physical disk allocation, CPU/memory containment or per-principal byte quotas.
 - Before committing, reserve reloads policy after archive verification, rechecks grant bindings/time and applies current snapshot limits. This does not provide atomic policy revocation across the final read/commit or authorize later execution. There is no execution consumer of these records.
 
@@ -52,7 +52,7 @@ The journal is canonical JSON Lines with sequential events and a SHA-256 chain. 
 
 The observed UTC time watermark is persisted. A clock earlier than that watermark freezes operations with `clock_rollback`; expiry cannot be undone by a subsequently observed backward step. This is not a secure clock: an undetected rollback, a large forward jump or operator clock tampering remains outside the guarantee. Status and some rejected requests append time observations, so status is not read-only.
 
-Bounds are 16 MiB, 16,384 events, 4,096 bytes per event and 4,096 lifetime reservations, whichever is reached first. Time observations count as events. Full state fails closed, including maintenance/release operations that would append. Records are never silently evicted. Future rotation must preserve replay protection and coordinate outstanding grants; deleting the directory and starting again is not a safe recovery procedure.
+Bounds are 16 MiB, 16,384 events, 4,096 bytes per event and 4,096 lifetime reservations, whichever is reached first. Time observations count as events. Full state fails closed, including maintenance/release/recovery operations that would append. The read-only `recovery-status` command can inspect a valid full journal. Records are never silently evicted. Future rotation must preserve replay protection and coordinate outstanding grants; deleting the directory and starting again is not a safe recovery procedure.
 
 Cancellation before a reservation append consumes no request. Once a full write has synced, success wins over cancellation. Write/sync failure returns `commit_uncertain`: the event may be recorded. Retain state and query status before any retry; if the journal is damaged, stop and inspect it. Never truncate a partial tail automatically. Test-injected write failures establish this behavior, not power-loss durability. Initialization does not fsync directory entries; catastrophic loss of newly created state requires operational recovery rather than automatic reinitialization.
 
@@ -81,7 +81,7 @@ Automated security tests cover cross-process contention, process-death lock reco
 Still required before a live worker:
 
 1. Authenticated transport, principal derivation, protected policy deployment and a trusted approval UI. No listener or credential integration exists.
-2. Fenced execution ownership, restart reconciliation, real process/VM teardown on expiry/cancel, and execution-time revocation. Releasing accounting does not prove a running process stopped; no process runs here.
+2. Enforced external fencing, live process/VM restart reconciliation, verified teardown and execution-time revocation. Local claim identities, current-owner/policy checks and explicit accounting recovery now exist; see WORKER_RECOVERY.md. Releasing accounting does not prove a running process stopped; no process runs here.
 3. Protected durable storage, rollback-resistant recovery/rotation, rate limits, actual power-cut/disk-full tests, Windows ACL hardening and deployment-specific local-filesystem locking behavior. Network/shared filesystems and hostile same-user races are unsupported boundaries.
 4. Mac worker isolation against malicious source, signer separation, secure artifact publication and resource enforcement. Hosted trusted-source simulator tests do not establish these properties.
 5. Physical USB/Wi-Fi pairing and device-state compatibility, signing, installation/launch and Apple account APIs. These require their own hardware/credential validation; none is inferred from local reservations.

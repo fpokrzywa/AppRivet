@@ -30,6 +30,9 @@ func (a App) runWorker(ctx context.Context, args []string, jsonMode bool) int {
 		return helpResult()
 	}
 	command := args[0]
+	if command == "claim" || command == "check-owner" || command == "recover" || command == "recovery-status" {
+		return a.runWorkerOwnership(ctx, args, jsonMode)
+	}
 	fs := flag.NewFlagSet("worker "+command, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	var policyPath, requestPath, principal, archive, state, configPath, requestID, reservationID string

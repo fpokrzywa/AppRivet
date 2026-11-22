@@ -29,6 +29,9 @@ func (j storedReservation) current(now time.Time) Reservation {
 	if r.Status == "reserved" && !now.Before(end) {
 		r.Status = "expired"
 	}
+	if r.Status == "claimed" && !now.Before(end) {
+		r.Status = "recovery_required"
+	}
 	return r
 }
 
@@ -40,6 +43,8 @@ type event struct {
 	Config   *Config            `json:"config,omitempty"`
 	Job      *storedReservation `json:"job,omitempty"`
 	ID       string             `json:"id,omitempty"`
+	Owner    *Ownership         `json:"owner,omitempty"`
+	Stopped  bool               `json:"confirmed_stopped,omitempty"`
 	Hash     string             `json:"hash"`
 }
 type journalState struct {
@@ -57,7 +62,7 @@ func (s *journalState) capacity(principal string, n int64, now time.Time) bool {
 	active, own := 0, 0
 	var used int64
 	for _, j := range s.jobs {
-		if j.current(now).Status == "reserved" {
+		if j.current(now).Status == "reserved" || j.Status == "claimed" {
 			active++
 			used += j.ReservedBytes
 			if j.Principal == principal {
@@ -78,6 +83,9 @@ func (s *journalState) apply(e event) error {
 	if !digest.MatchString(hash) || sum(b) != hash {
 		return corrupt()
 	}
+	if e.Kind != "claim" && e.Kind != "recover" && (e.Owner != nil || e.Stopped) {
+		return corrupt()
+	}
 	switch e.Kind {
 	case "init":
 		if s.sequence != 0 || e.Config == nil || !e.Config.valid() || e.Job != nil || e.ID != "" {
@@ -93,6 +101,9 @@ func (s *journalState) apply(e event) error {
 			return corrupt()
 		}
 		j := *e.Job
+		if j.WorkerID != "" || j.ClaimID != "" || j.Fence != 0 || j.ClaimedAt != "" {
+			return corrupt()
+		}
 		end, err := time.Parse(time.RFC3339Nano, j.ExpiresAt)
 		if !nonce.MatchString(j.ID) || !identifier.MatchString(j.RequestID) || !identifier.MatchString(j.Principal) || !identifier.MatchString(j.ProjectID) || !identifier.MatchString(j.GrantID) || j.Operation != "extract" || !digest.MatchString(j.SnapshotSHA256) || !digest.MatchString(j.Fingerprint) || !digest.MatchString(j.NonceHash) || j.Status != "reserved" || j.CreatedAt != e.At || err != nil || stamp(end) != j.ExpiresAt || !end.After(now) || end.Sub(now) > time.Duration(s.config.MaxLeaseSeconds)*time.Second || j.ReservedBytes > snapshot.MaxArchiveBytes+snapshot.MaxTotalBytes || !s.capacity(j.Principal, j.ReservedBytes, now) {
 			return corrupt()
@@ -120,6 +131,10 @@ func (s *journalState) apply(e event) error {
 		}
 		if !found {
 			return corrupt()
+		}
+	case "claim", "recover":
+		if err := s.applyOwnership(e, now); err != nil {
+			return err
 		}
 	default:
 		return corrupt()

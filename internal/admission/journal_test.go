@@ -157,10 +157,22 @@ func TestJournalPOSIXModesAndMissingLock(t *testing.T) {
 
 func FuzzReservationJournal(f *testing.F) {
 	s, r, p, a, _ := reservationFixture(f)
-	if _, err := s.Reserve(context.Background(), "developer", p, r, a); err != nil {
+	reserved, err := s.Reserve(context.Background(), "developer", p, r, a)
+	if err != nil {
 		f.Fatal(err)
 	}
 	seed, _ := os.ReadFile(filepath.Join(s.Dir, "journal.jsonl"))
+	f.Add(seed)
+	claimed, err := s.Claim(context.Background(), "developer", reserved.Reservations[0].ID, "fuzz-worker", p, a)
+	if err != nil {
+		f.Fatal(err)
+	}
+	seed, _ = os.ReadFile(filepath.Join(s.Dir, "journal.jsonl"))
+	f.Add(seed)
+	if _, err = s.Recover(context.Background(), "developer", ownerOf(claimed.Reservations[0]), true); err != nil {
+		f.Fatal(err)
+	}
+	seed, _ = os.ReadFile(filepath.Join(s.Dir, "journal.jsonl"))
 	f.Add(seed)
 	f.Add([]byte("{}\n"))
 	f.Add([]byte("null\n"))

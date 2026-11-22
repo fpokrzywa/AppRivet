@@ -34,6 +34,10 @@ type Reservation struct {
 	CreatedAt      string `json:"created_at"`
 	ExpiresAt      string `json:"expires_at"`
 	Status         string `json:"status"`
+	WorkerID       string `json:"worker_id,omitempty"`
+	ClaimID        string `json:"claim_id,omitempty"`
+	Fence          int    `json:"fence,omitempty"`
+	ClaimedAt      string `json:"claimed_at,omitempty"`
 }
 type Receipt struct {
 	Mode                   string        `json:"mode"`
@@ -206,6 +210,9 @@ func (s Store) Release(ctx context.Context, principal, id string) (Receipt, erro
 			continue
 		}
 		current := j.current(tx.state.at)
+		if j.Status == "claimed" {
+			return Receipt{}, failure("ownership_required", "claimed capacity requires exact-owner recovery and a stopped-worker assertion")
+		}
 		if current.Status == "reserved" {
 			if err = tx.append(ctx, event{Kind: "release", At: stamp(tx.state.at), ID: id}); err != nil {
 				return Receipt{}, err

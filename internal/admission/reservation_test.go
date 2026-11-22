@@ -186,7 +186,12 @@ func TestReservationProcessHelper(t *testing.T) {
 	if _, err := os.Stdin.Read(start[:]); err != nil {
 		os.Exit(2)
 	}
-	_, err := s.Reserve(context.Background(), "developer", os.Getenv("APPRIVET_TEST_POLICY"), r, os.Getenv("APPRIVET_TEST_ARCHIVE"))
+	var err error
+	if strings.HasPrefix(mode, "claim:") {
+		_, err = s.Claim(context.Background(), "developer", strings.TrimPrefix(mode, "claim:"), r.RequestID, os.Getenv("APPRIVET_TEST_POLICY"), os.Getenv("APPRIVET_TEST_ARCHIVE"))
+	} else {
+		_, err = s.Reserve(context.Background(), "developer", os.Getenv("APPRIVET_TEST_POLICY"), r, os.Getenv("APPRIVET_TEST_ARCHIVE"))
+	}
 	result := "ok"
 	if err != nil {
 		var detail *Error

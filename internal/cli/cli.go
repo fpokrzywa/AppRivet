@@ -56,6 +56,10 @@ Usage:
   apprivet worker reserve --state DIR --policy FILE --request FILE --principal ID --archive FILE [--json]
   apprivet worker status --state DIR --principal ID [--request-id ID] [--json]
   apprivet worker release --state DIR --principal ID --reservation ID [--json]
+  apprivet worker claim --state DIR --principal ID --reservation ID --worker ID --policy FILE --archive FILE [--json]
+  apprivet worker check-owner --state DIR --principal ID --reservation ID --worker ID --claim ID --fence N --policy FILE --archive FILE [--json]
+  apprivet worker recovery-status --state DIR --principal ID [--json]
+  apprivet worker recover --state DIR --principal ID --reservation ID --worker ID --claim ID --fence N --confirmed-stopped [--json]
   apprivet version [--json]
 
 Build/test options:
@@ -70,6 +74,7 @@ Snapshots package explicitly listed files and verify integrity on any host.
 Extraction requires a matching digest and a new destination; it executes no code.
 Worker checks evaluate local policy offline; they do not authenticate or authorize execution.
 Reservations retain replay history and account for capacity; they launch no jobs.
+Expired claims retain capacity until exact-owner recovery. Recovery verifies no process termination.
 
 Use --help with a command. --json is supported before or after the command.
 Windows/Linux: project preparation and offline report inspection. iOS builds and
@@ -254,9 +259,17 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 	switch data := response.Data.(type) {
 	case admission.Receipt:
 		fmt.Fprintln(a.Out, "Local reservation accounting; caller not authenticated, execution not authorized.")
-		for _, r := range data.Reservations {
-			fmt.Fprintf(a.Out, "%s: %s; request: %s; expires: %s; bytes: %d\n", r.ID, r.Status, r.RequestID, r.ExpiresAt, r.ReservedBytes)
-		}
+		writeReservations(a.Out, data.Reservations)
+	case admission.RecoveryReceipt:
+		fmt.Fprintln(a.Out, "Local recovery accounting; caller not authenticated, execution not authorized. Stopped-worker assertion not verified; no process terminated.")
+		writeReservations(a.Out, data.Reservations)
+	case admission.RecoveryReport:
+		fmt.Fprintln(a.Out, "Read-only recovery inspection; caller not authenticated, execution not authorized.")
+		fmt.Fprintf(a.Out, "Journal sequence: %d; recorded: %s; observed: %s; clock rollback: %t\n", data.JournalSequence, data.RecordedAt, data.ObservedAt, data.ClockRollback)
+		writeReservations(a.Out, data.Reservations)
+	case admission.OwnershipDecision:
+		fmt.Fprintf(a.Out, "Local ownership matches at %s; valid until %s. Caller not authenticated, execution not authorized.\n", data.CheckedAt, data.ValidUntil)
+		writeReservations(a.Out, []admission.Reservation{data.Reservation})
 	case snapshot.Extraction:
 		fmt.Fprintf(a.Out, "Extracted source: %s\nSHA-256: %s\nFiles: %d\n", data.Destination, data.Snapshot.SHA256, len(data.Snapshot.Files))
 		fmt.Fprintln(a.Out, "No code executed. Integrity is not authorization or proof of safe/buildable source.")

@@ -1,6 +1,6 @@
 # Project status and handoff
 
-Updated: 2026-11-22. Read-only discovery, portable snapshots, digest-bound extraction, offline worker admission and persistent local replay/capacity reservations are implemented. The physical-device workflow and authenticated/isolated remote worker are not complete.
+Updated: 2026-11-22. Read-only discovery, portable snapshots, digest-bound extraction, offline worker admission persistent local replay/capacity reservations, and local ownership/recovery checks are implemented. The physical-device workflow and authenticated/isolated remote worker are not complete.
 
 Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The owner changed visibility from private to public during this session; the change was verified. Standard hosted CI now starts, resolving the earlier billing admission failure. License selection remains open; no license, versioned binary release, payments or activation were added.
 
@@ -14,6 +14,7 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 - Explicit source selection, deterministic bounded archives, canonical verification and digest-required extraction into a new owned directory. No execution, upload or authorization is implied.
 - Read-only offline admission checks for exact grant/principal/project/operation/digest bindings, time windows and per-snapshot quotas; decisions explicitly do not authenticate or authorize execution.
 - Persistent local replay protection and bounded worker reservations with init/reserve/status/release, kernel process locks, policy rechecking and retained request/nonce history. No jobs execute. See [WORKER_RESERVATIONS](WORKER_RESERVATIONS.md).
+- Exclusive local claims, exact worker/claim/fence checks, retained capacity after claim expiry, explicit accounting recovery and read-only journal recovery inspection. No process execution or termination is implied. See [WORKER_RECOVERY](WORKER_RECOVERY.md).
 - Research, parity matrix, architecture, threat model, ADRs, roadmap, contribution/security documentation and CI.
 
 ## Evidence
@@ -63,4 +64,4 @@ CI reliability observation: [run 45052339395](https://github.com/fpokrzywa/AppRi
 2. Validate USB/Wi-Fi/disconnected/unpaired/locked/Developer Mode-disabled and older devices against Apple's actual reports. Add carefully sanitized captures with provenance; current committed fixtures are synthetic.
 3. Design and test the credential-free worker/signing boundary and trusted human approvals before enabling signing or device mutations. Discovery cannot authorize installation. Keep Apple passwords and private keys out of the CLI.
 4. Continue M2 installation/launch only with the required hardware/signing evidence. Remote builds, MCP and release distribution retain their separate acceptance gates.
-5. Integrate the local extractor and offline admission core into authenticated worker transport only with protected policy deployment, execution-time revocation, durable recovery, fenced execution ownership and OS isolation designs. Local replay/capacity reservations now exist; see [WORKER_RESERVATIONS](WORKER_RESERVATIONS.md). Snapshot integrity and hypothetical principal flags are not execution permission. See [SNAPSHOTS](SNAPSHOTS.md) and [WORKER_ADMISSION](WORKER_ADMISSION.md) for exact limits and unvalidated gates.
+5. Integrate the local extractor and offline admission core into authenticated worker transport only with protected policy deployment, execution-time revocation, durable recovery, fenced execution ownership and OS isolation designs. Local replay/capacity reservations and ownership/recovery checks now exist; external fencing, live supervisor evidence and verified teardown do not. See [WORKER_RESERVATIONS](WORKER_RESERVATIONS.md) and [WORKER_RECOVERY](WORKER_RECOVERY.md). Snapshot integrity and hypothetical principal flags are not execution permission. See [SNAPSHOTS](SNAPSHOTS.md) and [WORKER_ADMISSION](WORKER_ADMISSION.md) for exact limits and unvalidated gates.

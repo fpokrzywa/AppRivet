@@ -89,6 +89,28 @@ with tempfile.TemporaryDirectory(prefix="apprivet-smoke-", dir=base) as temporar
     assert run(*reserve_args, exit_code=4)["error"]["code"] == "replay_detected"
     request["nonce"] = "b" * 32
     request_path.write_text(json.dumps(request), encoding="utf-8")
-    assert run(*reserve_args)["data"]["reservations"][0]["status"] == "reserved"
+    next_job = run(*reserve_args)["data"]["reservations"][0]
+    assert next_job["status"] == "reserved"
+    claimed = run("worker", "claim", "--state", state, "--principal", "ci-developer",
+                  "--reservation", next_job["id"], "--worker", "smoke-worker",
+                  "--policy", policy_path, "--archive", archive)["data"]["reservations"][0]
+    assert claimed["status"] == "claimed" and claimed["fence"] > 0
+    owner_args = ("--state", state, "--principal", "ci-developer", "--reservation", claimed["id"],
+                  "--worker", claimed["worker_id"], "--claim", claimed["claim_id"], "--fence", claimed["fence"])
+    checked = run("worker", "check-owner", *owner_args, "--policy", policy_path, "--archive", archive)["data"]
+    assert checked["ownership_valid"] and not checked["authentication_verified"] and not checked["execution_authorized"]
+    before = (state / "journal.jsonl").read_bytes()
+    inspection = run("worker", "recovery-status", "--state", state, "--principal", "ci-developer")["data"]
+    assert inspection["mode"] == "local_recovery_inspection" and not inspection["execution_authorized"]
+    assert inspection["reservations"][-1] == claimed
+    assert before == (state / "journal.jsonl").read_bytes()
+    assert run("worker", "release", "--state", state, "--principal", "ci-developer",
+               "--reservation", claimed["id"], exit_code=4)["error"]["code"] == "ownership_required"
+    assert run("worker", "recover", *owner_args, exit_code=4)["error"]["code"] == "stop_confirmation_required"
+    closed = run("worker", "recover", *owner_args, "--confirmed-stopped")["data"]
+    assert not closed["stop_assertion_verified"] and closed["reservations"][0]["status"] == "recovered"
+    assert run("worker", "check-owner", *owner_args, "--policy", policy_path, "--archive", archive,
+               exit_code=4)["error"]["code"] == "ownership_conflict"
+    assert run(*reserve_args, exit_code=4)["error"]["code"] == "replay_detected"
 
-print("Snapshot hashes, extraction, admission, durable reservation/replay/recovery/release checks passed.")
+print("Snapshot, admission, reservation/replay, exclusive ownership and explicit recovery checks passed.")

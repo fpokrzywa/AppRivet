@@ -1,5 +1,13 @@
 # Verification record
 
+## Reservation recovery and ownership (2026-11-22)
+
+Local Windows tests and vet passed across all eight tested packages; admission coverage is 86.6%, CLI 88.9%. Native Windows journal fuzzing completed 10,000 inputs with reserved/claimed/recovered state seeds. Real CLI smoke passed exclusive claim, current-owner checking, read-only recovery inspection, ordinary-release refusal, stopped-assertion requirement, explicit recovery, old-owner refusal and retained request replay protection. All eight compiled Linux package test executables and six client cross-builds passed.
+
+Security tests cover six-process claim contention with one winner, durable ownership inspection after process exit, exact tuple/principal bindings, retained global/per-principal/byte capacity after claimed expiry, changed/revoked policy and archive bytes, final deadline checks, cancelled operations, complete/partial uncertain writes and cancellation after sync, fully populated journal inspection, clock rollback, legacy canonical records and invalid correctly rehashed transitions. API/CLI tests failed before implementation. One new byte-budget test initially undercounted its eight-byte source fixture; correcting the test restored the expected capacity boundary.
+
+Independent review found no actionable issues and independently passed the admission/CLI suites and diff checks. Hosted CI results are pending. [WORKER_RECOVERY](WORKER_RECOVERY.md#evidence-and-remaining-live-validation) records the limits: no authenticated worker, external side-effect fencing, live process/VM reconciliation, verified teardown, protected state migration/rollback anchoring, private Windows ACL enforcement, isolated Mac execution or physical-device/signing validation. Recovery is local accounting and never proof that a process stopped.
+
 ## Replay protection and local reservations (2026-11-22)
 
 Local Windows tests and vet passed across all eight tested packages; admission coverage is 86.2%, CLI 89.0%. Native Windows journal fuzzing completed 10,000 inputs. The real CLI smoke passed extraction/admission plus init, reserve, exact replay refusal, status recovery, release, retained nonce refusal and a fresh reservation. All eight compiled Linux package test executables passed in the restricted container; all six macOS/Linux/Windows amd64/arm64 client cross-builds passed.
