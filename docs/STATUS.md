@@ -51,3 +51,5 @@ Ruling: work directly in this initially empty dedicated repository; no existing 
 Commit history separates research, project generation, runner/adapters, CLI/CI and review fixes. Completed changes are committed; build outputs and local validation scratch remain ignored.
 
 Milestone 2 progress: read-only device parser/adapters and CLI implemented using original synthetic fixtures. Separate bounded structured stdout added to prevent redaction from corrupting JSON. Windows tests and vet pass; live Mac/device validation remains unverified. See docs/DEVICES.md and the M2 plan for scope and acceptance.
+
+M2 independent review: fixed duplicate JSON keys silently overwriting inventory and explicit modern nulls falling back to stale legacy state. Both regression tests failed before fixes and passed after; full Windows tests/vet pass. Linux runtime tests passed before these final parser fixes and will be repeated. User changed repository visibility to public on 2026-11-22; visibility verified. Standard hosted CI will be retried on the new push; license remains undecided.

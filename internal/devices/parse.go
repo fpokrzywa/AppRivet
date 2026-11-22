@@ -1,7 +1,9 @@
 package devices
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"regexp"
 	"sort"
 	"strings"
@@ -11,38 +13,70 @@ import (
 )
 
 type hardware struct {
-	UDID        *string `json:"udid"`
-	Platform    *string `json:"platform"`
-	ProductType *string `json:"productType"`
-	Reality     *string `json:"reality"`
+	UDID        textField `json:"udid"`
+	Platform    textField `json:"platform"`
+	ProductType textField `json:"productType"`
+	Reality     textField `json:"reality"`
 }
 type state struct {
-	Name          *string `json:"name"`
-	BootState     *string `json:"bootState"`
-	DeveloperMode *string `json:"developerModeStatus"`
-	OSVersion     *string `json:"osVersionNumber"`
+	Name          textField `json:"name"`
+	BootState     textField `json:"bootState"`
+	DeveloperMode textField `json:"developerModeStatus"`
+	OSVersion     textField `json:"osVersionNumber"`
 }
 type connection struct {
-	State        *string `json:"state"`
-	TunnelState  *string `json:"tunnelState"`
-	PairingState *string `json:"pairingState"`
-	Transport    *string `json:"transportType"`
+	State        textField `json:"state"`
+	TunnelState  textField `json:"tunnelState"`
+	PairingState textField `json:"pairingState"`
+	Transport    textField `json:"transportType"`
+}
+
+// Known text fields cannot be null: rejecting the report prevents fallback
+// from reviving stale legacy values. Omitted fields remain eligible for fallback.
+type textField struct {
+	Value   string
+	Present bool
+}
+
+func (f *textField) UnmarshalJSON(body []byte) error {
+	if bytes.Equal(bytes.TrimSpace(body), []byte("null")) {
+		return invalidReport()
+	}
+	if err := json.Unmarshal(body, &f.Value); err != nil {
+		return err
+	}
+	f.Present = true
+	return nil
+}
+
+type object[T any] struct{ Fields T }
+
+func (o *object[T]) UnmarshalJSON(body []byte) error {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return invalidReport()
+	}
+	return json.Unmarshal(body, &o.Fields)
+}
+
+type versionText struct {
+	StringValue textField `json:"stringValue"`
+}
+type software struct {
+	OSVersion object[versionText] `json:"osVersionNumber"`
+}
+type modernProperties struct {
+	Hardware   object[hardware]   `json:"hardware"`
+	State      object[state]      `json:"state"`
+	Connection object[connection] `json:"connection"`
+	Software   object[software]   `json:"software"`
 }
 type coreDevice struct {
-	Identifier string     `json:"identifier"`
-	Hardware   hardware   `json:"hardwareProperties"`
-	State      state      `json:"deviceProperties"`
-	Connection connection `json:"connectionProperties"`
-	Properties struct {
-		Hardware   hardware   `json:"hardware"`
-		State      state      `json:"state"`
-		Connection connection `json:"connection"`
-		Software   struct {
-			OSVersion struct {
-				StringValue *string `json:"stringValue"`
-			} `json:"osVersionNumber"`
-		} `json:"software"`
-	} `json:"properties"`
+	Identifier string                   `json:"identifier"`
+	Hardware   hardware                 `json:"hardwareProperties"`
+	State      state                    `json:"deviceProperties"`
+	Connection connection               `json:"connectionProperties"`
+	Properties object[modernProperties] `json:"properties"`
 }
 
 var identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
@@ -52,6 +86,9 @@ var identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`
 func Parse(body []byte, simulators bool) (Inventory, error) {
 	if len(body) > MaxReportBytes {
 		return Inventory{}, failure("report_too_large", "device report exceeds the 4 MiB limit")
+	}
+	if err := validateJSON(body); err != nil {
+		return Inventory{}, invalidReport()
 	}
 	var inv Inventory
 	var err error
@@ -117,7 +154,8 @@ func parseCoreDevices(body []byte) (Inventory, error) {
 		if raw == nil {
 			return Inventory{}, invalidReport()
 		}
-		h, s, c := raw.Properties.Hardware, raw.Properties.State, raw.Properties.Connection
+		p := raw.Properties.Fields
+		h, s, c := p.Hardware.Fields, p.State.Fields, p.Connection.Fields
 		kind := "unknown"
 		switch pick(h.Reality, raw.Hardware.Reality) {
 		case "physical":
@@ -128,7 +166,7 @@ func parseCoreDevices(body []byte) (Inventory, error) {
 		inv.Devices = append(inv.Devices, Device{
 			ID: raw.Identifier, UDID: pick(h.UDID, raw.Hardware.UDID), Kind: kind,
 			Name: display(pick(s.Name, raw.State.Name)), Platform: display(pick(h.Platform, raw.Hardware.Platform)), Model: display(pick(h.ProductType, raw.Hardware.ProductType)),
-			OSVersion: display(pick(raw.Properties.Software.OSVersion.StringValue, raw.State.OSVersion)), BootState: display(pick(s.BootState, raw.State.BootState)),
+			OSVersion: display(pick(p.Software.Fields.OSVersion.Fields.StringValue, raw.State.OSVersion)), BootState: display(pick(s.BootState, raw.State.BootState)),
 			ConnectionState: display(pick(c.State, raw.Connection.TunnelState)), PairingState: display(pick(c.PairingState, raw.Connection.PairingState)),
 			Transport: display(pick(c.Transport, raw.Connection.Transport)), DeveloperMode: display(pick(s.DeveloperMode, raw.State.DeveloperMode)),
 		})
@@ -175,12 +213,12 @@ func parseSimulators(body []byte) (Inventory, error) {
 func invalidReport() error {
 	return failure("invalid_report", "device report has malformed JSON or an unsupported inventory structure; no inventory was accepted")
 }
-func pick(primary, fallback *string) string {
-	if primary != nil {
-		return *primary
+func pick(primary, fallback textField) string {
+	if primary.Present {
+		return primary.Value
 	}
-	if fallback != nil {
-		return *fallback
+	if fallback.Present {
+		return fallback.Value
 	}
 	return ""
 }
@@ -201,4 +239,59 @@ func display(value string) string {
 		return "unknown"
 	}
 	return value
+}
+
+// encoding/json accepts repeated keys with last-value-wins behavior. Inventory
+// reports must not silently lose records or overwrite failed tool outcomes.
+func validateJSON(body []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := jsonValue(decoder, 0); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return invalidReport()
+	}
+	return nil
+}
+func jsonValue(decoder *json.Decoder, depth int) error {
+	if depth > 64 {
+		return invalidReport()
+	}
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	delim, ok := token.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delim {
+	case '{':
+		seen := map[string]bool{}
+		for decoder.More() {
+			key, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			name, ok := key.(string)
+			if !ok || seen[name] {
+				return invalidReport()
+			}
+			seen[name] = true
+			if err := jsonValue(decoder, depth+1); err != nil {
+				return err
+			}
+		}
+	case '[':
+		for decoder.More() {
+			if err := jsonValue(decoder, depth+1); err != nil {
+				return err
+			}
+		}
+	default:
+		return invalidReport()
+	}
+	_, err = decoder.Token()
+	return err
 }

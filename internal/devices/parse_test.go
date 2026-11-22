@@ -89,6 +89,43 @@ func TestEmptyListsAndMissingVersion(t *testing.T) {
 	}
 }
 
+func TestDuplicateJSONKeysCannotHideDevicesOrFailures(t *testing.T) {
+	cases := []struct {
+		body string
+		sim  bool
+	}{
+		{`{"devices":{"runtime":[{"udid":"device-a"}],"runtime":[]}}`, true},
+		{`{"devices":{"runtime":[{"udid":"device-a","udid":"device-b"}]}}`, true},
+		{`{"devices":{"runtime":[{"udid":"device-a"}]},"devices":{}}`, true},
+		{`{"info":{"commandType":"devicectl.list.devices","outcome":"failed","outcome":"success"},"result":{"devices":[]}}`, false},
+		{envelope(`[{"identifier":"device-a","identifier":"device-b"}]`), false},
+		{strings.Replace(envelope(`[{"identifier":"a"}]`), `"devices":[{"identifier":"a"}]`, `"devices":[{"identifier":"a"}],"devices":[]`, 1), false},
+		{`{"devices":{"runtime":[],"runtim\u0065":[]}}`, true},
+	}
+	for _, tc := range cases {
+		inv, err := Parse([]byte(tc.body), tc.sim)
+		if err == nil || len(inv.Devices) != 0 {
+			t.Fatalf("ambiguous report accepted: %s -> %+v %v", tc.body, inv, err)
+		}
+	}
+}
+
+func TestModernNullNeverResurrectsLegacyState(t *testing.T) {
+	for _, properties := range []string{`{"connection":{"state":null}}`, `{"connection":{"pairingState":null}}`, `{"state":{"name":null}}`, `{"connection":null}`, `{"hardware":null}`, `{"state":null}`, `{"software":null}`, `{"software":{"osVersionNumber":null}}`, `null`} {
+		body := envelope(`[{"identifier":"device-a","properties":` + properties + `,"connectionProperties":{"tunnelState":"connected","pairingState":"paired"}}]`)
+		if _, err := Parse([]byte(body), false); err == nil {
+			t.Fatalf("null accepted: %s", properties)
+		}
+	}
+	for _, tc := range []struct{ connection, want string }{{`{}`, "connected"}, {`{"state":""}`, "unknown"}, {`{"state":"future-state"}`, "future-state"}} {
+		body := envelope(`[{"identifier":"device-a","properties":{"connection":` + tc.connection + `},"connectionProperties":{"tunnelState":"connected"}}]`)
+		inv, err := Parse([]byte(body), false)
+		if err != nil || inv.Devices[0].ConnectionState != tc.want {
+			t.Fatalf("precedence %s -> %+v %v", tc.connection, inv, err)
+		}
+	}
+}
+
 func envelope(devices string) string {
 	return `{"info":{"commandType":"devicectl.list.devices","outcome":"success","jsonVersion":5},"result":{"devices":` + devices + `}}`
 }
