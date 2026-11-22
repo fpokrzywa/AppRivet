@@ -16,7 +16,8 @@ M1 supports simulator builds only, explicitly disables signing, and never passes
 | internal/project | Validate, render, discover projects | Evaluate Package.swift or overwrite projects |
 | internal/doctor | Check host, full Xcode, SDK and tools | Install tools or accept Apple agreements |
 | internal/devices | Read-only devicectl/simctl inventory and offline report normalization | Pair, install, infer authorization, or expose raw metadata |
-| internal/snapshot | Explicit source selection, bounded canonical archives and integrity verification | Extract, execute, upload, infer authorization or claim complete/buildable source |
+| internal/snapshot | Explicit source selection, bounded canonical archives, integrity verification and digest-bound extraction into a new owned directory | Execute, upload, infer authorization or claim complete/buildable source |
+| internal/admission | Offline grant/principal/project/digest/time/quota checks against actual snapshot bytes | Authenticate callers, issue execution tickets, reserve workers or claim remote approval |
 | internal/build | Simulator build/test orchestration | Sign, provision or publish |
 | internal/runner | Fixed executable invocation, cancellation, bounded/redacted output | Invoke a shell or claim isolation |
 | Future signing broker | Keychain references, policy, approved signing | Execute project scripts |
@@ -37,7 +38,7 @@ Build in an ephemeral Mac VM or dedicated clean worker identity with no signing/
 
 ## Future remote protocol
 
-The portable source-snapshot boundary is now implemented independently of transport: explicit files, canonical TAR/manifest, quotas, path restrictions and optional expected archive digest. See SNAPSHOTS.md. This establishes a content format only; it supplies neither authenticated identities nor grants, isolation, extraction or execution. Future worker admission must reverify bytes against the authorized digest and apply its own policy.
+The portable source-snapshot boundary now includes explicit selection, canonical TAR/manifest, quotas, path restrictions and extraction through a stable verified copy into a new owned directory. Offline admission evaluates locally loaded grants against a separately supplied principal and actual archive bytes. See SNAPSHOTS.md and WORKER_ADMISSION.md. This supplies neither authenticated identity, trusted human approval, replay protection, queue reservations nor OS isolation. Future service admission must source identity/policy independently of requests, recheck validity/revocation at use and bind the exact digest to its authorized operation.
 
 Developer-controlled agent, disabled until paired. TLS 1.3 plus mutually authenticated client certificates; short-lived pairing code verified through a trusted local Mac UI, fingerprint comparison, attempt limits, expiry and revocation. Bind identities to users and project grants server-side. No unauthenticated LAN discovery or insecure fallback.
 

@@ -33,6 +33,10 @@ Verification performs no extraction or execution. Streaming quotas and canonical
 
 Hashes prove content integrity, not sender identity, safe code, build completeness or permission to run/sign/install. A self-consistent attacker-created bundle is accepted unless its digest differs from a separately trusted expected digest. Authenticated transport, project grants, trusted human approval, isolated extraction/build workers and the signer boundary remain mandatory future gates. See SNAPSHOTS.md for exact supported paths, limits and limitations.
 
+Extraction now verifies a bounded temporary copy before creating a destination, then re-verifies that open copy while writing under an exclusively created os.Root. Expected digest is mandatory; archive links/modes/owners are not applied. Existing destinations are refused, and failed/cancelled output is removed only after ownership identity checks. This is not atomic publication or protection from hostile same-user races. Windows numeric modes do not set private DACLs: access-controlled temporary storage and destination ancestry are operator prerequisites. A reviewer reproduced inherited broad read permissions under permissive Windows parent ACLs; no automatic ACL hardening is claimed.
+
+Offline admission rejects malformed/ambiguous policy and request JSON, mismatched principal/project/operation/digest/grant, disabled or inactive grants and excessive resource use. It reads archives only after policy binding checks and bounds reads by the selected grant. Principal flags and local JSON are not authenticated approval. Results explicitly deny authentication and execution authorization; they are neither bearer tickets nor one-time reservations. Protected policy deployment, authenticated transport, revocation at use, replay prevention and aggregate concurrent quotas remain unimplemented. See WORKER_ADMISSION.md.
+
 ## Milestone 2 discovery boundary
 
 - Device JSON is untrusted data, including names that may contain terminal controls or text aimed at coding agents. Never execute or interpret it as instructions. Known display fields are sanitized; arbitrary metadata and raw error payloads are omitted.

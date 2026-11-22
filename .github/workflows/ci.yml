@@ -43,14 +43,15 @@ jobs:
       - name: Fuzz source snapshot verification
         if: runner.os == 'Linux'
         run: go test ./internal/snapshot -run='^$' -fuzz=FuzzVerify -fuzztime=10000x -parallel=2 -timeout=60s
-      - name: Source snapshot CLI roundtrip
+      - name: Fuzz admission policy JSON
+        if: runner.os == 'Linux'
+        run: go test ./internal/admission -run='^$' -fuzz=FuzzAdmissionJSON -fuzztime=10000x -parallel=2 -timeout=60s
+      - name: Source extraction and admission CLI smoke
         shell: bash
         run: |
-          CLI=./apprivet
-          if [ "$RUNNER_OS" = Windows ]; then CLI=./apprivet.exe; fi
-          "$CLI" snapshot create --root examples/HelloAppRivet --files-from examples/HelloAppRivet.snapshot-files --output "$RUNNER_TEMP/source.tar" --json > "$RUNNER_TEMP/created.json"
-          "$CLI" snapshot inspect --archive "$RUNNER_TEMP/source.tar" --json > "$RUNNER_TEMP/verified.json"
-          diff "$RUNNER_TEMP/created.json" "$RUNNER_TEMP/verified.json"
+          PYTHON=python3
+          if [ "$RUNNER_OS" = Windows ]; then PYTHON=python; fi
+          "$PYTHON" .github/scripts/worker-smoke.py
 
   ios-simulator:
     runs-on: macos-15
@@ -71,18 +72,22 @@ jobs:
         run: |
           "$RUNNER_TEMP/apprivet" devices --timeout 60s --json
           "$RUNNER_TEMP/apprivet" devices --simulators --timeout 60s --json
-      - name: Generate and validate original project
+      - name: Generate, extract and validate original project
         working-directory: ${{ runner.temp }}
         run: |
           ./apprivet init CIApp --bundle-id org.example.apprivetci
-          plutil -lint CIApp/CIApp.xcodeproj/project.pbxproj
-          ./apprivet inspect --project CIApp --json
-          ./apprivet build --project CIApp --trust-project --timeout 15m
+          printf '%s\n' CIApp/App.swift CIApp/ContentView.swift CIApp.xcodeproj/project.pbxproj CIApp.xcodeproj/xcshareddata/xcschemes/CIApp.xcscheme CIAppTests/CIAppTests.swift README.md > source-files.txt
+          ./apprivet snapshot create --root CIApp --files-from source-files.txt --output source.tar --json > snapshot.json
+          DIGEST=$(python3 -c 'import json; print(json.load(open("snapshot.json"))["data"]["sha256"])')
+          ./apprivet snapshot extract --archive source.tar --destination CIExtracted --expect-sha256 "$DIGEST" --json
+          plutil -lint CIExtracted/CIApp.xcodeproj/project.pbxproj
+          ./apprivet inspect --project CIExtracted --json
+          ./apprivet build --project CIExtracted --trust-project --timeout 15m
       - name: Run generated XCTest on an available iOS simulator
         working-directory: ${{ runner.temp }}
         run: |
           SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for k,vs in d["devices"].items() if "iOS" in k for v in vs if v.get("isAvailable") and "iPhone" in v["name"]))')
-          ./apprivet test --project CIApp --simulator "$SIMULATOR_ID" --trust-project --timeout 20m
+          ./apprivet test --project CIExtracted --simulator "$SIMULATOR_ID" --trust-project --timeout 20m
       - name: Validate framework-name collision regression
         working-directory: ${{ runner.temp }}
         run: |

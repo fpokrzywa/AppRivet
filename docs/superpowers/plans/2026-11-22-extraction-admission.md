@@ -12,9 +12,15 @@ Rulings: continue the authorized dedicated-repository workflow; implement native
 
 ## Tasks
 
-- [ ] Extraction tests first: roundtrip/content hash, missing/wrong digest, tampering, path/link/metadata abuse, existing file/dir/symlink refusal, changing original input, partial/cancel cleanup, private modes, owned-directory cleanup identity, concurrency on same destination. Implement staged verification and shared verifying sink.
-- [ ] Admission tests first: strict bounded JSON, principal/project/digest/action binding, disabled/expired/not-yet-valid/max-lifetime grants, resource limits, policy denial before file access, cancellation and honest offline decisions. Implement typed evaluator and fuzz target.
-- [ ] CLI tests first and handlers; extend native smoke tests and CI. Build/test the original generated SwiftUI app from extracted source on hosted Mac when available; do not infer isolated-worker/device support from that check.
-- [ ] Independent review, regression fixes, Windows/Linux tests, vet, race in CI, native fuzz, six cross-builds. Document exact filesystem/policy trust boundaries and remaining live validation. Commit/push and follow CI to a final result.
+- [x] Extraction tests first: roundtrip/content hash, missing/wrong digest, tampering, path/link/metadata abuse, existing file/dir/symlink refusal, changing original input, partial/cancel cleanup, private modes, owned-directory cleanup identity, concurrency on same destination. Implement staged verification and shared verifying sink.
+- [x] Admission tests first: strict bounded JSON, principal/project/digest/action binding, disabled/expired/not-yet-valid/max-lifetime grants, resource limits, policy denial before file access, cancellation and honest offline decisions. Implement typed evaluator and fuzz target.
+- [x] CLI tests first and handlers; extend native smoke tests and CI. Build/test the original generated SwiftUI app from extracted source on hosted Mac when available; do not infer isolated-worker/device support from that check.
+- [x] Independent review, regression fixes, Windows/Linux tests, vet, race in CI, native fuzz, six cross-builds. Document exact filesystem/policy trust boundaries and remaining live validation. Commit/push and follow CI to a final result.
 
 Review focus: verify-to-use archive substitution; symlink/path escape and exclusive ownership during cleanup; cancellation at final EOF; JSON ambiguity/time/identity binding; false authentication/execution claims. Baseline 97d2124. No listener, scheduler, signer or Apple-account workflow is introduced.
+
+Privacy clarification: 0600/0700 are POSIX mode requests, not a Windows ACL guarantee. Destination ancestry and temporary storage must be trusted and access-controlled by the operator. Windows inherits ACLs; this implementation neither audits nor repairs them. The verified-copy boundary is not an OS-account isolation boundary.
+
+Review ruling: omitted enabled is intentionally treated as disabled, not malformed policy. Only explicit true can make a grant eligible; null remains invalid JSON for this schema. This resolves the review's minor presence-contract discrepancy conservatively and is documented and regression-tested. Required identity, time, digest and quota fields still reject omission. No P1/P2 review findings; Windows ACL inheritance was independently reproduced and is an explicit deployment prerequisite, not a promised protection.
+
+Execution ledger: initial extraction/admission/CLI tests failed at absent APIs, then passed. Security review found no material defect; omitted enabled default and Windows ACL prerequisite explicitly documented. Windows eight-package suites/vet, eight Linux runtime suites, six cross-builds, two 10,000-input native fuzz runs and real Windows process smoke passed. CI result is tracked in STATUS/VERIFICATION through completion.

@@ -186,3 +186,38 @@ func FuzzAdmissionJSON(f *testing.F) {
 		}
 	})
 }
+
+func TestOmittedEnabledDefaultsToDenied(t *testing.T) {
+	p, r, _ := fixture(t)
+	body, _ := json.Marshal(p)
+	body = []byte(strings.Replace(string(body), `"enabled":true,`, "", 1))
+	parsed, err := ParsePolicy(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Grants[0].Enabled {
+		t.Fatal("omitted enabled granted access")
+	}
+	_, err = Check(context.Background(), testNow, "developer", parsed, r, "does-not-exist")
+	code(t, err, "admission_denied")
+}
+
+func TestAdmissionCountsActualFiles(t *testing.T) {
+	p, r, _ := fixture(t)
+	root := t.TempDir()
+	for _, name := range []string{"a", "b"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	archive := filepath.Join(t.TempDir(), "source.tar")
+	report, err := snapshot.Create(context.Background(), root, []string{"a", "b"}, archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Grants[0].SnapshotSHA256 = report.SHA256
+	r.SnapshotSHA256 = report.SHA256
+	p.Grants[0].Limits.MaxFiles = 1
+	_, err = Check(context.Background(), testNow, "developer", p, r, archive)
+	code(t, err, "resource_limit")
+}

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add digest-required snapshot extraction using a stable verified copy, exclusive destination ownership, bounded writes, no link/metadata restoration and checked cleanup after failures or cancellation.
+- Add read-only offline worker admission checks binding grants to principal, project, extract operation, digest, validity window and resource caps; explicitly no authentication or execution authorization.
+- Add extraction/admission security tests and policy JSON fuzzing, real CLI smoke on each CI host, and hosted Mac build/XCTest from extracted original source. Document Windows ACL prerequisites and remaining authentication/isolation/replay gates.
+
 - Add portable source snapshot create/inspect commands with explicit selection, deterministic canonical archives, per-file/whole-archive hashes and optional expected digest verification.
 - Reject archive ambiguity, unsafe/colliding paths, links, common credential filenames and oversized inputs; preserve existing output and clean up failed creation.
 - Add snapshot security/CLI tests, native fuzzing and example roundtrips in every CI platform job. Remote execution, extraction, signing and authorization remain unimplemented.

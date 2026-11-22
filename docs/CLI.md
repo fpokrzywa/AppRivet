@@ -1,6 +1,6 @@
 # CLI reference (schema 1)
 
-Implemented: doctor, init, inspect, build, test, devices, snapshot create/inspect, version, help. `install` and `launch` return `not_implemented`, exit 3; device mutation is not implemented.
+Implemented: doctor, init, inspect, build, test, devices, snapshot create/inspect/extract, worker check, version, help. `install` and `launch` return `not_implemented`, exit 3; device mutation is not implemented.
 
 ```sh
 apprivet doctor
@@ -14,6 +14,8 @@ apprivet devices --simulators --json
 apprivet devices --from-json devices.json --json
 apprivet snapshot create --root MyFirstApp --files-from files.txt --output source.tar --json
 apprivet snapshot inspect --archive source.tar --json
+apprivet snapshot extract --archive source.tar --destination extracted --expect-sha256 EXPECTED_DIGEST --json
+apprivet worker check --policy policy.json --request request.json --principal developer --archive source.tar --json
 ```
 
 `init` works offline on all three platforms. Names are 1-50 ASCII letters/digits, start with a letter, and cannot be a reserved Windows filename. Bundle IDs default to `com.example.<lowercase-name>` and must be changed to an appropriate unique ID before device signing. Creation refuses existing destinations and does not initialize Git, install dependencies or sign in to Apple. A write failure can leave a partial new project; inspect it before removing it. Existing directories are never merged or overwritten.
@@ -36,7 +38,9 @@ Generated app modules are named `AppRivet_<ProjectName>` to avoid Swift keyword 
 
 ## JSON for coding agents
 
-`snapshot create` packages explicitly listed files without executing them. `snapshot inspect` verifies the canonical archive and optional `--expect-sha256` digest without extracting it. Both work on every CLI host; the JSON envelope's command is `snapshot`. Existing outputs are never overwritten. See [source snapshot format, errors and limits](SNAPSHOTS.md). Integrity does not authorize execution, signing or device operations, and it does not prove a complete build input.
+`snapshot create` packages explicitly listed files without executing them. `snapshot inspect` verifies without extraction. `snapshot extract` requires `--expect-sha256` and a new `--destination`, verifies a stable bounded copy and materializes only regular files. JSON extraction data contains `destination` and `snapshot`; the envelope's command remains `snapshot`. All work on every CLI host. Existing outputs are never overwritten or merged. See [snapshot format, errors, storage prerequisites and limits](SNAPSHOTS.md). Integrity does not authorize execution, signing or device operations, and does not prove a complete build input.
+
+`worker check` evaluates a trusted local policy and untrusted request using the supplied hypothetical principal. Success explicitly reports `mode: "offline_policy_check"`, `authentication_verified: false` and `execution_authorized: false`. It performs no extraction, job submission or execution. A future service must obtain identity from authenticated transport rather than a flag or request field. See [worker schema, time/quota checks and remaining gates](WORKER_ADMISSION.md).
 
 Add `--json` before or after the command. Standard output contains exactly one JSON envelope; subprocess logs are in `data.execution.output`, not mixed into the stream. Exit status remains nonzero on failure. JSON mode writes no routine progress text to stderr. Reserved/unknown command errors are structured too.
 

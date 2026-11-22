@@ -38,7 +38,9 @@ bin/apprivet devices --from-json internal/devices/testdata/devicectl-modern.json
 
 Implemented commands: `doctor`, `init`, `inspect`, `build`, `test`, `devices`, `version`, and `help`. Build/test target iOS Simulator. Device listing does not establish attachment, pairing permission or installation authorization. `install` and `launch` explicitly return `not_implemented`. Signing, remote builds and Apple credential management remain planned.
 
-Portable `snapshot create` and `snapshot inspect` also package explicitly selected source files and verify their hashes without extraction, execution or credentials. See [source snapshots](docs/SNAPSHOTS.md) for the example list, strict format/limits and integrity-versus-authorization boundary. A valid snapshot is not proof of a complete or safe build.
+Portable `snapshot create`, `snapshot inspect` and `snapshot extract` package, verify and materialize explicitly selected source files without execution or credentials. Extraction requires a matching expected digest and a new destination. See [source snapshots](docs/SNAPSHOTS.md) for format limits and filesystem prerequisites. A valid snapshot is not proof of a complete or safe build.
+
+`worker check` evaluates local principal/project/digest/time/quota bindings against a policy and snapshot. It is an [offline admission check](docs/WORKER_ADMISSION.md), not authentication, execution permission or a running worker service.
 
 See the [CLI reference](docs/CLI.md) for flags, JSON, exit codes and security boundaries, and [verification](docs/VERIFICATION.md) for reproducible Mac tests. The [roadmap](docs/ROADMAP.md) separates Milestone 1 from future signing, devices, remote builds, and distribution.
 
@@ -51,6 +53,7 @@ See the [CLI reference](docs/CLI.md) for flags, JSON, exit codes and security bo
 - [Architecture decisions](docs/adr/0001-foundation.md)
 - [Device discovery and live-validation matrix](docs/DEVICES.md)
 - [Portable source snapshots](docs/SNAPSHOTS.md)
+- [Offline worker admission checks](docs/WORKER_ADMISSION.md)
 - [Contribution guide](CONTRIBUTING.md) and [security policy](SECURITY.md)
 
 No open-source license has been selected. Repository access does not grant a public redistribution license. No payments, activation, or license enforcement are implemented. AppRivet is not affiliated with or endorsed by Apple or Xtool.

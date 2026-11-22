@@ -1,6 +1,6 @@
 # Portable source snapshots
 
-Source snapshots are an implemented, credential-free foundation for a future remote worker. Creation and inspection work on Windows, Linux and macOS. They do not extract, upload, execute, build, sign or authorize code. Remote transport and worker isolation remain unimplemented.
+Source snapshots are an implemented, credential-free foundation for a future remote worker. Creation, inspection and digest-bound extraction work on Windows, Linux and macOS. They do not upload, execute, build, sign or authorize code. Remote transport and worker isolation remain unimplemented.
 
 ## Use
 
@@ -15,6 +15,9 @@ apprivet snapshot inspect --archive hello-source.tar --json
 
 # Supply a digest obtained separately through a trusted channel:
 apprivet snapshot inspect --archive hello-source.tar --expect-sha256 REPLACE_WITH_64_LOWERCASE_HEX_DIGITS --json
+
+# Extraction requires the expected digest and a destination that does not exist:
+apprivet snapshot extract --archive hello-source.tar --destination extracted-source --expect-sha256 REPLACE_WITH_64_LOWERCASE_HEX_DIGITS --json
 ```
 
 PowerShell users can put each command on a single line. A ready-to-use list is provided for the original HelloAppRivet example. `--root` defaults to the current working directory. The list, output and archive paths are relative to the CLI working directory, not the source root. Existing output is never overwritten.
@@ -27,7 +30,7 @@ Archive contents include the selected source verbatim. File selection and the cr
 
 Version 1 is an uncompressed canonical USTAR archive: lexicographically sorted `source/<relative-path>` regular files, then `manifest.json`, then exactly the canonical TAR ending. The manifest is canonical UTF-8 JSON plus one newline, with schema version 1 and ordered file entries. Source bytes are unchanged. All records use mode 0644, epoch modification time, zero user/group IDs and no owner names or additional metadata. The outer archive is created with mode 0600 where POSIX permissions apply; Windows uses existing filesystem ACLs.
 
-Verification streams data, checks file hashes and sizes against the exact expected manifest, and compares the input's SHA-256 with an independently reconstructed canonical archive. This rejects changed metadata, reordered/duplicate records, extra JSON fields or duplicate keys, extra padding, appended archives, hidden PAX/GNU metadata and trailing data. Arbitrary TAR/ZIP archives are not supported, even if another tool considers them valid. No filesystem extraction occurs.
+Verification streams data, checks file hashes and sizes against the exact expected manifest, and compares the input's SHA-256 with an independently reconstructed canonical archive. This rejects changed metadata, reordered/duplicate records, extra JSON fields or duplicate keys, extra padding, appended archives, hidden PAX/GNU metadata and trailing data. Arbitrary TAR/ZIP archives are not supported, even if another tool considers them valid. Inspection performs no filesystem extraction.
 
 `--expect-sha256` optionally compares the whole archive to a separately obtained digest. Without it, inspection establishes internal consistency only. An attacker can replace source and manifest and create a different internally valid snapshot. Even a matching expected digest establishes neither sender identity nor permission to execute. Future transport must authenticate identities and bind the digest to a project grant and authorized operation.
 
@@ -65,8 +68,22 @@ The format uses standard [archive/tar](https://pkg.go.dev/archive/tar), with a n
 | invalid_snapshot / digest_mismatch | 4 | Malformed/noncanonical archive or expected digest mismatch |
 | cancelled | 130 | Operation cancelled; no result accepted |
 
+## Safe extraction boundary
+
+`snapshot extract` requires a separately selected expected digest. It verifies a bounded copy into temporary storage before creating the destination, then verifies that same open copy again while materializing files through `os.Root`. It never reopens the original archive after verification. Changes to the original path cannot silently substitute different bytes between verification and extraction. The existing format verifier supplies path, link, type, count, byte, metadata and manifest checks on both passes.
+
+The destination parent must already be a real directory. The destination itself must not exist, even as an empty directory, file or dangling link. Creation is exclusive; extraction never merges, overwrites or uses archive-provided modes/owners/timestamps. Source paths are materialized directly under the destination, without the internal `source/` prefix or `manifest.json`. Files use mode 0600 and directories 0700 on POSIX. **Windows inherits ACLs; numeric modes do not establish private DACLs.** The operator must provide access-controlled destination ancestry and temporary storage (including any TMP/TMPDIR override) on every platform. AppRivet does not audit or repair ACLs, mount ownership or storage confidentiality.
+
+On ordinary failure or cancellation, extraction removes only its newly owned destination, anchored to its opened parent and checked against the created directory's identity. A replaced destination is not recursively deleted. `destination_exists`, `unsafe_destination` and `cleanup_failed` are additional exit-4 errors. `cleanup_failed` means partial output may remain and requires deliberate inspection. Temporary archive cleanup is best-effort; abrupt termination or storage errors can leave it behind.
+
+The destination can be visible while materialization is in progress. Wait for a successful result before using it; this is not atomic publication or crash recovery. Concurrent calls to the same destination have only one owner. Hostile same-user filesystem mutation, writable-by-other-users storage, mount replacement, unresponsive filesystem calls, disk reservations and whole-machine isolation are outside this local contract. Peak temporary disk demand includes the bounded archive copy plus extracted source and filesystem overhead. Cancellation is checked between reads and before accepting success, not an interrupt for a blocked OS read.
+
+The JSON extraction result contains `destination` (resolved local path) and `snapshot` (verified report). The digest is content identity, not permission to execute the extracted tree. [Offline worker checks](WORKER_ADMISSION.md) separately evaluate grant bindings; they do not authenticate the caller or turn extraction into an isolated build.
+
 ## Evidence and remaining validation
 
 Automated tests cover deterministic roundtrips, independent hashes, corruption/truncation/trailing bytes, metadata/manifest ambiguity, archive links, path/case/prefix conflicts, sensitive filenames, quotas, source symlinks, cancellation, partial-output cleanup, no overwrite, and portable CLI behavior with a runner that fails on any subprocess invocation. A valid archive seeds the bounded fuzz target alongside malformed inputs. CI runs a real CLI roundtrip of the original example on Windows/Linux/macOS and native Linux fuzzing. Exact completed runs are recorded in [STATUS](STATUS.md) and [VERIFICATION](VERIFICATION.md); a configured job alone is not evidence.
 
-Still open: authenticated remote transfer, extraction into a hardened worker, credential isolation, hostile build-script penetration tests, server-side quotas/grants, approval binding/replay protection and artifact transfer to a separate signer. Those require their own implementations and validation; a snapshot digest does not satisfy them. No extracted-snapshot Xcode build has been tested because extraction is not implemented. Physical-device states, signing, installation and launch retain the [device validation gaps](DEVICES.md#live-validation-still-required). No Apple credentials were needed for this feature.
+Extraction tests add content/hash roundtrips, existing-destination refusal, malicious archives, changing original input, cancellation/partial cleanup, cleanup ownership, private POSIX modes and concurrent destination ownership. Hosted Mac CI now attempts to build/test the original generated project after extraction; only a completed run recorded in STATUS establishes that evidence. It does not establish a hardened worker.
+
+Still open: authenticated remote transfer, extraction into an isolated worker account/VM, credential isolation, hostile build-script penetration tests, protected grants and aggregate reservations, approval binding/replay protection and artifact transfer to a separate signer. Those require their own implementations and validation; a snapshot digest and offline policy check do not satisfy them. Physical-device states, signing, installation and launch retain the [device validation gaps](DEVICES.md#live-validation-still-required). No Apple credentials were needed for this feature.

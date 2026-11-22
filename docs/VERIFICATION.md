@@ -1,6 +1,20 @@
 # Verification record
 
-## Portable source snapshots (2026-11-22)
+## Safe extraction and offline admission (2026-11-22)
+
+Windows tests and vet passed across eight packages: snapshot coverage 81.0%, admission 89.0%, CLI 88.1%. All eight Linux test executables passed in the restricted container; six client cross-builds passed. Native Windows snapshot verification and admission JSON fuzz each completed 10,000 inputs. The real Windows CLI smoke passed create/inspect/extract, independently calculated file/archive hashes, existing-destination refusal, honest offline decisions and policy denial before nonexistent-archive access.
+
+Extraction and CLI tests failed for absent APIs/commands before implementation. Security cases cover tampering, traversal/links/metadata, mandatory digest, changed original archive after verification, concurrent destination ownership, cancellation/partial cleanup, refusal to recursively delete a replaced destination, preplanted files/links, and POSIX modes. Admission tests cover strict JSON, bindings, grant validity/expiry, disabled and omitted-enabled behavior, actual resource counts, wrong archive bytes, cancellation, symlinks and no subprocess execution. Fuzzing is bounded evidence, not exhaustive validation.
+
+Independent review found no P1/P2 issue. Its minor enabled-presence discrepancy was settled as documented default-disabled behavior with a regression test. The reviewer independently reproduced inherited Windows ACL permissions despite numeric mode requests; access-controlled temp/destination storage is required. These tests do not establish authenticated transport, policy deployment security, one-time approval, replay protection, reservations, worker isolation, credential separation or physical-device behavior.
+
+CI now performs real extraction/admission smoke on Windows/Linux/macOS, native Linux fuzzing for all three parsers, and build/XCTest from an extracted original SwiftUI project. Exact completed run evidence will be recorded in STATUS; configuration alone is not a validation result. Reproduce the new parser check with:
+
+```sh
+go test ./internal/admission -run='^$' -fuzz=FuzzAdmissionJSON -fuzztime=10000x -parallel=2 -timeout=60s
+```
+
+## Historical portable source snapshot baseline (2026-11-22)
 
 Final [run 45055091739](https://github.com/fpokrzywa/AppRivet/actions/runs/45055091739) passed all four jobs at commit 5807712. Windows/Linux/macOS tests, vet and real snapshot CLI roundtrips passed; Linux/macOS race checks passed; native Linux device and snapshot fuzz targets each completed 10,000 inputs. Existing Mac discovery, original SwiftUI app build, simulator XCTest and framework-name collision regression passed. The following handoff commit changes documentation only. Local verification also passed all seven Linux package executables in the restricted container, all six client cross-builds, and a real Windows CLI example roundtrip whose archive digest was independently checked with PowerShell Get-FileHash. The final Windows native snapshot fuzz run completed 10,000 inputs after the cancellation fix.
 
@@ -14,7 +28,7 @@ Native snapshot fuzzing uses a valid archive seed plus malformed inputs, with 10
 go test ./internal/snapshot -run='^$' -fuzz=FuzzVerify -fuzztime=10000x -parallel=2 -timeout=60s
 ```
 
-CI also creates and inspects an archive from `examples/HelloAppRivet.snapshot-files` on each Go matrix host, comparing the complete JSON reports. This validates portable archive handling, not a build from an extracted snapshot. That workflow remains unimplemented. Detailed constraints and remaining evidence: [SNAPSHOTS](SNAPSHOTS.md).
+At that revision CI created and inspected an archive from `examples/HelloAppRivet.snapshot-files` on each Go matrix host, comparing complete JSON reports. Extraction and extracted-source builds were not yet implemented. See the newer section above and [SNAPSHOTS](SNAPSHOTS.md) for current evidence.
 
 ## Milestone 2 update (2026-11-22)
 
@@ -93,13 +107,13 @@ The local test used the already-installed `python:3.12-slim-bookworm` image. The
 $env:GOOS = 'linux'
 $env:GOARCH = 'amd64'
 $env:CGO_ENABLED = '0'
-foreach ($package in @('project','runner','doctor','build','cli','devices','snapshot')) {
+foreach ($package in @('project','runner','doctor','build','cli','devices','snapshot','admission')) {
     go test -c -o "bin/linux-tests/$package.test" "./internal/$package"
     if ($LASTEXITCODE -ne 0) { throw "Compilation failed: $package" }
 }
 $testRoot = (Resolve-Path 'bin/linux-tests').Path
 $sourceRoot = (Resolve-Path 'internal').Path
-docker run --rm --network none --read-only --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:rw,size=512m --mount "type=bind,source=$testRoot,target=/tests,readonly" --mount "type=bind,source=$sourceRoot,target=/src,readonly" python:3.12-slim-bookworm sh -c 'for package in project runner doctor build cli devices snapshot; do cd /src/"$package" || exit 1; /tests/"$package".test || exit 1; done'
+docker run --rm --network none --read-only --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:rw,size=512m --mount "type=bind,source=$testRoot,target=/tests,readonly" --mount "type=bind,source=$sourceRoot,target=/src,readonly" python:3.12-slim-bookworm sh -c 'for package in project runner doctor build cli devices snapshot admission; do cd /src/"$package" || exit 1; /tests/"$package".test || exit 1; done'
 Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
 ```
 

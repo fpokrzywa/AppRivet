@@ -1,6 +1,6 @@
 # Project status and handoff
 
-Updated: 2026-11-22. Milestone 2 read-only discovery and portable source snapshot creation/verification are implemented. The physical-device workflow and remote worker are not complete.
+Updated: 2026-11-22. Read-only discovery, portable snapshots, digest-bound extraction and offline worker admission checks are implemented. The physical-device workflow and authenticated/isolated remote worker are not complete.
 
 Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The owner changed visibility from private to public during this session; the change was verified. Standard hosted CI now starts, resolving the earlier billing admission failure. License selection remains open; no license, versioned binary release, payments or activation were added.
 
@@ -11,15 +11,16 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 - Read-only CoreDevice discovery via devicectl, separate simulator inventory via simctl, and offline JSON inspection on every CLI platform.
 - Legacy/modern device normalization, conservative unknown states, explicit source/live provenance, privacy filtering, bounded reads/capture, private report cleanup, cancellation and deadlines.
 - Duplicate-key/identifier rejection, null-precedence protection, original synthetic fixtures, adapter/CLI/security tests and parser fuzz target.
-- Explicit source file selection, deterministic bounded archives, canonical integrity verification and optional expected SHA-256 checks on every CLI host. No extraction, execution, upload or authorization is implied.
+- Explicit source selection, deterministic bounded archives, canonical verification and digest-required extraction into a new owned directory. No execution, upload or authorization is implied.
+- Read-only offline admission checks for exact grant/principal/project/operation/digest bindings, time windows and per-snapshot quotas; decisions explicitly do not authenticate or authorize execution.
 - Research, parity matrix, architecture, threat model, ADRs, roadmap, contribution/security documentation and CI.
 
 ## Evidence
 
 | Check | Result |
 | --- | --- |
-| Current Windows tests, seven packages, and go vet | Passed, including snapshot security/CLI regressions; snapshot coverage 83.5% |
-| Linux runtime tests and six cross-builds for snapshots | All seven Linux package suites and macOS/Linux/Windows amd64/arm64 client builds passed |
+| Current Windows tests, eight packages, and go vet | Passed; admission coverage 89.0%, snapshot 81.0%, CLI 88.1% |
+| Linux runtime tests and six cross-builds | All eight Linux package suites and macOS/Linux/Windows amd64/arm64 client builds passed |
 | Linux parser fuzz smoke | 274,120 executions over 10 seconds without failure; no coverage guidance in this precompiled binary |
 | Native Windows/Linux coverage-guided fuzz | 10,000 inputs passed on each; Linux CI uses a 60-second outer deadline |
 | Client cross-builds | macOS/Linux/Windows, amd64 and arm64 passed |
@@ -27,6 +28,8 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 | Prior milestone hosted CI | [Run 45053200343](https://github.com/fpokrzywa/AppRivet/actions/runs/45053200343), commit 7c3d011: all four jobs passed, including Windows/Linux/macOS Go tests, vet, Linux/macOS race checks and 10,000 native Linux device fuzz inputs |
 | Snapshot local CLI/fuzz | Real Windows example roundtrip and independent SHA-256 passed; final native Windows verifier fuzz completed 10,000 inputs |
 | Snapshot hosted CI | [Run 45055091739](https://github.com/fpokrzywa/AppRivet/actions/runs/45055091739), commit 5807712: all four jobs passed; snapshot CLI roundtrips on Windows/Linux/macOS, Linux/macOS race checks, 10,000 native Linux fuzz inputs for each device/snapshot target, and existing Mac discovery/build/XCTest/regression checks |
+| Extraction/admission local checks | Real Windows process-level create/inspect/extract/hash/no-overwrite/admission/denial smoke passed; native snapshot and admission JSON fuzz each completed 10,000 inputs |
+| Extraction/admission hosted CI | Pending push; new checks include cross-platform real CLI smoke and hosted build/XCTest of extracted original source |
 | Mac discovery smoke | devicectl 506.7 / JSON v3 returned zero devices; simctl returned 132 shutdown simulators across iOS/tvOS/watchOS/xrOS |
 | Original SwiftUI app build | Passed with Xcode 16.4 (16F6), iOS Simulator SDK 18.5, hosted macOS arm64 |
 | Simulator XCTest / module-collision build | One XCTest passed on iPhone 16 Pro / iOS 18.5; generated SwiftUI-named app built successfully |
@@ -41,6 +44,8 @@ Independent review found two M2 parser defects, fixed with failing-then-passing 
 
 Independent snapshot review found one cancellation-at-final-EOF defect, reproduced with a failing test and corrected before push. All public success paths now check cancellation before accepting a result. Review found no other material archive, path, quota, CLI or output-handling defects. Hostile same-user filesystem races, content-level secret detection, buildability and live host validation were explicitly outside that review; these remain documented boundaries, not inferred guarantees.
 
+Independent extraction/admission review found no P1/P2 issues. Its P3 enabled-field presence discrepancy was resolved by explicitly documenting and testing omission as disabled (only explicit true permits eligibility). The reviewer reproduced inherited broad read permissions on Windows: numeric modes do not establish private DACLs. Access-controlled destination ancestry and temporary storage are prerequisites; ACL hardening and hostile same-user races are not guaranteed. Authentication, replay prevention, reservations, revocation at use and execution authorization remain explicitly absent. No unresolved minor review findings.
+
 The reviewer could not establish physical-device compatibility, Mac file/cancellation behavior or physical state mappings from fixtures. Hosted discovery smoke now covers basic Mac tool invocation; the detailed physical-device matrix remains open. Local Linux testing supplies Unix behavior evidence, not Apple hardware evidence.
 
 Engineering decisions: continue in the clean dedicated repository; add simulator discovery and offline inspection as useful credential-free work; reject ambiguous reports rather than return partial or misleading inventory. Trade-off: explicit null known fields and future schema versions require an adapter update, and install/launch remain unavailable until their own authorization/isolation validation.
@@ -49,8 +54,8 @@ CI reliability observation: [run 45052339395](https://github.com/fpokrzywa/AppRi
 
 ## Next work
 
-1. Keep all CI checks green for subsequent changes. Snapshot implementation/workflow commit 5807712 passed; the following handoff commit changes documentation only. Preserve the observed simulator timing caveat even though this run passed; no billing workaround is required.
+1. Complete extraction/admission CI and record the tested commit/run. Preserve the observed simulator timing caveat; no billing workaround is required.
 2. Validate USB/Wi-Fi/disconnected/unpaired/locked/Developer Mode-disabled and older devices against Apple's actual reports. Add carefully sanitized captures with provenance; current committed fixtures are synthetic.
 3. Design and test the credential-free worker/signing boundary and trusted human approvals before enabling signing or device mutations. Discovery cannot authorize installation. Keep Apple passwords and private keys out of the CLI.
 4. Continue M2 installation/launch only with the required hardware/signing evidence. Remote builds, MCP and release distribution retain their separate acceptance gates.
-5. Build authenticated worker admission/extraction and grants around verified snapshot digests only with a concrete isolation design. Snapshot integrity alone is not execution permission. See [SNAPSHOTS](SNAPSHOTS.md) for format limits and unvalidated worker/signing gates.
+5. Integrate the local extractor and offline admission core into authenticated worker transport only with protected policy deployment, revocation-at-use, replay/reservation and OS isolation designs. Snapshot integrity and hypothetical principal flags are not execution permission. See [SNAPSHOTS](SNAPSHOTS.md) and [WORKER_ADMISSION](WORKER_ADMISSION.md) for exact limits and unvalidated gates.
