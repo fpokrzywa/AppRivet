@@ -1,0 +1,67 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Test
+        run: go test -count=1 -cover ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Race detector
+        if: runner.os != 'Windows'
+        run: go test -race ./...
+      - name: Build CLI
+        run: go build ./cmd/apprivet
+
+  ios-simulator:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build CLI and inspect Xcode
+        run: |
+          go build -o "$RUNNER_TEMP/apprivet" ./cmd/apprivet
+          "$RUNNER_TEMP/apprivet" doctor --json
+      - name: Generate and validate original project
+        working-directory: ${{ runner.temp }}
+        run: |
+          ./apprivet init CIApp --bundle-id org.example.apprivetci
+          plutil -lint CIApp/CIApp.xcodeproj/project.pbxproj
+          ./apprivet inspect --project CIApp --json
+          ./apprivet build --project CIApp --trust-project --timeout 15m
+      - name: Run generated XCTest on an available iOS simulator
+        working-directory: ${{ runner.temp }}
+        run: |
+          SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for k,vs in d["devices"].items() if "iOS" in k for v in vs if v.get("isAvailable") and "iPhone" in v["name"]))')
+          ./apprivet test --project CIApp --simulator "$SIMULATOR_ID" --trust-project --timeout 20m
