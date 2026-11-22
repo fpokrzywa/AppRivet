@@ -82,7 +82,7 @@ func (t *transaction) repair(ctx context.Context, p repairProof, expect RepairEx
 	}
 	name := "repair-control-" + r.ControlSHA256 + ".bin"
 	if _, err := t.root.Lstat(name); os.IsNotExist(err) {
-		if _, err = stageFile(t.root, name, p.control); err != nil {
+		if _, err = t.stageEvidence(name, p.control); err != nil {
 			return RepairReport{}, err
 		}
 	} else {

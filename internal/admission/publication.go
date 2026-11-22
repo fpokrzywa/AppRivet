@@ -2,6 +2,7 @@ package admission
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"io"
 	"os"
@@ -10,6 +11,23 @@ import (
 
 const pendingName = "publication.pending"
 const maxIntentBytes = 4096
+const evidenceStagePrefix = ".journal-evidence-"
+
+// Publish evidence under its final name only after its contents are synced.
+// Link never replaces a pre-existing name, including an older damaged marker.
+func (t *transaction) stageEvidence(name string, body []byte) (stagedFile, error) {
+	staged, err := t.stageFile(evidenceStagePrefix+rand.Text(), body)
+	if staged.info != nil {
+		defer removeOwned(t.root, staged)
+	}
+	if err != nil {
+		return stagedFile{}, err
+	}
+	if err := t.root.Link(staged.name, name); err != nil {
+		return stagedFile{}, stateIO()
+	}
+	return stagedFile{name: name, info: staged.info}, nil
+}
 
 // An intent binds the exact pre-publication authority to one prepared successor.
 // Hashes detect corruption; they do not authenticate a hostile storage owner.

@@ -1,5 +1,11 @@
 # Verification record
 
+## Disk-full and interrupted journal writes
+
+Portable tests cover file creation, zero-byte writes, partial writes with `ENOSPC`, short writes and failed file syncs. Real subprocess exits interrupt staging of both the pending marker and the before-image. Migration and compaction tests verify that faults before the marker preserve the original journal, and that control-write faults after the marker leave enough evidence for explicit repair. Ownership append tests check both formats. A torn event blocks replay and ownership checks without modifying the stored bytes. A complete recovery event followed by a sync error can be observed on reopen, and retry does not append a second event.
+
+The Linux CI step fills an isolated 1 MiB tmpfs using actual writes. It requires kernel `ENOSPC`, then tests migration, before-image creation during repair, and recovery append against that full mount. After releasing the filler, the test checks successful retry, unchanged history where expected, exact ownership, and replay rejection. Tmpfs exercises the kernel allocation failure path. Persistent filesystem quotas, delayed allocation, disk-full sync behavior, physical power loss and Windows metadata durability remain open. See [manifest repair and deployment limits](MANIFEST_REPAIR.md).
+
 ## Intent-backed manifest repair (2026-11-22)
 
 Local Windows tests and vet passed across all eight tested packages; admission coverage is 85.6%, CLI 88.5%. Native Windows publication-intent and journal-storage fuzz targets each completed 10,000 inputs. All eight Linux package executables passed in the restricted container, and all six macOS/Linux/Windows amd64/arm64 client cross-builds passed. Real CLI smoke exercised a synthetic torn control using the actual publisher's retained intent, pinned repair, saved damaged bytes, preserved claimed ownership and replay rejection. All four jobs in [run 45067510656](https://github.com/fpokrzywa/AppRivet/actions/runs/45067510656) passed at implementation/workflow commit `cebca8c58ca9f31bb1aefe0927cb5e5bc4a25979`: Windows/Linux/macOS tests, vet and CLI smoke; Linux/macOS race checks; all six native Linux fuzz targets with 10,000 inputs each; and Mac discovery, extracted-source build, one passing XCTest and framework-name collision build. The following handoff commit changes documentation only.

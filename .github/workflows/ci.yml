@@ -32,6 +32,15 @@ jobs:
         run: go test -count=1 -cover ./...
       - name: Vet
         run: go vet ./...
+      - name: Exercise journal ENOSPC on a bounded tmpfs
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          scratch=$(mktemp -d "$RUNNER_TEMP/journal-enospc.XXXXXX")
+          trap 'if mountpoint -q "$scratch"; then sudo umount "$scratch"; fi; rmdir "$scratch"' EXIT
+          sudo mount -t tmpfs -o "size=1m,nodev,nosuid,noexec,uid=$(id -u),gid=$(id -g),mode=0700" tmpfs "$scratch"
+          APPRIVET_ENOSPC_TMPFS="$scratch" go test ./internal/admission -run '^TestDiskFullLinuxTmpfs$' -count=1 -v
       - name: Race detector
         if: runner.os != 'Windows'
         run: go test -race ./...

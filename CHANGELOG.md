@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased: journal disk-full fault tests
+
+- Add injected write, sync and process interruption tests and an isolated Linux tmpfs test that triggers kernel `ENOSPC`.
+- Publish pending markers and repair before-images from synced staging files using no-replace hard links. Failed staging leaves the final name available for retry and preserves journal history.
+
 ## Unreleased: intent-backed manifest repair
 
 - Record a durable pending publication intent and source backup before replacing the journal control bytes; freeze normal operations until publication is finalized.

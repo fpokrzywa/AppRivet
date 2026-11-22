@@ -201,6 +201,7 @@ type transaction struct {
 	manifest     *journalManifest
 	activeEvents int
 	historyBytes int64
+	openStage    func(string) (journalFile, error)
 }
 
 func (t *transaction) close() {

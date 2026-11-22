@@ -48,8 +48,14 @@ type stagedFile struct {
 	info os.FileInfo
 }
 
-func stageFile(root *os.Root, name string, b []byte) (stagedFile, error) {
-	f, err := root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+func (t *transaction) stageFile(name string, b []byte) (stagedFile, error) {
+	var f journalFile
+	var err error
+	if t.openStage == nil {
+		f, err = t.root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	} else {
+		f, err = t.openStage(name)
+	}
 	if err != nil {
 		return stagedFile{}, stateIO()
 	}
@@ -159,7 +165,7 @@ func (t *transaction) maintain(ctx context.Context, now time.Time, action string
 		if err = cancelled(ctx); err != nil {
 			return MaintenanceReport{}, err
 		}
-		f, stageErr := stageFile(t.root, item.name, item.data)
+		f, stageErr := t.stageFile(item.name, item.data)
 		if f.info != nil {
 			staged = append(staged, f)
 		}
@@ -196,9 +202,12 @@ func (t *transaction) maintain(ctx context.Context, now time.Time, action string
 	if err != nil {
 		return MaintenanceReport{}, stateIO()
 	}
-	publicationStarted = true // From here, retain all artifacts on uncertainty.
-	pending, err := stageFile(t.root, pendingName, intentBody)
-	if err != nil || syncStoreDirectory(t.root) != nil {
+	pending, err := t.stageEvidence(pendingName, intentBody)
+	if err != nil {
+		return MaintenanceReport{}, err
+	}
+	publicationStarted = true // A complete marker is visible. Retain its evidence.
+	if syncStoreDirectory(t.root) != nil {
 		return MaintenanceReport{}, publicationUncertain()
 	}
 	if err = publishManifest(control, body); err != nil {
