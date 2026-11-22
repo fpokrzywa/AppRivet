@@ -2,10 +2,16 @@
 
 ## Unreleased
 
+- Add read-only `devices` through devicectl and `devices --simulators` through simctl, with bounded capture, cleanup and cancellation.
+- Add cross-platform `devices --from-json` inspection with explicit offline provenance, privacy filtering and stable error codes.
+- Add original synthetic legacy/modern/simulator fixtures, parser/adapter/CLI tests and fuzz target; reject duplicate JSON keys and ambiguous null fallbacks.
+- Add credential-free Mac discovery smoke checks, bounded native Linux parser fuzzing and a physical-device validation matrix.
+- Record the owner's change to public repository visibility; license remains undecided. Hosted Windows/Linux/macOS tests, discovery, SwiftUI builds and simulator XCTest now pass.
+
 - Document product requirements, independent implementation policy, researched feature parity, architecture and security boundaries.
 - Add portable doctor/init/inspect/help/version commands and schema-1 JSON responses.
 - Add original SwiftUI project generator, shared Xcode scheme, XCTest target and checked-in example.
 - Add guarded macOS simulator build/test adapter, bounded/redacted logs, environment filtering and process-group cleanup.
 - Test Windows behavior and Linux runtime behavior; cross-compile six client targets.
-- Add pinned GitHub CI for Windows/Linux/macOS and Xcode simulator acceptance; hosted execution currently blocked by account billing/spending limits.
+- Add pinned GitHub CI for Windows/Linux/macOS and Xcode simulator acceptance; the initial account billing/spending admission failure was subsequently resolved by the owner's visibility change.
 - Fix generated Swift module-name collisions and surviving Unix descendant processes with regression tests.

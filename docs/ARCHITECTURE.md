@@ -15,6 +15,7 @@ M1 supports simulator builds only, explicitly disables signing, and never passes
 | cmd/apprivet, internal/cli | Portable entry point and machine contract | Read passwords or silently grant approvals |
 | internal/project | Validate, render, discover projects | Evaluate Package.swift or overwrite projects |
 | internal/doctor | Check host, full Xcode, SDK and tools | Install tools or accept Apple agreements |
+| internal/devices | Read-only devicectl/simctl inventory and offline report normalization | Pair, install, infer authorization, or expose raw metadata |
 | internal/build | Simulator build/test orchestration | Sign, provision or publish |
 | internal/runner | Fixed executable invocation, cancellation, bounded/redacted output | Invoke a shell or claim isolation |
 | Future signing broker | Keychain references, policy, approved signing | Execute project scripts |
@@ -22,6 +23,8 @@ M1 supports simulator builds only, explicitly disables signing, and never passes
 | Optional AI adapter | Expose same constrained operations | Hold keys or approve sensitive mutations |
 
 Use small concrete packages today. Add transport/signing interfaces when implementing them; do not ship empty services masquerading as features.
+
+M2 discovery uses separate source adapters with a common inventory. CoreDevice IDs and hardware UDIDs remain distinct; simulators are classified from explicit evidence, not ID shape. The runner can capture bounded raw structured stdout separately from redacted stderr; raw stdout is excluded from diagnostic JSON. The devices parser validates ambiguity, selects known fields and sanitizes display text before output. devicectl uses a private temporary report file; simctl uses separate stdout. Offline files carry explicit provenance and never grant authority for later device mutations. See DEVICES.md for schema policy and unresolved compatibility checks.
 
 ## Future signing design
 

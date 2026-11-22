@@ -1,6 +1,6 @@
 # CLI reference (schema 1)
 
-Implemented: doctor, init, inspect, build, test, version, help. `devices`, `install`, and `launch` return `not_implemented`, exit 3; they are reserved names, not functional device commands.
+Implemented: doctor, init, inspect, build, test, devices, version, help. `install` and `launch` return `not_implemented`, exit 3; device mutation is not implemented.
 
 ```sh
 apprivet doctor
@@ -9,6 +9,9 @@ apprivet inspect --project MyFirstApp
 apprivet build --project MyFirstApp --trust-project
 xcrun simctl list devices available
 apprivet test --project MyFirstApp --trust-project --simulator SIMULATOR_UUID
+apprivet devices --json
+apprivet devices --simulators --json
+apprivet devices --from-json devices.json --json
 ```
 
 `init` works offline on all three platforms. Names are 1-50 ASCII letters/digits, start with a letter, and cannot be a reserved Windows filename. Bundle IDs default to `com.example.<lowercase-name>` and must be changed to an appropriate unique ID before device signing. Creation refuses existing destinations and does not initialize Git, install dependencies or sign in to Apple. A write failure can leave a partial new project; inspect it before removing it. Existing directories are never merged or overwritten.
@@ -27,6 +30,8 @@ The default execution timeout is 15m, configurable with `--timeout` up to 24h. I
 
 Generated app modules are named `AppRivet_<ProjectName>` to avoid Swift keyword and framework-name collisions. The visible app and scheme retain the requested project name.
 
+`devices` performs read-only local discovery on a Mac. Default: CoreDevice inventory through devicectl, including remembered or disconnected records. `--simulators` selects simctl instead. `--from-json FILE` inspects the selected format offline on any host and marks `live: false`, `source: "file"`. Discovery timeout defaults to 30s, with a 5m maximum. Tool failure is never represented as an empty successful list. Unknown connectivity, pairing and developer-mode values remain unknown; discovery does not authorize installation. See [device contract, limits and live matrix](DEVICES.md).
+
 ## JSON for coding agents
 
 Add `--json` before or after the command. Standard output contains exactly one JSON envelope; subprocess logs are in `data.execution.output`, not mixed into the stream. Exit status remains nonzero on failure. JSON mode writes no routine progress text to stderr. Reserved/unknown command errors are structured too.
@@ -41,10 +46,10 @@ Treat `schema_version`, `ok`, `error.code`, and documented data fields as the co
 | --- | --- |
 | 0 | Success/help/version |
 | 2 | Invalid arguments or unknown command |
-| 3 | Unsupported host/project, environment not ready, or planned feature |
-| 4 | Project/filesystem/precondition/trust failure |
+| 3 | Unsupported host/project/device schema, environment not ready, or planned feature |
+| 4 | Project/filesystem/precondition/trust failure or rejected device report |
 | 5 | Tool failure or output encoding failure |
 | 124 | Timeout |
-| 130 | Build/test cancelled |
+| 130 | Build/test/discovery cancelled |
 
 Human approvals for future signing, certificate/profile mutations and publishing must come through a trusted channel. The M1 trust flag must never become an AI-self-approval shortcut for those operations.

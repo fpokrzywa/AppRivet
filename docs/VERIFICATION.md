@@ -1,5 +1,23 @@
 # Verification record
 
+## Milestone 2 update (2026-11-22)
+
+The owner changed the repository to public and hosted CI now starts. [Run 45051791524](https://github.com/fpokrzywa/AppRivet/actions/runs/45051791524) passed all four jobs at commit 4f1ab4b: Windows/Linux/macOS Go tests, Linux/macOS race checks, read-only Mac device discovery, generated SwiftUI app build, simulator XCTest and framework-name collision build. Xcode 16.4 (16F6), iOS Simulator SDK 18.5, macOS arm64; one XCTest passed on iPhone 16 Pro / iOS 18.5. devicectl 506.7 / JSON v3 returned zero devices; simctl listed 132 shutdown simulators. The final key-alias hardening and new native Linux fuzz step require their follow-up CI run. The earlier billing failures below are historical.
+
+Current local Windows `go test -count=1 -cover ./...` and `go vet ./...` passed across six packages. Device-package coverage was 92.4%. Real CLI offline inventory inspection passed; live Windows discovery returned structured unsupported_platform/exit 3 as intended. Current Linux test binaries for all six packages passed in the restricted local Docker setup below. All six CLI cross-builds passed.
+
+Both review findings were reproduced before fixing: duplicate object keys silently overwrote inventories, and explicit null modern states fell back to stale connected/paired values. Regression tests now pass, including ASCII and Unicode simple-fold case-alias duplicates. A coverage-enabled child process also exposed an overly strict test expectation about empty stderr; the corrected test verifies payload separation while allowing Go's own coverage warning.
+
+Parser fuzz smoke: a 10-second Linux run executed 274,120 inputs with no failure. The cross-compiled test binary lacked coverage-guided instrumentation, so this is a bounded smoke check rather than comprehensive fuzzing. The earlier 8-second Windows run also passed, but exercised only six mutations and is weak evidence. To run coverage-guided fuzzing with a native Go toolchain:
+
+```sh
+go test ./internal/devices -run='^$' -fuzz=FuzzParse -fuzztime=30s -parallel=2
+```
+
+Synthetic fixtures and mocked Apple processes prove normalization, file cleanup, limits and command construction; they do not prove physical-device operation. See [the live validation matrix](DEVICES.md#live-validation-still-required). Signing, device installation/launch and Apple account integration remain unimplemented.
+
+## Milestone 1 historical record
+
 Date: 2026-11-22. Host: Windows amd64. Toolchain: Go 1.27.4, downloaded from the official Go distribution and SHA256 verified before extraction. Windows archive hash: `178ab98950ac69ab25069307dc6ade79f3816e414cce95b4da166a115cde1e7e`.
 
 ## Local evidence
@@ -47,7 +65,7 @@ No Apple credentials are required for the simulator acceptance test. Physical de
 
 ## Hosted CI result
 
-[Run 45049105646](https://github.com/fpokrzywa/AppRivet/actions/runs/45049105646) did not execute any job steps. GitHub annotations reported account payment/spending-limit restrictions. The workflow itself therefore remains unverified, as do macOS runtime/race tests and actual Xcode builds. No billing settings were changed. After account-owner action, dispatch the current workflow with `gh workflow run ci.yml --repo fpokrzywa/AppRivet --ref main` and inspect the resulting run; a failed billing admission is not a code test failure or a successful validation.
+[Run 45049105646](https://github.com/fpokrzywa/AppRivet/actions/runs/45049105646) did not execute any job steps. GitHub annotations reported account payment/spending-limit restrictions. This historical admission failure was resolved when the owner made the repository public. No billing settings were changed by AppRivet. See the M2 section and STATUS for later actual hosted results; a billing admission failure is not a code test failure or a successful validation.
 
 ## Linux reproduction from Windows with Docker
 
@@ -57,13 +75,14 @@ The local test used the already-installed `python:3.12-slim-bookworm` image. The
 $env:GOOS = 'linux'
 $env:GOARCH = 'amd64'
 $env:CGO_ENABLED = '0'
-foreach ($package in @('project','runner','doctor','build','cli')) {
+foreach ($package in @('project','runner','doctor','build','cli','devices')) {
     go test -c -o "bin/linux-tests/$package.test" "./internal/$package"
     if ($LASTEXITCODE -ne 0) { throw "Compilation failed: $package" }
 }
 $testRoot = (Resolve-Path 'bin/linux-tests').Path
-docker run --rm --network none --read-only --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:rw,size=512m --mount "type=bind,source=$testRoot,target=/tests,readonly" python:3.12-slim-bookworm sh -c 'for test in /tests/*.test; do "$test" -test.v || exit 1; done'
+$sourceRoot = (Resolve-Path 'internal').Path
+docker run --rm --network none --read-only --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:rw,size=512m --mount "type=bind,source=$testRoot,target=/tests,readonly" --mount "type=bind,source=$sourceRoot,target=/src,readonly" python:3.12-slim-bookworm sh -c 'for package in project runner doctor build cli devices; do cd /src/"$package" || exit 1; /tests/"$package".test || exit 1; done'
 Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
 ```
 
-Linux verifies the shared Unix runner implementation, but does not replace macOS/Xcode validation. The local container run did not use the race detector. Hosted Linux/macOS CI is configured to do so when runners can start.
+Linux verifies the shared Unix runner implementation, but does not replace macOS/Xcode validation. The local container run did not use the race detector; hosted Linux/macOS CI subsequently passed race checks after repository visibility changed.

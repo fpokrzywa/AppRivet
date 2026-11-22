@@ -1,6 +1,6 @@
 # Contributing
 
-This repository is private and its distribution license is undecided. Do not publish it, copy third-party implementations, or assume an open-source license.
+The owner made this repository public on 2026-11-22; its distribution license is still undecided. Do not copy third-party implementations or assume an open-source license. Public source visibility is separate from approval to publish release binaries or select licensing terms.
 
 Use the pinned Go version from go.mod. Run `go test ./...`, `go vet ./...`, and `gofmt` on changes. Add tests for meaningful behavior and security boundaries. Review dependencies before adding them; the initial CLI uses only the standard library. Keep user-controlled strings out of shell commands and do not add arbitrary command passthrough.
 

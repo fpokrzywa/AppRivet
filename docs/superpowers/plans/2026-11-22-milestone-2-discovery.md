@@ -18,10 +18,10 @@ Decisions: continue in the existing clean dedicated repository under the user's 
 
 ## Tasks
 
-- [ ] Research current devicectl schema changes and record source/provenance limitations.
-- [ ] Write failing parser tests and synthetic fixtures; implement normalized devicectl/simctl parsers.
-- [ ] Write failing adapter tests for bounded safe reads, cleanup, timeout/cancellation and platform refusal; implement List(ctx, host, runner, Request).
-- [ ] Write failing CLI tests; add devices flags, human output and JSON contract.
-- [ ] Add offline fuzz/smoke verification and credential-free Mac CI discovery commands.
-- [ ] Run Windows/Linux tests, vet, cross-builds and independent review; fix concrete findings with regression tests.
-- [ ] Update README, architecture/threat model, roadmap, CHANGELOG and STATUS; commit and push completed work; record remaining live validation gates and CI outcome.
+- [x] Research current devicectl schema changes and record source/provenance limitations.
+- [x] Write failing parser tests and synthetic fixtures; implement normalized devicectl/simctl parsers.
+- [x] Write failing adapter tests for bounded safe reads, cleanup, timeout/cancellation and platform refusal; implement List(ctx, host, runner, Request).
+- [x] Write failing CLI tests; add devices flags, human output and JSON contract.
+- [x] Add offline fuzz/smoke verification and credential-free Mac CI discovery commands.
+- [x] Run Windows/Linux tests, vet, cross-builds and independent review; fix concrete findings with regression tests.
+- [x] Update README, architecture/threat model, roadmap, CHANGELOG and STATUS; commit and push completed work; record remaining live validation gates and CI outcome.

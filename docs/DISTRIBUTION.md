@@ -1,6 +1,6 @@
 # Distribution preparation
 
-No public release, installer, license, update channel, subscription, payment or activation system is implemented. The private repository and source-build instructions are the current delivery mechanism.
+No versioned binary release, installer, license, update channel, subscription, payment or activation system is implemented. The owner made the source repository public on 2026-11-22. Source-build instructions are the current delivery mechanism; license selection and release publishing remain separate decisions.
 
 Candidate artifacts: macOS arm64/amd64, Windows amd64/arm64 `.exe`, Linux amd64/arm64 CLI binaries. Cross-compiling a Go client is not iOS app compilation. Windows/Linux users initially get project preparation and diagnostics; remote builds will be advertised only after that service exists and is tested.
 

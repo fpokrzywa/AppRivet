@@ -24,3 +24,12 @@ Trust boundaries: user -> CLI; CLI -> project/filesystem; orchestration -> tool 
 Security-focused tests cover invalid/path-like names, reserved Windows names, existing destinations, malformed bundle IDs, passive/ambiguous discovery, non-Mac execution refusal, trust refusal before subprocess invocation, unsupported package builds, fixed command arguments, timeout/cancellation, output limits, secret redaction, and JSON errors.
 
 Security acceptance for remote work: demonstrate a malicious build cannot read a seeded signer key, contact the signer, escape source/artifact roots, impersonate another user, retain a job after cancellation, or overwrite logs. Until that evidence exists, remote/untrusted execution stays disabled.
+
+## Milestone 2 discovery boundary
+
+- Device JSON is untrusted data, including names that may contain terminal controls or text aimed at coding agents. Never execute or interpret it as instructions. Known display fields are sanitized; arbitrary metadata and raw error payloads are omitted.
+- Duplicate object keys (including case aliases accepted by Go's decoder), duplicate IDs, malformed envelopes and ambiguous null modern properties are rejected. Failures never become an authoritative empty list. Offline inventories are labeled and cannot authorize mutations.
+- Reports are bounded by bytes, nesting and record count; live simctl truncation fails explicitly. Final-component symlinks/nonregular files are rejected and the opened file identity is checked. A hostile process under the same OS user remains outside this local filesystem trust boundary.
+- Private temporary reports are removed on normal completion/error/cancellation. Abrupt process termination can leave files; raw device metadata is never committed by this workflow. Names/identifiers in normalized output still merit care before sharing.
+- Separate raw stdout exists only for structured parsing, is bounded and excluded from diagnostic JSON; redaction is applied after selecting display fields. Tests verify no stdout payload spills into redacted stderr output.
+- Discovery invokes no project code, pairing command, signing tool or Apple account API. A connected/paired state is an observation, never proof of installation permission or safe signing access.

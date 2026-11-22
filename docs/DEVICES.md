@@ -68,15 +68,15 @@ All committed fixtures are original synthetic examples. No AppRivet live device 
 
 | Scenario | Required evidence | Current status |
 | --- | --- | --- |
-| Selected full Xcode with no physical device | Tool/Xcode versions, successful empty or mixed listing; human and JSON output agree | Unverified |
+| Selected full Xcode with no physical device | Tool/Xcode versions, successful empty or mixed listing; human and JSON output agree | JSON smoke passed: Xcode 16.4 / devicectl 506.7 JSON v3, empty list; live human-output comparison still open |
 | Physical iPhone/iPad over USB | Compare CoreDevice ID, UDID, name, reality, platform and state with Apple's output | Unverified |
 | Wi-Fi device / disconnected remembered device | Verify actual transport/connection/pairing values; no assumed attachment | Unverified |
 | Unpaired/locked/Developer Mode disabled device | Read-only listing behavior and clear unknown/unavailable states; no silent pairing | Unverified |
 | Older unsupported device with sparse metadata | Listing remains useful and does not manufacture installation readiness | Unverified |
 | Mixed simulator and physical entries in devicectl | Correct explicit reality mapping; no duplicate-ID guesswork | Unverified |
 | Legacy and current modern-only JSON on real Xcode | Capture sanitized fixtures, verify declared version and actual mappings | Unverified |
-| simctl booted/shutdown/unavailable inventory | Compare IDs/runtime/availability, use a listed UUID with test adapter | Unverified |
-| Mac cancellation/deadline | No lingering owned processes or temporary report files | Unix behavior tested on Linux; Mac unverified |
+| simctl booted/shutdown/unavailable inventory | Compare IDs/runtime/availability, use a listed UUID with test adapter | Hosted listing of 132 shutdown simulators and XCTest on a listed iOS 18.5 simulator passed; booted/unavailable comparison still open |
+| Mac cancellation/deadline | No lingering owned processes or temporary report files | Shared runner/adapter tests pass on Linux and Mac; cancellation of actual Apple discovery processes remains unverified |
 
 Capture locally on a Mac without account credentials:
 
@@ -93,4 +93,4 @@ apprivet devices --from-json "$TMPDIR/coredevices-private.json" --json
 
 Raw captures contain sensitive metadata. Keep them outside Git; replace IDs/names and remove serials, hostnames, addresses, account/environment data and paths before proposing a fixture. Preserve field types and record the exact tool versions and transformations. Do not call a sanitized synthetic reconstruction a live capture.
 
-Mac CI now contains read-only discovery smoke checks. A hosted runner with no physical hardware can validate tool invocation and an empty/simulator response only; it cannot establish physical-device support, signing or installation. M2 is not fully accepted until the relevant hardware matrix is exercised.
+Mac CI's read-only discovery checks passed in [run 45051791524](https://github.com/fpokrzywa/AppRivet/actions/runs/45051791524), commit 4f1ab4b, on macOS arm64 with Xcode 16.4 (16F6) and iOS Simulator SDK 18.5. devicectl 506.7 / JSON v3 returned an empty list; simctl returned 132 shutdown simulator records across iOS, tvOS, watchOS and xrOS. The original app built, its single XCTest passed on iPhone 16 Pro / iOS 18.5, and the framework-name collision regression built. This does not validate modern physical-device fields, signing or installation. M2 is not fully accepted until the relevant hardware matrix is exercised.
