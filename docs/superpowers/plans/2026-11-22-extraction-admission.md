@@ -1,0 +1,20 @@
+# Safe Extraction and Offline Worker Admission Plan
+
+Goal: materialize verified source snapshots and evaluate worker-owned policy without Mac tools, Apple credentials, remote execution or fake authentication claims.
+
+Architecture: snapshot.Extract requires an expected SHA-256, copies bounded input to a private temporary file while fully verifying it, then verifies that stable copy again while writing through an os.Root into an exclusively created destination. No overwrite/merge. Files use 0600 and directories 0700; archive modes/links/metadata are never applied. Failures/cancellation remove only the newly owned directory, after identity verification through the anchored parent. The parent/ancestors/OS account are trusted; this is not hostile same-user isolation or an atomic filesystem transaction. No file is executed.
+
+Worker admission is an offline policy evaluator, not authentication. A separately supplied principal, schema-1 request, trusted local policy and archive are required. Policy grants bind an exact ID, principal, project, operation=extract and snapshot digest, explicit enabled state, bounded validity interval (at most 24h), and positive resource caps no larger than snapshot hard limits. Reject malformed/ambiguous/unknown JSON, duplicate grant IDs, missing fields, disabled/not-yet-valid/expired grants, wrong bindings, unsupported operations and resource excess. Check bindings before archive access; constrain archive reads to policy bytes and validate the digest. Results explicitly report offline mode, authentication_verified=false and execution_authorized=false. No reusable admission ticket or one-time/replay guarantee.
+
+Interfaces: snapshot.Extract(ctx, archive, destination, expected) (Extraction,error); admission.LoadPolicy/LoadRequest; admission.Check(ctx, now, principal, policy, request, archive) (Decision,error). CLI: snapshot extract --archive FILE --destination DIR --expect-sha256 HEX; worker check --policy FILE --request FILE --principal ID --archive FILE. Policy/requests contain no host paths, shell arguments, credentials or requested execution.
+
+Rulings: continue the authorized dedicated-repository workflow; implement natively, with one independent security review before push. Scope is explicit user request; no extra confirmation needed. Use exclusive destination creation instead of portable directory rename (which can overwrite existing empty directories). Destination may be visible while copying; success is the consumption boundary. Local policy editing/CLI principal flags are not trusted remote approval. Separate authentication, revocation-at-use, replay prevention, reservations/queueing and OS isolation remain future gates.
+
+## Tasks
+
+- [ ] Extraction tests first: roundtrip/content hash, missing/wrong digest, tampering, path/link/metadata abuse, existing file/dir/symlink refusal, changing original input, partial/cancel cleanup, private modes, owned-directory cleanup identity, concurrency on same destination. Implement staged verification and shared verifying sink.
+- [ ] Admission tests first: strict bounded JSON, principal/project/digest/action binding, disabled/expired/not-yet-valid/max-lifetime grants, resource limits, policy denial before file access, cancellation and honest offline decisions. Implement typed evaluator and fuzz target.
+- [ ] CLI tests first and handlers; extend native smoke tests and CI. Build/test the original generated SwiftUI app from extracted source on hosted Mac when available; do not infer isolated-worker/device support from that check.
+- [ ] Independent review, regression fixes, Windows/Linux tests, vet, race in CI, native fuzz, six cross-builds. Document exact filesystem/policy trust boundaries and remaining live validation. Commit/push and follow CI to a final result.
+
+Review focus: verify-to-use archive substitution; symlink/path escape and exclusive ownership during cleanup; cancellation at final EOF; JSON ambiguity/time/identity binding; false authentication/execution claims. Baseline 97d2124. No listener, scheduler, signer or Apple-account workflow is introduced.

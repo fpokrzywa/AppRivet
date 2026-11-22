@@ -19,7 +19,7 @@ func (a App) runSnapshot(ctx context.Context, args []string, jsonMode bool) int 
 		return a.emit(response, jsonMode, exit)
 	}
 	badArgs := func() int {
-		return failure("invalid_arguments", "use snapshot create --root DIR --files-from LIST --output FILE, or snapshot inspect --archive FILE [--expect-sha256 HEX]", 2)
+		return failure("invalid_arguments", "use snapshot create, inspect or extract with their documented required flags; run snapshot --help", 2)
 	}
 	showHelp := func() int { response.Data = map[string]string{"help": help}; return a.emit(response, jsonMode, 0) }
 	if len(args) == 0 {
@@ -29,12 +29,12 @@ func (a App) runSnapshot(ctx context.Context, args []string, jsonMode bool) int 
 		return showHelp()
 	}
 	action := args[0]
-	if action != "create" && action != "inspect" {
+	if action != "create" && action != "inspect" && action != "extract" {
 		return badArgs()
 	}
 	fs := flag.NewFlagSet("snapshot "+action, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	var root, list, output, archive, expected string
+	var root, list, output, archive, expected, destination string
 	if action == "create" {
 		fs.StringVar(&root, "root", ".", "source root")
 		fs.StringVar(&list, "files-from", "", "newline list of relative files")
@@ -42,6 +42,9 @@ func (a App) runSnapshot(ctx context.Context, args []string, jsonMode bool) int 
 	} else {
 		fs.StringVar(&archive, "archive", "", "archive to inspect without extraction")
 		fs.StringVar(&expected, "expect-sha256", "", "separately obtained archive digest")
+		if action == "extract" {
+			fs.StringVar(&destination, "destination", "", "new extraction directory; never merged or overwritten")
+		}
 	}
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -64,7 +67,7 @@ func (a App) runSnapshot(ctx context.Context, args []string, jsonMode bool) int 
 		}
 		return filepath.Join(a.Dir, p)
 	}
-	var report snapshot.Report
+	var data any
 	var err error
 	if action == "create" {
 		if root == "" || list == "" || output == "" {
@@ -73,13 +76,20 @@ func (a App) runSnapshot(ctx context.Context, args []string, jsonMode bool) int 
 		var files []string
 		files, err = snapshot.ReadSelection(resolve(list))
 		if err == nil {
-			report, err = snapshot.Create(ctx, resolve(root), files, resolve(output))
+			data, err = snapshot.Create(ctx, resolve(root), files, resolve(output))
 		}
 	} else {
 		if archive == "" {
 			return badArgs()
 		}
-		report, err = snapshot.Inspect(ctx, resolve(archive), expected)
+		if action == "extract" {
+			if destination == "" || expected == "" {
+				return badArgs()
+			}
+			data, err = snapshot.Extract(ctx, resolve(archive), resolve(destination), expected)
+		} else {
+			data, err = snapshot.Inspect(ctx, resolve(archive), expected)
+		}
 	}
 	if err != nil {
 		var detail *snapshot.Error
@@ -95,6 +105,6 @@ func (a App) runSnapshot(ctx context.Context, args []string, jsonMode bool) int 
 		}
 		return failure("snapshot_failed", "snapshot operation failed; no result accepted", 4)
 	}
-	response.Data = report
+	response.Data = data
 	return a.emit(response, jsonMode, 0)
 }

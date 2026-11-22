@@ -99,13 +99,18 @@ func Verify(ctx context.Context, input io.Reader, expectedSHA256 string) (Report
 	if expectedSHA256 != "" && !digestValid(expectedSHA256) {
 		return Report{}, fail("invalid_arguments", "expected SHA-256 must be 64 lowercase hexadecimal characters")
 	}
-	r, err := verify(ctx, input, expectedSHA256)
+	r, err := verify(ctx, input, expectedSHA256, nil)
 	if err = contextError(ctx, err); err != nil {
 		return Report{}, err
 	}
 	return r, nil
 }
-func verify(ctx context.Context, input io.Reader, expected string) (Report, error) {
+
+// A sink is only used inside a newly owned extraction directory. Verification
+// still covers all archive bytes; callers remove output on any error.
+type fileSink func(string) (io.WriteCloser, error)
+
+func verify(ctx context.Context, input io.Reader, expected string, sink fileSink) (Report, error) {
 	actualHash, canonicalHash := sha256.New(), sha256.New()
 	counted := &countingReader{r: io.LimitReader(contextReader{ctx, input}, MaxArchiveBytes+1)}
 	stream := io.TeeReader(counted, actualHash)
@@ -185,7 +190,22 @@ func verify(ctx context.Context, input io.Reader, expected string) (Report, erro
 			return Report{}, invalid()
 		}
 		fileHash := sha256.New()
-		n, err := io.Copy(io.MultiWriter(canonical, fileHash), reader)
+		var output io.WriteCloser
+		writers := []io.Writer{canonical, fileHash}
+		if sink != nil {
+			output, err = sink(name)
+			if err != nil {
+				return Report{}, err
+			}
+			writers = append(writers, output)
+		}
+		n, err := io.Copy(io.MultiWriter(writers...), reader)
+		if output != nil {
+			closeErr := output.Close()
+			if err != nil || closeErr != nil {
+				return Report{}, ioError()
+			}
+		}
 		if err != nil || n != h.Size {
 			return Report{}, invalid()
 		}

@@ -12,6 +12,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/fpokrzywa/AppRivet/internal/admission"
 	"github.com/fpokrzywa/AppRivet/internal/build"
 	"github.com/fpokrzywa/AppRivet/internal/devices"
 	"github.com/fpokrzywa/AppRivet/internal/doctor"
@@ -49,6 +50,8 @@ Usage:
   apprivet devices --from-json FILE [--simulators] [--json]
   apprivet snapshot create --root DIR --files-from LIST --output FILE [--json]
   apprivet snapshot inspect --archive FILE [--expect-sha256 HEX] [--json]
+  apprivet snapshot extract --archive FILE --destination DIR --expect-sha256 HEX [--json]
+  apprivet worker check --policy FILE --request FILE --principal ID --archive FILE [--json]
   apprivet version [--json]
 
 Build/test options:
@@ -60,7 +63,8 @@ Device discovery is read-only. --simulators selects simctl; otherwise devicectl.
 --from-json inspects an offline report on any host, never a live device query.
 Discovery timeout defaults to 30s (maximum 5m). Listing is not authorization.
 Snapshots package explicitly listed files and verify integrity on any host.
-Snapshots do not extract, execute, upload, sign, or authorize source code.
+Extraction requires a matching digest and a new destination; it executes no code.
+Worker checks evaluate local policy offline; they do not authenticate or authorize execution.
 
 Use --help with a command. --json is supported before or after the command.
 Windows/Linux: project preparation and offline report inspection. iOS builds and
@@ -95,6 +99,9 @@ func (a App) Run(ctx context.Context, args []string) int {
 	}
 	if command == "snapshot" {
 		return a.runSnapshot(ctx, filtered, jsonMode)
+	}
+	if command == "worker" {
+		return a.runWorker(ctx, filtered, jsonMode)
 	}
 	if command == "install" || command == "launch" {
 		return fail("not_implemented", command+" is planned after Milestone 1; use Xcode's official device workflow", 3)
@@ -240,6 +247,12 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 		return exit
 	}
 	switch data := response.Data.(type) {
+	case snapshot.Extraction:
+		fmt.Fprintf(a.Out, "Extracted source: %s\nSHA-256: %s\nFiles: %d\n", data.Destination, data.Snapshot.SHA256, len(data.Snapshot.Files))
+		fmt.Fprintln(a.Out, "No code executed. Integrity is not authorization or proof of safe/buildable source.")
+	case admission.Decision:
+		fmt.Fprintf(a.Out, "Offline policy check: eligible for %s\nPrincipal: %s; project: %s; grant: %s\nChecked at: %s; grant expires: %s\nSHA-256: %s\n", data.Operation, data.Principal, data.ProjectID, data.GrantID, data.CheckedAt, data.ValidUntil, data.Snapshot.SHA256)
+		fmt.Fprintln(a.Out, "Caller not authenticated; execution not authorized. No extraction or job submission performed.")
 	case snapshot.Report:
 		fmt.Fprintf(a.Out, "Source snapshot: %s\nSHA-256: %s\nFiles: %d; source bytes: %d; archive bytes: %d\n", data.Format, data.SHA256, len(data.Files), data.TotalBytes, data.ArchiveBytes)
 		fmt.Fprintln(a.Out, "Integrity checked; not authorization or proof of safe/buildable source. No extraction or execution performed.")
