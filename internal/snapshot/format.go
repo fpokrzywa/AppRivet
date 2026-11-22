@@ -100,8 +100,8 @@ func Verify(ctx context.Context, input io.Reader, expectedSHA256 string) (Report
 		return Report{}, fail("invalid_arguments", "expected SHA-256 must be 64 lowercase hexadecimal characters")
 	}
 	r, err := verify(ctx, input, expectedSHA256)
-	if err != nil {
-		return Report{}, contextError(ctx, err)
+	if err = contextError(ctx, err); err != nil {
+		return Report{}, err
 	}
 	return r, nil
 }

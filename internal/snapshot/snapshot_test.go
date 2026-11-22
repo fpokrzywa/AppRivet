@@ -330,6 +330,29 @@ type cancellingReader struct {
 	cancel context.CancelFunc
 }
 
+type cancelAtEOFReader struct {
+	io.Reader
+	cancel context.CancelFunc
+}
+
+func (r cancelAtEOFReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	if err == io.EOF {
+		r.cancel()
+	}
+	return n, err
+}
+func TestCancellationAtFinalEOFCannotAcceptReport(t *testing.T) {
+	b := validBytes(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r, err := Verify(ctx, cancelAtEOFReader{bytes.NewReader(b), cancel}, "")
+	wantCode(t, err, "cancelled")
+	if len(r.Files) != 0 {
+		t.Fatal("cancelled result exposed inventory")
+	}
+}
+
 func (r cancellingReader) Read(p []byte) (int, error) {
 	n, err := r.Reader.Read(p)
 	r.cancel()

@@ -88,6 +88,9 @@ func Inspect(ctx context.Context, name, expected string) (Report, error) {
 	if err != nil || after.Size() != info.Size() || !after.ModTime().Equal(info.ModTime()) {
 		return Report{}, fail("source_changed", "archive changed during inspection; no result accepted")
 	}
+	if err := contextError(ctx, nil); err != nil {
+		return Report{}, err
+	}
 	return r, nil
 }
 
@@ -196,6 +199,9 @@ func Create(ctx context.Context, rootName string, files []string, output string)
 	// The same independent verifier accepts created archives before publication succeeds.
 	report, err := Inspect(ctx, output, "")
 	if err != nil {
+		return Report{}, err
+	}
+	if err := contextError(ctx, nil); err != nil {
 		return Report{}, err
 	}
 	keep = true
