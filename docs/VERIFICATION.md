@@ -8,13 +8,15 @@ Current local Windows `go test -count=1 -cover ./...` and `go vet ./...` passed 
 
 Both review findings were reproduced before fixing: duplicate object keys silently overwrote inventories, and explicit null modern states fell back to stale connected/paired values. Regression tests now pass, including ASCII and Unicode simple-fold case-alias duplicates. A coverage-enabled child process also exposed an overly strict test expectation about empty stderr; the corrected test verifies payload separation while allowing Go's own coverage warning.
 
-Parser fuzz smoke: a 10-second Linux run executed 274,120 inputs with no failure. The cross-compiled test binary lacked coverage-guided instrumentation, so this is a bounded smoke check rather than comprehensive fuzzing. The earlier 8-second Windows run also passed, but exercised only six mutations and is weak evidence. To run coverage-guided fuzzing with a native Go toolchain:
+Parser fuzz smoke: a 10-second Linux run executed 274,120 inputs with no failure. The cross-compiled test binary lacked coverage-guided instrumentation, so this is a bounded smoke check rather than comprehensive fuzzing. Native time-limited runs on Windows and Linux passed but exercised only six mutations and are weak evidence. A subsequent native Windows coverage-guided run completed 10,000 inputs in 1.6 seconds without failure. CI now uses an execution count with an outer deadline so a nominally passing short timed run is not mistaken for substantial exploration. This remains bounded fuzz evidence, not exhaustive validation:
 
 ```sh
-go test ./internal/devices -run='^$' -fuzz=FuzzParse -fuzztime=30s -parallel=2
+go test ./internal/devices -run='^$' -fuzz=FuzzParse -fuzztime=10000x -parallel=2 -timeout=60s
 ```
 
 Synthetic fixtures and mocked Apple processes prove normalization, file cleanup, limits and command construction; they do not prove physical-device operation. See [the live validation matrix](DEVICES.md#live-validation-still-required). Signing, device installation/launch and Apple account integration remain unimplemented.
+
+CI timing caveat: attempt 1 of [run 45052339395](https://github.com/fpokrzywa/AppRivet/actions/runs/45052339395) passed all Go jobs but simctl discovery exceeded its 60-second deadline. An unchanged Mac retry passed discovery before being superseded by the final CI/documentation update during XCTest. The timeout was surfaced as exit 124 with no inventory accepted. This is a known intermittent observation; a successful rerun does not establish its root cause or eliminate the reliability risk.
 
 ## Milestone 1 historical record
 

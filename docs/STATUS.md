@@ -20,6 +20,7 @@ Repository: [fpokrzywa/AppRivet](https://github.com/fpokrzywa/AppRivet). The own
 | Current Windows tests, six packages, and go vet | Passed |
 | Current Linux runtime tests, six packages in restricted local container | Passed |
 | Linux parser fuzz smoke | 274,120 executions over 10 seconds without failure; no coverage guidance in this precompiled binary |
+| Native Windows coverage-guided fuzz | 10,000 inputs passed; CI uses the same execution count with a 60-second outer deadline |
 | Client cross-builds | macOS/Linux/Windows, amd64 and arm64 passed |
 | Actual Windows CLI | Offline CoreDevice/simulator reports succeed with live=false; live discovery refuses with exit 3 |
 | Hosted CI after public visibility change | [Run 45051791524](https://github.com/fpokrzywa/AppRivet/actions/runs/45051791524), commit 4f1ab4b: all four jobs passed, including Windows/Linux/macOS Go tests and Linux/macOS race checks |
@@ -39,9 +40,11 @@ The reviewer could not establish physical-device compatibility, Mac file/cancell
 
 Engineering decisions: continue in the clean dedicated repository; add simulator discovery and offline inspection as useful credential-free work; reject ambiguous reports rather than return partial or misleading inventory. Trade-off: explicit null known fields and future schema versions require an adapter update, and install/launch remain unavailable until their own authorization/isolation validation.
 
+CI reliability observation: [run 45052339395](https://github.com/fpokrzywa/AppRivet/actions/runs/45052339395), attempt 1, passed all Go jobs but timed out during simctl discovery at 60 seconds. An unchanged Mac retry passed discovery, then was superseded by the final CI/documentation update while XCTest was running. This is an observed intermittent timing failure, not a parser rejection or a proven Apple-service root cause. No discovery retry or timeout increase was added. Preserve this evidence and investigate if it recurs.
+
 ## Next work
 
-1. Keep all CI jobs green for subsequent code changes, including the new bounded native Linux parser fuzz step. The first successful integration run above predates the final key-alias hardening and fuzz-step addition; their follow-up run must also pass. No billing workaround is currently required.
+1. Keep all CI jobs green for subsequent code changes, including the bounded native Linux parser fuzz step. The first successful integration run above predates the final key-alias hardening and fuzz-step addition; the final follow-up run must also pass. Investigate recurrent simulator timeouts before claiming reliable unattended Mac operation. No billing workaround is currently required.
 2. Validate USB/Wi-Fi/disconnected/unpaired/locked/Developer Mode-disabled and older devices against Apple's actual reports. Add carefully sanitized captures with provenance; current committed fixtures are synthetic.
 3. Design and test the credential-free worker/signing boundary and trusted human approvals before enabling signing or device mutations. Discovery cannot authorize installation. Keep Apple passwords and private keys out of the CLI.
 4. Continue M2 installation/launch only with the required hardware/signing evidence. Remote builds, MCP and release distribution retain their separate acceptance gates.
