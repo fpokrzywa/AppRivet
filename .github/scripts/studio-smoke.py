@@ -26,9 +26,16 @@ with tempfile.TemporaryDirectory(prefix="apprivet-studio-") as home:
                 html = page.read()
                 assert b"Describe your app" in html and b"<style>" in html
                 assert b"<script>" in html and b"X-AppRivet-Session" in html
+                assert b"Import brief" in html and b"Review prompt" in html and b'aria-labelledby="admin-heading"' in html
                 assert "style-src 'sha256-" in page.headers["Content-Security-Policy"]
             brief = "A checklist I can use to pack for a weekend trip."
-            with request("/api/create", json.dumps({"name": "BrowserSmoke", "brief": brief}).encode()) as created:
+            project = {"name": "BrowserSmoke", "brief": brief}
+            with request("/api/review", json.dumps({**project, "provider": "openai", "model": "gpt-6.2-sol"}).encode()) as review:
+                draft = json.load(review)
+                assert draft["provider"] == "openai" and draft["model"] == "gpt-6.2-sol"
+                assert len(draft["approval"]) == 64 and draft["prompt"].endswith(brief)
+                assert not Path(home, "AppRivet Projects").exists()
+            with request("/api/create", json.dumps(project).encode()) as created:
                 data = json.load(created)
                 assert created.status == 201 and data["suggested_scheme"] == "BrowserSmoke"
                 assert data["starter"] == "checklist"

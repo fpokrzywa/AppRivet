@@ -33,27 +33,89 @@ func Create(parent, name, bundleID string) (Info, error) {
 	return CreateWithOptions(parent, name, bundleID, StarterOptions{})
 }
 
-func CreateWithOptions(parent, name, bundleID string, options StarterOptions) (Info, error) {
+type Draft struct {
+	Name     string `json:"name"`
+	BundleID string `json:"bundle_id"`
+	Starter  string `json:"starter"`
+	Brief    string `json:"brief"`
+	Prompt   string `json:"prompt"`
+}
+
+// Review validates the same inputs used by project creation without writing files.
+func Review(name, bundleID string, options StarterOptions) (Draft, error) {
 	if !namePattern.MatchString(name) || reserved.MatchString(name) {
-		return Info{}, fmt.Errorf("project name must be 1-50 ASCII letters/digits, start with a letter, and not be a reserved Windows name")
+		return Draft{}, fmt.Errorf("project name must be 1-50 ASCII letters/digits, start with a letter, and not be a reserved Windows name")
 	}
 	if len(bundleID) > 255 || !bundlePattern.MatchString(bundleID) {
-		return Info{}, fmt.Errorf("bundle ID must use reverse-DNS labels starting with letters, such as com.example.myapp (maximum 255 characters)")
+		return Draft{}, fmt.Errorf("bundle ID must use reverse-DNS labels starting with letters, such as com.example.myapp (maximum 255 characters)")
 	}
 	for _, label := range strings.Split(bundleID, ".") {
 		if strings.HasSuffix(label, "-") || len(label) > 63 {
-			return Info{}, fmt.Errorf("bundle ID labels must be at most 63 characters and cannot end with a hyphen")
+			return Draft{}, fmt.Errorf("bundle ID labels must be at most 63 characters and cannot end with a hyphen")
 		}
 	}
 	starter, brief, err := resolveStarter(options)
 	if err != nil {
+		return Draft{}, err
+	}
+	prompt := fmt.Sprintf("Create an iOS 17+ SwiftUI app with these project settings.\n\nProject name: %s\nBundle ID: %s", name, bundleID)
+	if brief == "" {
+		prompt += "\n\nStart with a basic SwiftUI screen."
+	} else {
+		prompt += "\n\nApp brief:\n" + brief
+	}
+	return Draft{Name: name, BundleID: bundleID, Starter: starter, Brief: brief, Prompt: prompt}, nil
+}
+
+func CreateWithOptions(parent, name, bundleID string, options StarterOptions) (Info, error) {
+	draft, err := Review(name, bundleID, options)
+	if err != nil {
 		return Info{}, err
 	}
+	return create(parent, draft, "", options.Starter != "" || draft.Brief != "")
+}
+
+func ReviewAI(name, bundleID, brief string) (Draft, error) {
+	draft, err := Review(name, bundleID, StarterOptions{Brief: brief, Starter: "blank"})
+	if err != nil {
+		return Draft{}, err
+	}
+	if draft.Brief == "" {
+		return Draft{}, fmt.Errorf("describe the app or import a brief before generating with AI")
+	}
+	draft.Starter = "ai"
+	draft.Prompt = fmt.Sprintf(`Generate a working SwiftUI app for iPhone and iPad, targeting iOS 17 or later.
+Return JSON with a single "content_view" string containing the complete ContentView.swift source.
+Start with import SwiftUI and define struct ContentView: View with a default initializer.
+Use Apple frameworks and self-contained source. The surrounding Xcode project, app entry point,
+Greeting helper, and smoke tests already exist. Omit @main, package dependencies, entitlements, build settings,
+commands, script files, and setup instructions. Implement the brief as fully as possible within one
+Swift source file. Use local data and avoid credentials or external services.
+
+Project name: %s
+Bundle ID: %s
+
+App brief:
+%s`, draft.Name, draft.BundleID, draft.Brief)
+	return draft, nil
+}
+
+// CreateGenerated writes generated text into a fixed source file. Xcode and the
+// user must review and build the source separately.
+func CreateGenerated(parent string, draft Draft, source string) (Info, error) {
+	validated, err := ReviewAI(draft.Name, draft.BundleID, draft.Brief)
+	if err != nil {
+		return Info{}, err
+	}
+	return create(parent, validated, source, true)
+}
+
+func create(parent string, draft Draft, swiftSource string, includeStarter bool) (Info, error) {
+	name := draft.Name
 	root, err := filepath.Abs(filepath.Join(parent, name))
 	if err != nil {
 		return Info{}, err
 	}
-	data := struct{ Name, BundleID, Starter, Brief string }{name, bundleID, starter, brief}
 	files := []struct{ src, dst string }{
 		{"App.swift.tmpl", name + "/App.swift"},
 		{"ContentView.swift.tmpl", name + "/ContentView.swift"},
@@ -63,13 +125,17 @@ func CreateWithOptions(parent, name, bundleID string, options StarterOptions) (I
 		{"gitignore.tmpl", ".gitignore"},
 		{"README.md.tmpl", "README.md"},
 	}
-	if brief != "" {
+	if draft.Brief != "" {
 		files = append(files, struct{ src, dst string }{"APP_BRIEF.md.tmpl", "APP_BRIEF.md"})
 	}
 	// Render everything before writing. The destination is exclusively created;
 	// failures preserve any partial project for inspection rather than deleting it.
 	rendered := make([][]byte, len(files))
 	for i, file := range files {
+		if swiftSource != "" && file.src == "ContentView.swift.tmpl" {
+			rendered[i] = []byte(swiftSource + "\n\nenum Greeting {\n    static func message(for name: String) -> String {\n        \"Hello, \\(name)!\"\n    }\n}\n")
+			continue
+		}
 		raw, err := templates.ReadFile("templates/" + file.src)
 		if err != nil {
 			return Info{}, err
@@ -79,7 +145,7 @@ func CreateWithOptions(parent, name, bundleID string, options StarterOptions) (I
 			return Info{}, err
 		}
 		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, data); err != nil {
+		if err := tmpl.Execute(&buf, draft); err != nil {
 			return Info{}, err
 		}
 		rendered[i] = buf.Bytes()
@@ -106,8 +172,8 @@ func CreateWithOptions(parent, name, bundleID string, options StarterOptions) (I
 		}
 	}
 	info := Info{Kind: "xcode-project", Path: filepath.Join(root, name+".xcodeproj"), Root: root, Scheme: name}
-	if options.Starter != "" || brief != "" {
-		info.Starter = starter
+	if includeStarter {
+		info.Starter = draft.Starter
 	}
 	return info, nil
 }

@@ -7,6 +7,8 @@
 - Add local browser launchers and downloadable artifacts for Windows and Linux. Create SwiftUI projects and reveal the workspace from a graphical form.
 - Put **Describe your app** at the center of the redesigned browser workspace and add an app brief to the native Mac form. Create a functional checklist, notes app, counter, or blank SwiftUI project and save the description alongside the source.
 - Package the local browser workspace with its styles and scripts embedded in the same page.
+- Import UTF-8 text or Markdown briefs. Review the exact prompt before creating a starter or sending an AI request.
+- Add **Admin** for provider and model selection and separate session keys. Generate SwiftUI source through the OpenAI Responses API or Anthropic Messages API after approval.
 
 ## Unreleased: native Linux journal writeback testing
 

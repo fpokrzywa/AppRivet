@@ -1,18 +1,49 @@
 "use strict";
 
+const byID = id => document.getElementById(id);
 const session = location.hash.slice(1);
-const form = document.querySelector("#create");
-const fields = document.querySelector("#create-fields");
-const submit = document.querySelector("#submit");
-const folder = document.querySelector("#folder");
-const quit = document.querySelector("#quit");
-const message = document.querySelector("#message");
-const projects = document.querySelector("#projects");
-const brief = form.elements.namedItem("brief");
-const nameField = form.elements.namedItem("name");
-const starter = form.elements.namedItem("starter");
+const form = byID("create");
+const fields = byID("create-fields");
+const submit = byID("submit");
+const folder = byID("folder");
+const quit = byID("quit");
+const message = byID("message");
+const projects = byID("projects");
+const brief = byID("brief");
+const nameField = byID("name");
+const starter = byID("starter");
+const admin = byID("admin");
+const adminButton = byID("open-admin");
+const provider = byID("provider");
+const model = byID("model");
+const customModel = byID("custom-model");
+const apiKey = byID("api-key");
+const keyStatus = byID("key-status");
+const clearKey = byID("clear-key");
+const review = byID("prompt-review");
+const reviewStatus = byID("review-status");
+const promptText = byID("prompt-text");
+const confirmCreate = byID("confirm-create");
+const editBrief = byID("edit-brief");
+const importStatus = byID("import-status");
+
+let reviewedRequest;
+let creating = false;
+let activeProvider = "openai";
+
+const providers = {
+  openai: {name: "OpenAI", models: [["gpt-6.2-sol", "GPT-6.2 Sol"], ["gpt-6.2-astra", "GPT-6.2 Astra"]]},
+  anthropic: {name: "Anthropic", models: [["claude-opus-5-5", "Claude Opus 5.5"], ["claude-fable-5-2", "Claude Fable 5.2"]]},
+};
+// Keys live in page memory. They are never written to browser storage or the URL.
+const profiles = {
+  openai: {model: providers.openai.models[0][0], key: ""},
+  anthropic: {model: providers.anthropic.models[0][0], key: ""},
+};
+const keyPattern = /^[A-Za-z0-9_-]{8,512}$/;
 
 const starters = {
+  ai: ["AI-generated SwiftUI", "A model writes the app’s SwiftUI source from your brief. Review the source before building in Xcode."],
   auto: ["Automatic from brief", "Match a checklist, saved note or counter. Other ideas start with a blank SwiftUI project and the brief."],
   checklist: ["Checklist", "Add items, check them off, and swipe to delete. Items are saved on the device."],
   notes: ["Notes", "Start with a note editor that saves your text on the device."],
@@ -25,20 +56,24 @@ const examples = {
   counter: ["RepCounter", "A counter for tracking exercise reps. I need to add one, undo a rep, and reset between sets."],
 };
 
-function show(text, error = false) {
-  message.textContent = text;
-  message.classList.toggle("error", error);
+function show(element, text, error = false) {
+  element.textContent = text;
+  element.classList.toggle("error", error);
 }
 
 function updateBrief() {
-  document.querySelector("#brief-count").textContent = `${brief.value.length.toLocaleString()} / 2,000`;
+  byID("brief-count").textContent = brief.value.length.toLocaleString() + " / 2,000";
   const [title, description] = starters[starter.value];
-  document.querySelector("#starter-title").textContent = title;
-  document.querySelector("#starter-copy").textContent = description;
+  byID("starter-title").textContent = title;
+  byID("starter-copy").textContent = description;
+  const settings = profiles[activeProvider];
+  byID("selected-model").textContent = starter.value === "ai"
+    ? providers[activeProvider].name + " · " + settings.model + (settings.key ? "" : " · Add a key in Admin")
+    : "";
 }
 
 async function request(path, body) {
-  const headers = { "X-AppRivet-Session": session };
+  const headers = {"X-AppRivet-Session": session};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const response = await fetch(path, {
     method: path === "/api/state" ? "GET" : "POST",
@@ -53,8 +88,8 @@ async function request(path, body) {
 
 async function refresh() {
   const state = await request("/api/state");
-  document.querySelector("#workspace-path").textContent = state.workspace;
-  document.querySelector("#empty").hidden = state.projects.length !== 0;
+  byID("workspace-path").textContent = state.workspace;
+  byID("empty").hidden = state.projects.length !== 0;
   const rows = document.createDocumentFragment();
   for (const name of state.projects) {
     const row = document.createElement("li");
@@ -64,12 +99,115 @@ async function refresh() {
   projects.replaceChildren(rows);
 }
 
+function watchFile(button, input, consume) {
+  button.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => {
+    const file = input.files[0];
+    input.value = "";
+    if (file) void consume(file);
+  });
+}
+
+async function readTextFile(file, extension, maxBytes) {
+  if (!extension.test(file.name)) throw new Error("Choose a file in a supported format.");
+  if (file.size > maxBytes) throw new Error("This file is too large.");
+  try {
+    return new TextDecoder("utf-8", {fatal: true}).decode(await file.arrayBuffer()).replace(/\r\n?/g, "\n");
+  } catch {
+    throw new Error("Choose a file saved as UTF-8 plain text.");
+  }
+}
+
+watchFile(byID("import-brief"), byID("brief-file"), async file => {
+  try {
+    const contents = await readTextFile(file, /\.(txt|md|markdown)$/i, 8004);
+    if (!contents.trim() || contents.length > 2000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(contents)) {
+      throw new Error("Use 1–2,000 characters of plain text or Markdown.");
+    }
+    brief.value = contents;
+    updateBrief();
+    show(importStatus, "Imported " + file.name + ". You can edit it above.");
+    brief.focus();
+  } catch (error) {
+    show(importStatus, error.message, true);
+  }
+});
+
+function refreshKeyStatus() {
+  const hasKey = Boolean(profiles[provider.value].key);
+  show(keyStatus, hasKey ? "Key set for this session. Paste or import a replacement." : "No key set for this provider.");
+  clearKey.disabled = !hasKey;
+}
+
+function updateCustomField() {
+  byID("custom-model-field").hidden = model.value !== "custom";
+}
+
+function showProviderSettings() {
+  const saved = profiles[provider.value];
+  const models = providers[provider.value].models;
+  model.replaceChildren(...models.map(([id, label]) => new Option(label, id)), new Option("Custom model ID", "custom"));
+  model.value = models.some(([id]) => id === saved.model) ? saved.model : "custom";
+  customModel.value = model.value === "custom" ? saved.model : "";
+  apiKey.value = "";
+  updateCustomField();
+  refreshKeyStatus();
+}
+
+adminButton.addEventListener("click", () => {
+  provider.value = activeProvider;
+  showProviderSettings();
+  admin.showModal();
+});
+admin.addEventListener("close", () => { apiKey.value = ""; });
+byID("close-admin").addEventListener("click", () => admin.close());
+provider.addEventListener("change", showProviderSettings);
+model.addEventListener("change", updateCustomField);
+clearKey.addEventListener("click", () => {
+  profiles[provider.value].key = "";
+  apiKey.value = "";
+  refreshKeyStatus();
+  updateBrief();
+});
+watchFile(byID("import-key"), byID("key-file"), async file => {
+  const selected = provider.value;
+  try {
+    const key = (await readTextFile(file, /\.txt$/i, 1024)).trim();
+    if (!keyPattern.test(key)) throw new Error("Choose a text file containing just one API key.");
+    if (!admin.open || provider.value !== selected) return;
+    apiKey.value = key;
+    show(keyStatus, "Key loaded. Save settings to use it.");
+  } catch (error) {
+    show(keyStatus, error.message, true);
+  }
+});
+byID("admin-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const modelID = model.value === "custom" ? customModel.value.trim() : model.value;
+  const key = apiKey.value.trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(modelID)) {
+    show(keyStatus, "Enter a valid model ID from the provider.", true);
+    customModel.focus();
+    return;
+  }
+  if (key && !keyPattern.test(key)) {
+    show(keyStatus, "Enter a valid API key.", true);
+    apiKey.focus();
+    return;
+  }
+  activeProvider = provider.value;
+  profiles[activeProvider].model = modelID;
+  if (key) profiles[activeProvider].key = key;
+  admin.close();
+  updateBrief();
+});
+
 brief.addEventListener("input", updateBrief);
 starter.addEventListener("change", updateBrief);
-document.querySelector("#go-projects").addEventListener("click", () => {
-  const heading = document.querySelector("#projects-heading");
-  heading.focus({ preventScroll: true });
-  heading.scrollIntoView({ block: "start" });
+byID("go-projects").addEventListener("click", () => {
+  const heading = byID("projects-heading");
+  heading.focus({preventScroll: true});
+  heading.scrollIntoView({block: "start"});
 });
 for (const button of document.querySelectorAll("[data-example]")) {
   button.addEventListener("click", () => {
@@ -77,7 +215,8 @@ for (const button of document.querySelectorAll("[data-example]")) {
     const replacingExample = Object.values(examples).some(([exampleName]) => exampleName === nameField.value);
     if (!nameField.value.trim() || replacingExample) nameField.value = sampleName;
     brief.value = sampleBrief;
-    starter.value = button.dataset.example;
+    if (starter.value !== "ai") starter.value = button.dataset.example;
+    show(importStatus, "");
     updateBrief();
     brief.focus();
   });
@@ -85,43 +224,94 @@ for (const button of document.querySelectorAll("[data-example]")) {
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
-  submit.disabled = true;
-  show("Creating the SwiftUI starter…");
+  const ai = starter.value === "ai";
+  const settings = profiles[activeProvider];
+  const project = {
+    name: nameField.value,
+    bundle_id: byID("bundle").value,
+    brief: brief.value,
+    ...(ai ? {provider: activeProvider, model: settings.model} : {starter: starter.value}),
+  };
+  fields.disabled = true;
+  show(message, "Validating the brief and project settings…");
   try {
-    const result = await request("/api/create", {
-      name: nameField.value,
-      bundle_id: form.elements.namedItem("bundle").value,
-      brief: brief.value,
-      starter: starter.value,
-    });
+    const draft = await request("/api/review", project);
+    reviewedRequest = ai ? {...project, approval: draft.approval} : project;
+    promptText.value = draft.prompt;
+    byID("review-target").textContent = ai
+      ? "Destination: " + providers[draft.provider].name + " · " + draft.model + ". Approval sends this prompt and uses your API account."
+      : "Local project · " + starters[draft.starter][0] + " starter. AppRivet will create the project on this machine.";
+    confirmCreate.textContent = ai ? "Send & create project" : "Create SwiftUI starter";
+    confirmCreate.disabled = ai && !settings.key;
+    show(reviewStatus, confirmCreate.disabled ? "Add a key for this provider in Admin to send the prompt." : "", confirmCreate.disabled);
+    show(message, "");
+    fields.disabled = false;
+    submit.focus();
+    review.showModal();
+  } catch (error) {
+    show(message, error.message, true);
+  } finally {
+    fields.disabled = quit.disabled;
+  }
+});
+editBrief.addEventListener("click", () => review.close());
+review.addEventListener("cancel", event => { if (creating) event.preventDefault(); });
+review.addEventListener("close", () => {
+  reviewedRequest = undefined;
+  promptText.value = "";
+});
+byID("copy-prompt").addEventListener("click", async () => {
+  promptText.focus();
+  promptText.select();
+  try {
+    await navigator.clipboard.writeText(promptText.value);
+    show(reviewStatus, "Prompt copied.");
+  } catch {
+    show(reviewStatus, "Prompt selected. Use your system’s copy shortcut.");
+  }
+});
+confirmCreate.addEventListener("click", async () => {
+  if (!reviewedRequest || creating) return;
+  const project = reviewedRequest;
+  creating = true;
+  confirmCreate.disabled = editBrief.disabled = true;
+  show(reviewStatus, project.provider ? "Waiting for the model to generate SwiftUI…" : "Creating your project…");
+  try {
+    const result = await request("/api/create", project.provider ? {...project, api_key: profiles[project.provider].key} : project);
     const label = starters[result.starter]?.[0] ?? "SwiftUI";
-    show(`Created ${result.suggested_scheme} with the ${label} starter.`);
+    review.close();
+    show(message, project.provider
+      ? "Created " + result.suggested_scheme + ". Review the generated SwiftUI in Xcode before building."
+      : "Created " + result.suggested_scheme + " with the " + label + " starter.");
     await refresh().catch(() => {});
   } catch (error) {
-    show(error.message, true);
+    show(reviewStatus, error.message, true);
   } finally {
-    submit.disabled = false;
+    creating = false;
+    confirmCreate.disabled = editBrief.disabled = false;
   }
 });
 
 folder.addEventListener("click", async () => {
   try { await request("/api/open-folder"); }
-  catch (error) { show(error.message, true); }
+  catch (error) { show(message, error.message, true); }
 });
-
 quit.addEventListener("click", async () => {
   try {
     await request("/api/quit");
-    fields.disabled = folder.disabled = quit.disabled = true;
-    show("AppRivet has quit. You can close this tab.");
-  } catch (error) { show(error.message, true); }
+    fields.disabled = folder.disabled = quit.disabled = adminButton.disabled = true;
+    for (const profile of Object.values(profiles)) profile.key = "";
+    show(message, "AppRivet has quit. You can close this tab.");
+  } catch (error) {
+    show(message, error.message, true);
+  }
 });
 
 if (!session) {
-  show("Start AppRivet from your desktop to open a new session.", true);
+  show(message, "Start AppRivet from your desktop to open a new session.", true);
 } else {
   refresh().then(() => {
-    fields.disabled = folder.disabled = quit.disabled = false;
-    show("");
-  }).catch(error => show(error.message, true));
+    fields.disabled = folder.disabled = quit.disabled = adminButton.disabled = false;
+    show(message, "");
+  }).catch(error => show(message, error.message, true));
 }

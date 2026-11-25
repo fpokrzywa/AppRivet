@@ -14,7 +14,7 @@ Status: Milestone 2 device discovery is implemented with synthetic-fixture and o
 
 ## Development
 
-The AppRivet frontends let you describe an app and create a SwiftUI starter without Terminal on Windows, Linux, and macOS. The Mac app also builds and runs the project on a selected iOS Simulator. [Download and setup guide](docs/DESKTOP.md)
+The AppRivet frontends let you write or import an app brief, review the exact prompt, and generate SwiftUI source with OpenAI or Anthropic. Offline starters also work on Windows, Linux, and macOS. The Mac app builds and runs projects on a selected iOS Simulator. [Download and setup guide](docs/DESKTOP.md)
 
 Install Go from [go.dev](https://go.dev/dl/). The tested version and commands are recorded in [verification](docs/VERIFICATION.md).
 

@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/fpokrzywa/AppRivet/internal/generation"
 	"github.com/fpokrzywa/AppRivet/internal/project"
 )
 
@@ -27,6 +28,7 @@ type Config struct {
 	Workspace  string
 	OpenFolder func(string) error
 	Quit       func()
+	Generate   generation.SourceGenerator
 }
 
 type state struct {
@@ -39,6 +41,10 @@ type createRequest struct {
 	BundleID string `json:"bundle_id"`
 	Brief    string `json:"brief"`
 	Starter  string `json:"starter"`
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	Approval string `json:"approval"`
+	APIKey   string `json:"api_key"`
 }
 
 func Handler(config Config) http.Handler {
@@ -84,7 +90,7 @@ func Handler(config Config) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, state{Workspace: config.Workspace, Projects: projects})
 	})
-	mux.HandleFunc("POST /api/create", func(w http.ResponseWriter, r *http.Request) {
+	projectRequest := func(w http.ResponseWriter, r *http.Request) {
 		var req createRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32768))
 		decoder.DisallowUnknownFields()
@@ -97,17 +103,55 @@ func Handler(config Config) http.Handler {
 		if req.BundleID == "" {
 			req.BundleID = "com.example." + strings.ToLower(req.Name)
 		}
+		if req.Provider != "" {
+			draft, err := generation.Review(req.Name, req.BundleID, req.Brief, req.Provider, req.Model)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			if r.URL.Path == "/api/review" {
+				writeJSON(w, http.StatusOK, draft)
+				return
+			}
+			if req.Approval != draft.Approval {
+				writeError(w, http.StatusBadRequest, "Review and approve the current prompt, provider and model first.")
+				return
+			}
+			if err := ensureWorkspace(config.Workspace); err != nil {
+				writeError(w, http.StatusInternalServerError, "Could not create your AppRivet Projects folder.")
+				return
+			}
+			info, err := generation.Create(r.Context(), config.Workspace, draft, req.Approval, req.APIKey, config.Generate)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			writeJSON(w, http.StatusCreated, info)
+			return
+		}
+		options := project.StarterOptions{Brief: req.Brief, Starter: req.Starter}
+		if r.URL.Path == "/api/review" {
+			draft, err := project.Review(req.Name, req.BundleID, options)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, draft)
+			return
+		}
 		if err := ensureWorkspace(config.Workspace); err != nil {
 			writeError(w, http.StatusInternalServerError, "Could not create your AppRivet Projects folder.")
 			return
 		}
-		info, err := project.CreateWithOptions(config.Workspace, req.Name, req.BundleID, project.StarterOptions{Brief: req.Brief, Starter: req.Starter})
+		info, err := project.CreateWithOptions(config.Workspace, req.Name, req.BundleID, options)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		writeJSON(w, http.StatusCreated, info)
-	})
+	}
+	mux.HandleFunc("POST /api/review", projectRequest)
+	mux.HandleFunc("POST /api/create", projectRequest)
 	mux.HandleFunc("POST /api/open-folder", func(w http.ResponseWriter, _ *http.Request) {
 		if ensureWorkspace(config.Workspace) != nil || config.OpenFolder == nil || config.OpenFolder(config.Workspace) != nil {
 			writeError(w, http.StatusInternalServerError, "Could not open your AppRivet Projects folder.")

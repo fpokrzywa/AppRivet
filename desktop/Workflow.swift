@@ -20,6 +20,25 @@ struct DesktopProject: Decodable, Sendable {
     }
 }
 
+struct DesktopDraft: Decodable, Identifiable, Sendable {
+    let name: String
+    let bundleID: String
+    let starter: String
+    let brief: String
+    let prompt: String
+    let provider: String?
+    let model: String?
+    let approval: String?
+
+    var id: String { approval ?? name }
+    var isAI: Bool { provider != nil }
+
+    enum CodingKeys: String, CodingKey {
+        case name, starter, brief, prompt, provider, model, approval
+        case bundleID = "bundle_id"
+    }
+}
+
 struct DesktopSimulator: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
@@ -77,11 +96,22 @@ struct DesktopWorkflow: Sendable {
         return Self(cli: cli)
     }
 
-    func create(name: String, bundleID: String, parent: URL, brief: String, starter: String) throws -> DesktopProject {
-        guard name.range(of: #"^[A-Za-z][A-Za-z0-9]{0,49}\z"#, options: .regularExpression) != nil else {
-            throw DesktopFailure(message: "Start the project name with a letter and use up to 50 letters and numbers.")
+    func review(name: String, bundleID: String, brief: String, starter: String, provider: String, model: String) throws -> DesktopDraft {
+        var args = ["init", "--review", "--bundle-id=\(bundleID)", "--brief=\(brief)", "--starter=\(starter)"]
+        if starter == "ai" {
+            args += ["--provider=\(provider)", "--model=\(model)"]
         }
-        return try invoke(["init", "--bundle-id=\(bundleID)", "--brief=\(brief)", "--starter=\(starter)", name], directory: parent)
+        return try invoke(args + [name])
+    }
+
+    func create(draft: DesktopDraft, parent: URL, apiKey: String? = nil) throws -> DesktopProject {
+        var args = ["init", "--bundle-id=\(draft.bundleID)", "--brief=\(draft.brief)"]
+        if let provider = draft.provider, let model = draft.model, let approval = draft.approval {
+            args += ["--provider=\(provider)", "--model=\(model)", "--approve=\(approval)"]
+        } else {
+            args.append("--starter=\(draft.starter)")
+        }
+        return try invoke(args + [draft.name], directory: parent, timeout: draft.isAI ? 195 : 30, apiKey: apiKey)
     }
 
     func inspect(_ url: URL) throws -> DesktopProject {
@@ -152,8 +182,8 @@ struct DesktopWorkflow: Sendable {
         return (app, bundleID)
     }
 
-    private func invoke<Value: Decodable>(_ args: [String], directory: URL? = nil, timeout: Int = 30) throws -> Value {
-        let result = try runProcess(cli, args + ["--json"], directory: directory, timeout: timeout)
+    private func invoke<Value: Decodable>(_ args: [String], directory: URL? = nil, timeout: Int = 30, apiKey: String? = nil) throws -> Value {
+        let result = try runProcess(cli, args + ["--json"], directory: directory, timeout: timeout, apiKey: apiKey)
         guard let response = try? JSONDecoder().decode(CLIEnvelope<Value>.self, from: result.stdout), response.schema_version == 1 else {
             throw DesktopFailure(message: "AppRivet returned an unreadable result.", details: result.diagnostics)
         }
@@ -187,7 +217,7 @@ private struct ProcessResult {
 
 // Use files for separate stdout and stderr so a verbose child cannot deadlock
 // on a full pipe. Bound what the app reads back into memory.
-private func runProcess(_ executable: URL, _ args: [String], directory: URL? = nil, timeout: Int) throws -> ProcessResult {
+private func runProcess(_ executable: URL, _ args: [String], directory: URL? = nil, timeout: Int, apiKey: String? = nil) throws -> ProcessResult {
     let manager = FileManager.default
     let scratch = manager.temporaryDirectory.appendingPathComponent("apprivet-ui-\(UUID().uuidString)", isDirectory: true)
     try manager.createDirectory(at: scratch, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
@@ -209,9 +239,11 @@ private func runProcess(_ executable: URL, _ args: [String], directory: URL? = n
     child.standardInput = FileHandle.nullDevice
     child.standardOutput = output
     child.standardError = errors
-    child.environment = ProcessInfo.processInfo.environment.filter { key, _ in
-        key != "DEVELOPER_DIR" && !key.hasPrefix("SIMCTL_CHILD_")
+    var environment = ProcessInfo.processInfo.environment.filter { key, _ in
+        key != "DEVELOPER_DIR" && key != "APPRIVET_API_KEY" && !key.hasPrefix("SIMCTL_CHILD_")
     }
+    environment["APPRIVET_API_KEY"] = apiKey
+    child.environment = environment
 
     func readOutput() throws -> ProcessResult {
         try output.seek(toOffset: 0)

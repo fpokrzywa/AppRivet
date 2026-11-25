@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -16,6 +17,7 @@ import (
 	"github.com/fpokrzywa/AppRivet/internal/build"
 	"github.com/fpokrzywa/AppRivet/internal/devices"
 	"github.com/fpokrzywa/AppRivet/internal/doctor"
+	"github.com/fpokrzywa/AppRivet/internal/generation"
 	"github.com/fpokrzywa/AppRivet/internal/project"
 	"github.com/fpokrzywa/AppRivet/internal/runner"
 	"github.com/fpokrzywa/AppRivet/internal/snapshot"
@@ -42,7 +44,8 @@ const help = `AppRivet - independent iOS development toolkit
 
 Usage:
   apprivet doctor [--json]
-  apprivet init NAME [--bundle-id com.example.app] [--brief TEXT] [--starter TYPE] [--json]
+  apprivet init NAME [--bundle-id com.example.app] [--brief TEXT] [--starter TYPE] [--review] [--json]
+  apprivet init NAME --brief TEXT --provider PROVIDER --model MODEL (--review | --approve HASH) [--json]
   apprivet inspect [--project PATH] [--json]
   apprivet build [--project PATH] [--scheme NAME] --trust-project [--json]
   apprivet test [--project PATH] [--scheme NAME] --simulator UUID --trust-project [--json]
@@ -131,6 +134,8 @@ func (a App) Run(ctx context.Context, args []string) int {
 	fs.SetOutput(io.Discard)
 	projectPath, scheme, bundle, simulator := ".", "", "", ""
 	var starterOptions project.StarterOptions
+	var provider, model, approval string
+	review := false
 	trust := false
 	simulators := false
 	fromJSON := ""
@@ -144,6 +149,10 @@ func (a App) Run(ctx context.Context, args []string) int {
 		fs.StringVar(&bundle, "bundle-id", "", "reverse-DNS bundle identifier")
 		fs.StringVar(&starterOptions.Brief, "brief", "", "app idea to save with the project")
 		fs.StringVar(&starterOptions.Starter, "starter", "", "auto, blank, checklist, notes or counter")
+		fs.BoolVar(&review, "review", false, "validate inputs and preview the prompt without creating a project")
+		fs.StringVar(&provider, "provider", "", "OpenAI or Anthropic API provider ID")
+		fs.StringVar(&model, "model", "", "provider API model ID")
+		fs.StringVar(&approval, "approve", "", "approval hash from the current AI prompt review")
 		// The documented init NAME --options form also works with Go's flag parser.
 		if len(filtered) > 0 && !strings.HasPrefix(filtered[0], "-") {
 			filtered = append(append([]string{}, filtered[1:]...), filtered[0])
@@ -221,6 +230,33 @@ func (a App) Run(ctx context.Context, args []string) int {
 		name := fs.Arg(0)
 		if bundle == "" {
 			bundle = "com.example." + strings.ToLower(name)
+		}
+		if provider != "" {
+			draft, err := generation.Review(name, bundle, starterOptions.Brief, provider, model)
+			if err != nil {
+				return fail("invalid_arguments", err.Error(), 2)
+			}
+			if review {
+				response.Data = draft
+				break
+			}
+			info, err := generation.Create(ctx, a.Dir, draft, approval, os.Getenv("APPRIVET_API_KEY"), generation.Generate)
+			if err != nil {
+				return fail("generation_failed", err.Error(), 4)
+			}
+			response.Data = info
+			break
+		}
+		if model != "" || approval != "" {
+			return fail("invalid_arguments", "select a provider when using an AI model or approval", 2)
+		}
+		if review {
+			draft, err := project.Review(name, bundle, starterOptions)
+			if err != nil {
+				return fail("invalid_arguments", err.Error(), 2)
+			}
+			response.Data = draft
+			break
 		}
 		info, err := project.CreateWithOptions(a.Dir, name, bundle, starterOptions)
 		if err != nil {
@@ -348,6 +384,10 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 		if response.Command == "init" {
 			fmt.Fprintln(a.Out, "Next: on a Mac, run apprivet doctor, then apprivet build --project", data.Root, "--trust-project")
 		}
+	case project.Draft:
+		fmt.Fprintf(a.Out, "Local starter: %s\n\n%s\n", data.Starter, data.Prompt)
+	case generation.Draft:
+		fmt.Fprintf(a.Out, "Destination: %s (%s)\n\n%s\n\nApproval: %s\n", data.Provider, data.Model, data.Prompt, data.Approval)
 	case doctor.Report:
 		fmt.Fprintf(a.Out, "Host: %s/%s\n", data.HostOS, data.HostArch)
 		for _, check := range data.Checks {

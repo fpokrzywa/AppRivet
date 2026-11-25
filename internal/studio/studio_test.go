@@ -1,6 +1,7 @@
 package studio
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/fpokrzywa/AppRivet/internal/generation"
 )
 
 func TestStudioCreatesAndListsProject(t *testing.T) {
@@ -104,5 +107,77 @@ func TestStudioBuildsChecklistStarterFromBrief(t *testing.T) {
 	saved, err := os.ReadFile(filepath.Join(root, "APP_BRIEF.md"))
 	if err != nil || !strings.Contains(string(saved), brief) {
 		t.Fatalf("project did not save the brief: %v", err)
+	}
+}
+
+func TestStudioReviewsAIRequestBeforeCallingProvider(t *testing.T) {
+	workspace := filepath.Join(t.TempDir(), "projects")
+	const brief = "A timer that saves the latest lap."
+	const key = "sk-ant-example-fake"
+	const source = "import SwiftUI\n\nstruct ContentView: View {\n    var body: some View { Text(\"Lap timer\") }\n}"
+	var calls int
+	var draft generation.Draft
+	h := Handler(Config{
+		Host: "127.0.0.1:1234", Session: "local-test-session", Workspace: workspace,
+		Generate: func(_ context.Context, provider, model, apiKey, prompt string) (string, error) {
+			calls++
+			if provider != draft.Provider || model != draft.Model || apiKey != key || prompt != draft.Prompt {
+				t.Fatal("provider, credentials or prompt did not match the approved request")
+			}
+			return source, nil
+		},
+	})
+	send := func(path string, data createRequest, want int) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:1234"+path, strings.NewReader(string(body)))
+		req.Header.Set("X-AppRivet-Session", "local-test-session")
+		res := httptest.NewRecorder()
+		h.ServeHTTP(res, req)
+		if res.Code != want {
+			t.Fatalf("%s returned %d, want %d: %s", path, res.Code, want, res.Body.String())
+		}
+		return res
+	}
+	input := createRequest{Name: "LapTimer", Brief: brief, Provider: "anthropic", Model: "claude-fable-5-2"}
+	if err := json.NewDecoder(send("/api/review", input, http.StatusOK).Body).Decode(&draft); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(draft.Prompt, brief) || draft.BundleID != "com.example.laptimer" || draft.Starter != "ai" {
+		t.Fatalf("incorrect prompt review: %+v", draft)
+	}
+	input.APIKey = key
+	send("/api/create", input, http.StatusBadRequest)
+	input.Approval = draft.Approval
+	changed := input
+	changed.Brief += " Now add a chart."
+	send("/api/create", changed, http.StatusBadRequest)
+	changed = input
+	changed.Model = "claude-opus-5-5"
+	send("/api/create", changed, http.StatusBadRequest)
+	changed = input
+	changed.Provider = "openai"
+	send("/api/create", changed, http.StatusBadRequest)
+	if _, err := os.Stat(workspace); !os.IsNotExist(err) || calls != 0 {
+		t.Fatalf("review or unapproved requests had side effects: calls=%d, stat=%v", calls, err)
+	}
+
+	res := send("/api/create", input, http.StatusCreated)
+	if strings.Contains(res.Body.String(), key) || !strings.Contains(res.Body.String(), "\"starter\":\"ai\"") {
+		t.Fatal("created project response returned the wrong output")
+	}
+	root := filepath.Join(workspace, "LapTimer")
+	for file, want := range map[string]string{"LapTimer/ContentView.swift": source, "APP_BRIEF.md": brief} {
+		got, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(file)))
+		if err != nil || !strings.Contains(string(got), want) || strings.Contains(string(got), key) {
+			t.Fatalf("wrong generated content in %s: %v", file, err)
+		}
+	}
+	send("/api/create", input, http.StatusBadRequest)
+	if calls != 1 {
+		t.Fatalf("provider called for a duplicate project: %d calls", calls)
 	}
 }

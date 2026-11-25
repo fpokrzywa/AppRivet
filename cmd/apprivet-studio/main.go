@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fpokrzywa/AppRivet/internal/generation"
 	"github.com/fpokrzywa/AppRivet/internal/studio"
 )
 
@@ -50,9 +51,10 @@ func run() error {
 			Host: host, Session: session, Workspace: filepath.Join(home, "AppRivet Projects"),
 			OpenFolder: func(path string) error { return open(path, false) },
 			Quit:       func() { once.Do(func() { close(quit) }) },
+			Generate:   generation.Generate,
 		}),
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second,
-		WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second,
+		WriteTimeout: 195 * time.Second, IdleTimeout: 30 * time.Second,
 	}
 	finished := make(chan error, 1)
 	go func() { finished <- server.Serve(listener) }()

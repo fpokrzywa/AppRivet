@@ -10,7 +10,11 @@
   <header class="topbar">
     <div class="shell topbar-inner">
       <span class="wordmark">AppRivet</span>
-      <nav class="top-actions" aria-label="Workspace"><button id="go-projects" type="button" class="quiet">Your projects</button><button id="quit" type="button" class="quiet" disabled>Quit</button></nav>
+      <nav class="top-actions" aria-label="Workspace">
+        <button id="go-projects" type="button" class="quiet">Your projects</button>
+        <button id="open-admin" type="button" class="quiet" disabled>Admin</button>
+        <button id="quit" type="button" class="quiet" disabled>Quit</button>
+      </nav>
     </div>
   </header>
   <main class="shell">
@@ -23,15 +27,21 @@
       <form id="create" class="composer">
         <fieldset id="create-fields" disabled>
           <div class="brief-field">
-            <div class="label-row"><label for="brief">Describe your app</label><span id="brief-count" class="count" aria-hidden="true">0 / 2,000</span></div>
-            <p class="field-help" id="brief-help">What should it do, and what should it remember?</p>
+            <div class="label-row">
+              <label for="brief">Describe your app</label>
+              <button id="import-brief" type="button" class="quiet" aria-describedby="brief-help">Import brief</button>
+              <input id="brief-file" type="file" accept=".txt,.md,.markdown" hidden>
+            </div>
+            <p class="field-help" id="brief-help">What should it do, and what should it remember? You can import a text or Markdown file.</p>
             <textarea id="brief" name="brief" maxlength="2000" rows="5" aria-describedby="brief-help" placeholder="A packing checklist for weekend trips. I want to add items, check them off, and keep the list when I reopen the app."></textarea>
             <div class="examples" aria-label="Example app ideas">
               <span>Try an example</span>
               <button type="button" data-example="checklist">Packing checklist</button>
               <button type="button" data-example="notes">Field notes</button>
               <button type="button" data-example="counter">Rep counter</button>
+              <span id="brief-count" class="count" aria-hidden="true">0 / 2,000</span>
             </div>
+            <p id="import-status" class="message" role="status"></p>
           </div>
           <div class="project-fields">
             <div>
@@ -40,14 +50,18 @@
               <p class="field-help" id="name-help">Start with a letter. Use letters and numbers.</p>
             </div>
             <div>
-              <label for="starter">Starter</label>
+              <label for="starter">Creation method</label>
               <select id="starter" name="starter">
-                <option value="auto">Automatic from brief</option>
-                <option value="checklist">Checklist</option>
-                <option value="notes">Notes</option>
-                <option value="counter">Counter</option>
-                <option value="blank">Blank</option>
+                <option value="ai">Generate with AI</option>
+                <optgroup label="Offline starters">
+                  <option value="auto" selected>Automatic from brief</option>
+                  <option value="checklist">Checklist</option>
+                  <option value="notes">Notes</option>
+                  <option value="counter">Counter</option>
+                  <option value="blank">Blank</option>
+                </optgroup>
               </select>
+              <p id="selected-model" class="field-help"></p>
             </div>
           </div>
           <details class="advanced">
@@ -56,14 +70,14 @@
             <input id="bundle" name="bundle" placeholder="com.example.myfirstapp" maxlength="255" spellcheck="false">
           </details>
           <div class="form-footer">
-            <button id="submit" type="submit" class="primary">Create SwiftUI Starter</button>
+            <button id="submit" type="submit" class="primary">Review prompt</button>
             <p id="message" role="status" aria-live="polite" class="message">Opening your local workspace…</p>
           </div>
         </fieldset>
       </form>
       <aside class="sidebar" aria-label="Starter and project information">
         <section class="starter-panel panel" aria-labelledby="starter-heading">
-          <h2 id="starter-heading">Your starter</h2>
+          <h2 id="starter-heading">Project output</h2>
           <p id="starter-title" class="starter-name">Automatic from brief</p>
           <p id="starter-copy" class="starter-copy">Match a checklist, saved note or counter. Other ideas start with a blank SwiftUI project and the brief.</p>
           <div class="starter-files">
@@ -87,6 +101,53 @@
       </aside>
     </div>
   </main>
+  <dialog id="admin" class="panel dialog" aria-labelledby="admin-heading">
+    <form id="admin-form">
+      <h2 id="admin-heading">Admin</h2>
+      <p class="dialog-info">Set your AI provider, model and key. You can keep a separate key for each provider during this session.</p>
+      <div class="dialog-fields">
+        <div>
+          <label for="provider">Provider</label>
+          <select id="provider">
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+          </select>
+        </div>
+        <div>
+          <label for="model">Model</label>
+          <select id="model"></select>
+        </div>
+      </div>
+      <div id="custom-model-field" hidden>
+        <label for="custom-model">Custom model ID</label>
+        <input id="custom-model" maxlength="128" spellcheck="false">
+      </div>
+      <div class="key-label">
+        <label for="api-key">API key</label>
+        <button id="import-key" class="quiet" type="button">Import key file</button>
+        <input id="key-file" type="file" accept=".txt" hidden>
+      </div>
+      <input id="api-key" type="password" maxlength="512" autocomplete="off" spellcheck="false" placeholder="Paste a key to add or replace it">
+      <p id="key-status" class="field-help" role="status"></p>
+      <div class="dialog-actions">
+        <button id="clear-key" class="quiet" type="button">Remove key</button>
+        <button id="close-admin" class="quiet" type="button">Close</button>
+        <button class="primary" type="submit">Save settings</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="prompt-review" class="panel dialog" aria-labelledby="review-heading">
+    <h2 id="review-heading">Review prompt</h2>
+    <p id="review-target" class="dialog-info"></p>
+    <label for="prompt-text">Prompt text</label>
+    <textarea id="prompt-text" readonly rows="11" spellcheck="false"></textarea>
+    <p id="review-status" class="message" role="status"></p>
+    <div class="dialog-actions">
+      <button id="edit-brief" type="button" class="quiet">Back to brief</button>
+      <button id="copy-prompt" type="button" class="quiet">Copy prompt</button>
+      <button id="confirm-create" type="button" class="primary">Create project</button>
+    </div>
+  </dialog>
   <!-- APP_SCRIPT -->
 </body>
 </html>
