@@ -77,6 +77,7 @@ textarea, input, select {
   font: inherit;
 }
 textarea { resize: vertical; min-height: 132px; line-height: 1.55; margin-top: 10px; padding: 13px; }
+#brief { max-height: 14rem; overflow-y: auto; overscroll-behavior-y: contain; }
 textarea::placeholder, input::placeholder { color: #a7babc; }
 .field-help { color: var(--muted); font-size: .84rem; margin: 5px 0 0; }
 .examples { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 13px; }

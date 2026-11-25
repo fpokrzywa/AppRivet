@@ -928,7 +928,8 @@ private struct DesktopView: View {
                 }
                 TextEditor(text: $model.brief)
                     .font(.body)
-                    .frame(minHeight: 84)
+                    .scrollIndicators(.visible, axes: .vertical)
+                    .frame(height: 132)
                     .border(Color.secondary.opacity(0.25))
                     .accessibilityLabel("Describe your app")
                 Text(model.briefMessage.isEmpty ? "Describe what the app should do, or import a text or Markdown file." : model.briefMessage)
