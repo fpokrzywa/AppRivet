@@ -10,7 +10,7 @@ The Windows and Linux launchers target x86-64 desktop machines. They open AppRiv
 
 ### Install on Windows
 
-1. Download **AppRivet-Windows.zip**. [AppRivet 0.4.11 Windows ZIP](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.11/AppRivet-Windows.zip)
+1. Download **AppRivet-Windows.zip**. [AppRivet 0.4.12 Windows ZIP](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.12/AppRivet-Windows.zip)
 2. Right-click the downloaded ZIP and select **Extract All**.
 3. Double-click **AppRivet.exe**. The browser opens your local workspace.
 
@@ -95,7 +95,7 @@ The automated provider tests use mock HTTP responses. Live generation requires a
 
 ### Install AppRivet
 
-1. Download and open the notarized **AppRivet-macOS.dmg**. The app includes Apple silicon and Intel executables. [AppRivet 0.4.11 macOS disk image](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.11/AppRivet-macOS.dmg) and [AppRivet 0.4.11 release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.11).
+1. Download and open the notarized **AppRivet-macOS.dmg**. The app includes Apple silicon and Intel executables. [AppRivet 0.4.12 macOS disk image](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.12/AppRivet-macOS.dmg) and [AppRivet 0.4.12 release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.12).
 2. Quit AppRivet if it’s open. Drag **AppRivet.app** onto **Applications** in the disk image window. If Finder asks what to do with the existing copy, choose **Replace**.
 3. Eject the disk image. Open AppRivet from **Finder → Applications** and check **AppRivet → About AppRivet** to confirm the installed version.
 

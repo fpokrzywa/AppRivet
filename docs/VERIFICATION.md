@@ -1,5 +1,11 @@
 # Verification record
 
+## Installed version and planning output limit
+
+All six 0.4.12 CI jobs passed. Packaged Windows and Linux launchers reported the version from their release build. Chrome verified the version stayed at the bottom right at desktop and narrow widths while scrolling. The planning review showed the optional retry and the combined maximum budget. Provider fixtures verified that a truncated Anthropic plan retries the approved prompt once, that other provider failures stop after the first call, and that Claude's lower planning effort leaves code-generation requests unchanged. A live Anthropic run with the watchmaker brief still needs validation. [Passing CI](https://github.com/fpokrzywa/AppRivet/actions/runs/45700530995)
+
+Apple accepted both Mac packages. The first hosted Simulator launch timed out. An unchanged rerun completed the notarized app's build, install and launch check. The public assets matched the staged packages by SHA-256. [Passing notarized release check](https://github.com/fpokrzywa/AppRivet/actions/runs/45700531021/attempts/2) and [0.4.12 release](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.12).
+
 ## AI generation defaults and offline starter recovery
 
 All six CI jobs passed on the AppRivet 0.4.11 source. The packaged Mac smoke test verified the new AI default, reopened an offline starter and carried its full brief into a separate project form, and exercised iOS Simulator build and launch. A local Chrome test with fixture responses verified the same recovery path and showed that reviewing a brief sends no provider request before approval. Go tests exercised both single and component generation and rejected the known SwiftUI starter response before creating project files. Apple accepted the app and disk image, Gatekeeper verified both, and the notarized app passed the Simulator smoke test. A real generation run with the selected provider and a feature-by-feature review of its output still need live validation. [Passing CI](https://github.com/fpokrzywa/AppRivet/actions/runs/45696611048) and [passing notarized release check](https://github.com/fpokrzywa/AppRivet/actions/runs/45696610930).
