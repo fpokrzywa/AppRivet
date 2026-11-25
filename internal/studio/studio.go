@@ -37,6 +37,7 @@ type state struct {
 	Workspace       string           `json:"workspace"`
 	Projects        []string         `json:"projects"`
 	FlutterSDK      bool             `json:"flutter_sdk"`
+	ProjectFormats  []string         `json:"project_formats"`
 	FlutterProjects []flutterProject `json:"flutter_projects"`
 }
 
@@ -92,6 +93,7 @@ func Handler(config Config) http.Handler {
 	}
 	mux.HandleFunc("GET /api/state", func(w http.ResponseWriter, _ *http.Request) {
 		inventory := state{Workspace: config.Workspace, Projects: []string{}, FlutterSDK: project.FlutterAvailable(), FlutterProjects: []flutterProject{}}
+		inventory.ProjectFormats = project.CreationFormats(runtime.GOOS, inventory.FlutterSDK)
 		if err := checkWorkspace(config.Workspace); err != nil && !errors.Is(err, os.ErrNotExist) {
 			writeError(w, http.StatusInternalServerError, "Could not read your AppRivet Projects folder.")
 			return
@@ -132,6 +134,10 @@ func Handler(config Config) http.Handler {
 		}
 		target := project.TargetOptions{Format: req.Format, Platforms: req.Platforms}
 		if req.Format == "flutter" {
+			if r.URL.Path == "/api/create" && !project.FlutterAvailable() {
+				writeError(w, http.StatusConflict, "Install or locate the Flutter SDK before creating this project.")
+				return
+			}
 			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(10 * time.Minute))
 		}
 		if req.Provider != "" {

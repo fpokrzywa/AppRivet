@@ -13,10 +13,13 @@ mkdir -p "$destination"
 destination=$(cd "$destination" && pwd)
 app="$destination/AppRivet.app"
 archive="$destination/AppRivet-macOS.zip"
-if [[ -e "$app" || -L "$app" || -e "$archive" || -L "$archive" ]]; then
-  echo "Choose a new output folder. AppRivet packaging does not overwrite $app or $archive." >&2
-  exit 1
-fi
+disk_image="$destination/AppRivet-macOS.dmg"
+for output in "$app" "$archive" "$disk_image"; do
+  if [[ -e "$output" || -L "$output" ]]; then
+    echo "Choose a new output folder. AppRivet packaging does not overwrite $output." >&2
+    exit 1
+  fi
+done
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/apprivet-package.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
@@ -64,6 +67,12 @@ codesign --force --sign - "$staged/Contents/MacOS/apprivet"
 codesign --force --sign - "$staged"
 codesign --verify --deep --strict "$staged"
 ditto -c -k --sequesterRsrc --keepParent "$staged" "$scratch/AppRivet-macOS.zip"
+image_root="$scratch/disk-image"
+mkdir "$image_root"
+ditto "$staged" "$image_root/AppRivet.app"
+ln -s /Applications "$image_root/Applications"
+hdiutil create -quiet -volname AppRivet -fs HFS+ -format UDZO -srcfolder "$image_root" "$scratch/AppRivet-macOS.dmg"
 ditto "$staged" "$app"
 cp "$scratch/AppRivet-macOS.zip" "$archive"
-printf 'Packaged %s\nArchive: %s\n' "$app" "$archive"
+cp "$scratch/AppRivet-macOS.dmg" "$disk_image"
+printf 'Packaged %s\nArchive: %s\nInstaller: %s\n' "$app" "$archive" "$disk_image"

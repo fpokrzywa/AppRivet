@@ -44,7 +44,7 @@ type Envelope struct {
 const help = `AppRivet - independent iOS development toolkit
 
 Usage:
-  apprivet doctor [--json]
+  apprivet doctor [--project-formats] [--json]
   apprivet init NAME [--bundle-id com.example.app] [--brief TEXT | --brief-stdin] [--starter TYPE] [--review] [--json]
   apprivet init NAME (--brief TEXT | --brief-stdin) --provider PROVIDER --model MODEL (--review | --approve HASH) [--json]
   apprivet init NAME --format flutter --platforms ios,android,web,windows,macos,linux [--review] [--json]
@@ -141,7 +141,7 @@ func (a App) Run(ctx context.Context, args []string) int {
 	projectPath, scheme, bundle, simulator := ".", "", "", ""
 	var starterOptions project.StarterOptions
 	briefStdin := false
-	projectForm := false
+	projectForm, projectFormats := false, false
 	var provider, model, approval string
 	var format, platforms, flutterTarget string
 	review := false
@@ -150,6 +150,8 @@ func (a App) Run(ctx context.Context, args []string) int {
 	fromJSON := ""
 	timeout := 15 * time.Minute
 	switch command {
+	case "doctor":
+		fs.BoolVar(&projectFormats, "project-formats", false, "list project formats available on this host")
 	case "devices":
 		fs.BoolVar(&simulators, "simulators", false, "list simulator inventory using simctl")
 		fs.StringVar(&fromJSON, "from-json", "", "inspect an offline tool JSON report")
@@ -241,6 +243,10 @@ func (a App) Run(ctx context.Context, args []string) int {
 	case "version":
 		response.Data = map[string]string{"version": a.Version}
 	case "doctor":
+		if projectFormats {
+			response.Data = project.CreationFormats(a.OS, project.FlutterAvailable())
+			break
+		}
 		report := doctor.Check(ctx, a.OS, a.Arch, a.Runner)
 		response.Data = report
 		if !report.Ready {
@@ -461,6 +467,12 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 	case project.FlutterBuild:
 		if response.OK {
 			fmt.Fprintln(a.Out, "Flutter build:", data.Artifact)
+		}
+	case []string:
+		if len(data) == 0 {
+			fmt.Fprintln(a.Out, "No project formats available on this host. Install the Flutter SDK to get started.")
+		} else {
+			fmt.Fprintln(a.Out, "Available project formats:", strings.Join(data, ", "))
 		}
 	case doctor.Report:
 		fmt.Fprintf(a.Out, "Host: %s/%s\n", data.HostOS, data.HostArch)

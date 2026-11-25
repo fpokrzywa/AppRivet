@@ -11,7 +11,8 @@ import urllib.request
 
 executable = Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix="apprivet-studio-") as home:
-    env = dict(os.environ, HOME=home, USERPROFILE=home)
+    sdk = Path(home, "flutter-test-sdk")
+    env = dict(os.environ, HOME=home, USERPROFILE=home, APPRIVET_FLUTTER_SDK=str(sdk))
     with subprocess.Popen([str(executable), "--serve-only"], env=env, stdout=subprocess.PIPE, text=True) as app:
         try:
             address = urllib.parse.urlsplit(app.stdout.readline().strip())
@@ -22,6 +23,16 @@ with tempfile.TemporaryDirectory(prefix="apprivet-studio-") as home:
             def request(path, body=None):
                 return urllib.request.urlopen(urllib.request.Request(base + path, data=body, headers=headers), timeout=15)
 
+            with request("/api/state") as state:
+                capability = json.load(state)
+                assert capability["project_formats"] == [] and not capability["flutter_sdk"]
+            launcher = sdk / "bin" / ("flutter.bat" if os.name == "nt" else "flutter")
+            launcher.parent.mkdir(parents=True)
+            launcher.write_text("", encoding="utf-8")  # Detection must be passive.
+            launcher.chmod(0o755)
+            with request("/api/state") as state:
+                capability = json.load(state)
+                assert capability["project_formats"] == ["flutter"] and capability["flutter_sdk"]
             with request("/") as page:
                 html = page.read()
                 assert b"Describe your app" in html and b"<style>" in html
@@ -63,4 +74,4 @@ with tempfile.TemporaryDirectory(prefix="apprivet-studio-") as home:
             if app.poll() is None:
                 app.kill()
 
-print("AppRivet browser launcher served the UI, created a SwiftUI project and quit cleanly.")
+print("AppRivet browser launcher detected Flutter, served the UI, created a project and quit cleanly.")

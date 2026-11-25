@@ -140,6 +140,9 @@ struct AppRivetDesktop: App {
                 throw DesktopFailure(message: "The AppRivet emblems are missing from the package.")
             }
             let workflow = try DesktopWorkflow.bundled()
+            guard try workflow.projectFormats() == ["swiftui"] else {
+                throw DesktopFailure(message: "The desktop exposed a format for a missing toolchain.")
+            }
             let parent = URL(fileURLWithPath: arguments[2], isDirectory: true)
             let file = parent.appendingPathComponent("TripBrief.md")
             let brief = "A checklist for a weekend trip." + String(repeating: "\nKeep track of gear.", count: 120_000)
@@ -249,7 +252,9 @@ private final class DesktopModel: ObservableObject {
     @Published var name = "MyFirstApp"
     @Published var brief = ""
     @Published var starter = "blank"
-    @Published var format = "flutter"
+    @Published private(set) var format = ""
+    @Published private(set) var projectFormats = ["swiftui"]
+    @Published private(set) var checkingFormats = false
     @Published var platforms: Set<String> = ["ios", "android", "web"]
     @Published var buildTarget = "web"
     @Published var appearance = WorkspaceAppearance.dark
@@ -276,8 +281,10 @@ private final class DesktopModel: ObservableObject {
     private var webPreview: DesktopWebPreview?
 
     var busy: Bool { activity != nil }
+    var flutterAvailable: Bool { projectFormats.contains("flutter") }
+    var hasSelectedFormat: Bool { projectFormats.contains(format) }
     var canCreate: Bool {
-        guard let parent else { return false }
+        guard hasSelectedFormat, let parent else { return false }
         let projectName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !projectName.isEmpty else { return false }
         if let project {
@@ -290,7 +297,7 @@ private final class DesktopModel: ObservableObject {
     var isFlutterProject: Bool { project?.kind == "flutter-project" }
     var localTargets: [String] { (project?.platforms ?? []).filter { ["ios", "android", "web", "macos"].contains($0) } }
     var canRun: Bool {
-        guard project != nil, trusted else { return false }
+        guard project != nil, trusted, !isFlutterProject || flutterAvailable else { return false }
         return isFlutterProject && buildTarget != "ios" ? localTargets.contains(buildTarget) : selectedSimulator != nil
     }
 
@@ -354,6 +361,7 @@ private final class DesktopModel: ObservableObject {
     }
 
     func reviewProject() {
+        guard canCreate else { return }
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let format = self.format
         let bundleID = format == "flutter" ? "" : bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -375,13 +383,35 @@ private final class DesktopModel: ObservableObject {
     }
 
     func createProject(_ draft: DesktopDraft) {
-        guard let parent else { return }
+        guard projectFormats.contains(draft.format ?? "swiftui"), let parent else { return }
         let key = key(for: draft)
         guard !draft.isAI || key != nil else { return }
         self.draft = nil
         perform(draft.isAI ? "Waiting for the model to generate the source…" : "Creating \(draft.name)…", work: {
             try $0.create(draft: draft, parent: parent, apiKey: key)
         }, done: selectProject)
+    }
+
+    func chooseFormat(_ format: String) {
+        guard projectFormats.contains(format) else { return }
+        self.format = format
+        if format == "flutter" && starter != "ai" { starter = "blank" }
+    }
+
+    func refreshProjectFormats() {
+        guard !checkingFormats else { return }
+        checkingFormats = true
+        Task {
+            defer { checkingFormats = false }
+            do {
+                projectFormats = try await Task.detached(priority: .userInitiated) {
+                    try DesktopWorkflow.bundled().projectFormats()
+                }.value
+            } catch {
+                self.errorMessage = error.localizedDescription
+            }
+            if format.isEmpty { chooseFormat(projectFormats.first ?? "swiftui") }
+        }
     }
 
     private func selectProject(_ project: DesktopProject) {
@@ -520,7 +550,9 @@ private struct DesktopView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("What app do you want to build?").font(.largeTitle.weight(.semibold))
                         .accessibilityAddTraits(.isHeader)
-                    Text("Create a SwiftUI or Flutter project, then build it for your selected platform.")
+                    Text(model.flutterAvailable
+                         ? "Create a SwiftUI or Flutter project, then build it for your selected platform."
+                         : "Create a SwiftUI project, then run it in the iOS Simulator.")
                         .foregroundStyle(.secondary)
                 }
                 projectSection.disabled(model.busy)
@@ -539,6 +571,7 @@ private struct DesktopView: View {
         .onAppear {
             if !loaded {
                 loaded = true
+                model.refreshProjectFormats()
                 model.refreshSimulators()
             }
         }
@@ -559,14 +592,26 @@ private struct DesktopView: View {
                     .accessibilityLabel("Describe your app")
                 Text(model.briefMessage.isEmpty ? "Describe what the app should do, or import a text or Markdown file." : model.briefMessage)
                     .font(.caption).foregroundStyle(.secondary)
-                Picker("Project format", selection: $model.format) {
-                    Text("Flutter (shared code)").tag("flutter")
+                Picker("Project format", selection: Binding(
+                    get: { model.hasSelectedFormat ? model.format : "" },
+                    set: model.chooseFormat
+                )) {
+                    if !model.hasSelectedFormat { Text("Choose a project format").tag("") }
+                    if model.flutterAvailable { Text("Flutter (shared code)").tag("flutter") }
                     Text("SwiftUI (native iOS)").tag("swiftui")
                 }
-                .onChange(of: model.format) { _ in
-                    if model.format == "flutter" && model.starter != "ai" { model.starter = "blank" }
+                if !model.flutterAvailable {
+                    HStack {
+                        if model.checkingFormats {
+                            Text("Checking installed SDKs…")
+                        } else {
+                            Link("Install the Flutter SDK to enable Flutter projects", destination: URL(string: "https://docs.flutter.dev/install/manual")!)
+                            Button("Check again", action: model.refreshProjectFormats)
+                        }
+                    }
+                    .font(.caption)
                 }
-                if model.format == "flutter" {
+                if model.hasSelectedFormat && model.format == "flutter" {
                     Text("App platforms").font(.headline)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), alignment: .leading)]) {
                         ForEach(appPlatforms.map { $0.id }, id: \.self) { id in
@@ -583,34 +628,36 @@ private struct DesktopView: View {
                         .font(.caption)
                 }
                 Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
-                    GridRow {
-                        Text("Creation method")
-                        Picker("Creation method", selection: $model.starter) {
-                            Text("Generate with AI").tag("ai")
-                            if model.format == "flutter" {
-                                Text("Flutter starter").tag("blank")
-                            } else {
-                                Text("Automatic from brief").tag("auto")
-                                Text("Checklist").tag("checklist")
-                                Text("Notes").tag("notes")
-                                Text("Counter").tag("counter")
-                                Text("Blank").tag("blank")
-                            }
-                        }
-                        .labelsHidden()
-                    }
-                    if model.starter == "ai" {
+                    if model.hasSelectedFormat {
                         GridRow {
-                            Text("Selected model")
-                            Text("\(model.selectedProvider.label) · \(model.profiles[model.selectedProvider]?.model ?? "")")
-                                .foregroundStyle(.secondary)
+                            Text("Creation method")
+                            Picker("Creation method", selection: $model.starter) {
+                                Text("Generate with AI").tag("ai")
+                                if model.format == "flutter" {
+                                    Text("Flutter starter").tag("blank")
+                                } else {
+                                    Text("Automatic from brief").tag("auto")
+                                    Text("Checklist").tag("checklist")
+                                    Text("Notes").tag("notes")
+                                    Text("Counter").tag("counter")
+                                    Text("Blank").tag("blank")
+                                }
+                            }
+                            .labelsHidden()
+                        }
+                        if model.starter == "ai" {
+                            GridRow {
+                                Text("Selected model")
+                                Text("\(model.selectedProvider.label) · \(model.profiles[model.selectedProvider]?.model ?? "")")
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                     GridRow {
                         Text("App name")
                         TextField("MyFirstApp", text: $model.name).labelsHidden().accessibilityLabel("App name")
                     }
-                    if model.format != "flutter" {
+                    if model.format == "swiftui" {
                         GridRow {
                             Text("Bundle ID")
                             TextField("Optional", text: $model.bundleID).labelsHidden().accessibilityLabel("Bundle ID")
@@ -654,31 +701,40 @@ private struct DesktopView: View {
     private var simulatorSection: some View {
         GroupBox(model.isFlutterProject ? "Build platform" : "iOS Simulator") {
             VStack(alignment: .leading, spacing: 12) {
-                if model.isFlutterProject {
-                    if model.localTargets.isEmpty {
-                        Text("Open this project on a host with a matching build target.").foregroundStyle(.secondary)
-                    } else {
-                        Picker("Target", selection: $model.buildTarget) {
-                            ForEach(model.localTargets, id: \.self) { target in
-                                Text(platformLabel(target)).tag(target)
-                            }
-                        }
-                    }
-                }
-                if !model.isFlutterProject || model.buildTarget == "ios" {
-                    simulatorPicker
-                }
-                Toggle("I have reviewed this project and trust it to build and run on this Mac", isOn: $model.trusted)
-                    .disabled(model.project == nil)
-                Button(model.isFlutterProject && model.buildTarget != "ios" ? "Build" : "Build & Run", action: model.buildAndRun)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!model.canRun)
-                if let build = model.completedBuild {
-                    buildActions(build)
+                if model.isFlutterProject && !model.flutterAvailable {
+                    Text("Install Flutter to build this project.").foregroundStyle(.secondary)
+                } else {
+                    buildControls
                 }
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var buildControls: some View {
+        if model.isFlutterProject {
+            if model.localTargets.isEmpty {
+                Text("Open this project on a host with a matching build target.").foregroundStyle(.secondary)
+            } else {
+                Picker("Target", selection: $model.buildTarget) {
+                    ForEach(model.localTargets, id: \.self) { target in
+                        Text(platformLabel(target)).tag(target)
+                    }
+                }
+            }
+        }
+        if !model.isFlutterProject || model.buildTarget == "ios" {
+            simulatorPicker
+        }
+        Toggle("I have reviewed this project and trust it to build and run on this Mac", isOn: $model.trusted)
+            .disabled(model.project == nil)
+        Button(model.isFlutterProject && model.buildTarget != "ios" ? "Build" : "Build & Run", action: model.buildAndRun)
+            .buttonStyle(.borderedProminent)
+            .disabled(!model.canRun)
+        if let build = model.completedBuild {
+            buildActions(build)
         }
     }
 

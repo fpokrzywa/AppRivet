@@ -49,7 +49,7 @@
               <input id="name" name="name" placeholder="MyFirstApp" required maxlength="50" pattern="[A-Za-z][A-Za-z0-9]{0,49}" aria-describedby="name-help" spellcheck="false">
               <p class="field-help" id="name-help">Start with a letter. Use letters and numbers.</p>
             </div>
-            <div>
+            <div id="creation-method-settings" hidden>
               <label for="starter">Creation method</label>
               <select id="starter" name="starter">
                 <option value="ai">Generate with AI</option>
@@ -65,12 +65,12 @@
             </div>
           </div>
           <div class="platform-settings">
-            <label for="format">Project format</label>
-            <select id="format" name="format">
-              <option value="flutter">Flutter (shared code)</option>
-              <option value="swiftui">SwiftUI (native iOS)</option>
-            </select>
-            <fieldset id="platform-settings">
+            <div id="format-settings" hidden>
+              <label for="format">Project format</label>
+              <select id="format" name="format"></select>
+            </div>
+            <p id="flutter-sdk-help" class="field-help" hidden>Install the <a href="https://docs.flutter.dev/install/manual" target="_blank" rel="noopener noreferrer">Flutter SDK</a> to enable Flutter projects. Reopen AppRivet if you changed your Path. <button id="check-sdk" type="button" class="quiet">Check again</button></p>
+            <fieldset id="platform-settings" hidden>
               <legend>App platforms</legend>
               <div class="platform-options">
                 <label><input type="checkbox" name="platform" value="ios" checked> iOS</label>
@@ -80,28 +80,27 @@
                 <label><input type="checkbox" name="platform" value="macos"> macOS</label>
                 <label><input type="checkbox" name="platform" value="linux"> Linux</label>
               </div>
-              <p id="flutter-sdk-help" class="field-help" hidden>Install the <a href="https://docs.flutter.dev/install/manual" target="_blank" rel="noopener noreferrer">Flutter SDK</a> to create and build Flutter projects. <button id="check-sdk" type="button" class="quiet">Check again</button></p>
             </fieldset>
           </div>
-          <details id="bundle-settings" class="advanced">
+          <details id="bundle-settings" class="advanced" hidden>
             <summary>Bundle ID</summary>
             <label for="bundle">Custom bundle ID <span class="muted">(optional)</span></label>
             <input id="bundle" name="bundle" placeholder="com.example.myfirstapp" maxlength="255" spellcheck="false">
           </details>
           <div class="form-footer">
-            <button id="submit" type="submit" class="primary">Review prompt</button>
+            <button id="submit" type="submit" class="primary" disabled>Review prompt</button>
             <button id="open-current-folder" type="button" class="quiet" hidden>Open project folder</button>
             <p id="message" role="status" aria-live="polite" class="message">Opening your local workspace…</p>
           </div>
         </fieldset>
       </form>
       <aside class="sidebar" aria-label="Starter and project information">
-        <section class="starter-panel panel" aria-labelledby="starter-heading">
+        <section id="starter-panel" class="starter-panel panel" aria-labelledby="starter-heading" hidden>
           <h2 id="starter-heading">Project output</h2>
-          <p id="starter-title" class="starter-name">Automatic from brief</p>
-          <p id="starter-copy" class="starter-copy">Match a checklist, saved note or counter. Other ideas start with a blank SwiftUI project and the brief.</p>
+          <p id="starter-title" class="starter-name"></p>
+          <p id="starter-copy" class="starter-copy"></p>
           <div class="starter-files">
-            <div><strong id="output-title">Flutter project</strong><span id="output-source">Shared Dart code</span></div>
+            <div><strong id="output-title"></strong><span id="output-source"></span></div>
             <div><strong>APP_BRIEF.md</strong><span>Included when you write a description</span></div>
           </div>
         </section>
@@ -115,7 +114,7 @@
           <ul id="projects" aria-label="Generated projects"></ul>
           <p id="empty" class="muted">Projects you create will appear here.</p>
         </section>
-        <section class="next-step" aria-labelledby="run-heading">
+        <section id="build-panel" class="next-step" aria-labelledby="run-heading" hidden>
           <h2 id="run-heading">Build your app</h2>
           <p id="run-copy">Pick a build target beside a saved project. Targets that require another host use the same project folder.</p>
         </section>

@@ -4,10 +4,21 @@ Use the Windows or Linux launcher in your browser, or open **AppRivet.app** from
 
 ## Windows and Linux
 
-Open the [AppRivet CI run](https://github.com/fpokrzywa/AppRivet/actions/workflows/ci.yml) and download the artifact for your operating system. Sign in to GitHub if prompted. The current Windows and Linux downloads target x86-64 desktop machines.
+The Windows and Linux launchers target x86-64 desktop machines. They open AppRivet in your default browser.
 
-- **Windows**. Extract **AppRivet-Windows-download** and double-click **AppRivet.exe**. It opens your default browser without opening a Terminal window.
-- **Linux**. Extract **AppRivet-Linux-download**, then extract **AppRivet-linux.tar.gz**. Open the **AppRivet** executable from your file manager. Use the file’s permissions dialog to allow execution if the file manager asks. The launcher uses `xdg-open` and requires a graphical desktop and a default browser.
+### Install on Windows
+
+1. Open the [AppRivet CI run](https://github.com/fpokrzywa/AppRivet/actions/workflows/ci.yml) and download **AppRivet-Windows-download**. Sign in to GitHub if prompted.
+2. Right-click the downloaded ZIP and select **Extract All**. If the extracted folder contains **AppRivet-Windows.zip**, extract that file too.
+3. Double-click **AppRivet.exe**. The browser opens your local workspace.
+
+### Install on Linux
+
+Download **AppRivet-Linux-download** from [AppRivet CI](https://github.com/fpokrzywa/AppRivet/actions/workflows/ci.yml), then extract **AppRivet-linux.tar.gz**. Open the **AppRivet** executable from your file manager. Use the file’s permissions dialog to allow execution if the file manager asks. The launcher uses `xdg-open` and requires a graphical desktop and a default browser.
+
+### Project formats and SDK detection
+
+AppRivet shows Flutter when it detects the installed SDK. On Windows and Linux, install Flutter to enable project creation. Choose **Check again** after installing the SDK, or relaunch AppRivet after adding Flutter to Path. The browser lets you reopen and inspect existing projects while you set up the SDK. The Mac app also offers SwiftUI and discovers iOS Simulators through Xcode.
 
 Enter an idea under **Describe your app**, choose **Import brief** for a UTF-8 `.txt`, `.md` or `.markdown` file, or load a sample using **Try an example**. You can edit imported text before continuing. AppRivet does not cap brief length. Provider input limits apply when you send an AI request. Enter a project name, choose a creation method and click **Review prompt**. The browser launcher saves new projects in **AppRivet Projects** in your home folder. **Open Projects Folder** reveals the workspace so you can move the whole generated folder to a Mac. Use **Quit** to stop the launcher. The browser interface listens only on loopback.
 
@@ -23,7 +34,7 @@ Use a different name to **Review as new project** if you want to create a separa
 
 ### One Flutter project, selected platforms
 
-1. Install the official Flutter SDK. AppRivet finds it on `PATH`, in `~/development/flutter` or `~/flutter`, or under the AppRivet toolchain cache. Set `APPRIVET_FLUTTER_SDK` to an absolute SDK directory to use a different location. A desktop launcher may need reopening after a PATH change. [Flutter installation](https://docs.flutter.dev/install/manual)
+1. Install the official Flutter SDK. AppRivet finds it on `PATH`, in `~/develop/flutter`, `~/development/flutter` or `~/flutter`, or under the AppRivet toolchain cache. Set `APPRIVET_FLUTTER_SDK` to an absolute SDK directory to use a different location. A desktop launcher may need reopening after a PATH change. [Flutter installation](https://docs.flutter.dev/install/manual)
 2. Choose **Flutter (shared code)** under **Project format**. Check the platforms you want under **App platforms**, then review and create the project. AppRivet invokes `flutter create` for exactly those platform folders. All targets share `lib/main.dart` and `pubspec.yaml`.
 3. In **Your projects**, select a build target and click **Build**. In the Mac app, select it under **Build platform**. Review the source and confirm you trust the project’s build scripts. Web, Android and desktop builds display their output location. The Mac app can launch the iOS debug build in a selected Simulator.
 
@@ -89,7 +100,7 @@ On a Mac with full Xcode and the Go version in `go.mod`, run this from the repos
 bash scripts/package-macos-app.sh
 ```
 
-The script creates `dist/macos/AppRivet.app` and `dist/macos/AppRivet-macOS.zip`. Use a new output folder as the first argument for a repeat package. The hosted simulator job verifies the archived bundle and invokes the same workflow as the window to create a project, build it, install it and launch it. The smoke test exercises the command path on a hosted Apple silicon Mac. Visual interaction and Intel execution require a Mac with the corresponding setup.
+The script creates `dist/macos/AppRivet.app`, the drag-to-Applications installer `AppRivet-macOS.dmg` and the updater archive `AppRivet-macOS.zip`. Use a new output folder as the first argument for a repeat package. The hosted Mac job mounts the disk image, copies the app, and verifies the bundle signature. It also exercises the packaged app’s Simulator workflow on Apple silicon. Visual interaction and Intel execution require a Mac with the corresponding setup.
 
 See the build results and platform downloads under **Artifacts** in GitHub Actions. [Latest AppRivet CI runs](https://github.com/fpokrzywa/AppRivet/actions/workflows/ci.yml)
 

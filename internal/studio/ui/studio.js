@@ -34,12 +34,15 @@ let reviewedRequest;
 let creating = false;
 let activeProvider = "openai";
 let flutterSDK = false;
+let availableFormats = [];
+let selectedFormat = "";
 let buildSelection;
 let building = false;
 let loadedProject = "";
 let openSequence = 0;
 
 const platformNames = {ios: "iOS", android: "Android", web: "Web", windows: "Windows", macos: "macOS", linux: "Linux"};
+const formatNames = {flutter: "Flutter (shared code)", swiftui: "SwiftUI (native iOS)"};
 
 const providers = {
   openai: {name: "OpenAI", models: [["gpt-6.2-sol", "GPT-6.2 Sol"], ["gpt-6.2-astra", "GPT-6.2 Astra"]]},
@@ -73,6 +76,7 @@ function show(element, text, error = false) {
 
 function updateBrief() {
   byID("brief-count").textContent = brief.value.length.toLocaleString() + " characters";
+  if (!format.value) return;
   const isFlutter = format.value === "flutter";
   const [title, description] = isFlutter
     ? starter.value === "ai"
@@ -87,28 +91,45 @@ function updateBrief() {
   byID("run-copy").textContent = isFlutter
     ? "Pick a build target beside a saved project. Targets that require another host use the same project folder."
     : "On your Mac, open the project in AppRivet and choose Build & Run.";
-  byID("flutter-sdk-help").hidden = flutterSDK;
   const settings = profiles[activeProvider];
   byID("selected-model").textContent = starter.value === "ai"
     ? providers[activeProvider].name + " · " + settings.model + (settings.key ? "" : " · Add a key in Admin")
     : "";
 }
 
+function showFormats() {
+  if (!selectedFormat) selectedFormat = availableFormats[0] || "";
+  const options = availableFormats.map(id => new Option(formatNames[id], id));
+  if (!availableFormats.includes(selectedFormat)) {
+    const placeholder = new Option("Choose a project format", "");
+    placeholder.disabled = true;
+    options.unshift(placeholder);
+  }
+  format.replaceChildren(...options);
+  format.value = availableFormats.includes(selectedFormat) ? selectedFormat : "";
+  byID("format-settings").hidden = availableFormats.length === 0;
+  updateFormat();
+}
+
 function updateFormat() {
   const isFlutter = format.value === "flutter";
   byID("platform-settings").hidden = !isFlutter;
-  byID("bundle-settings").hidden = isFlutter;
+  byID("bundle-settings").hidden = format.value !== "swiftui";
+  byID("creation-method-settings").hidden = !format.value;
+  byID("starter-panel").hidden = !format.value;
+  byID("build-panel").hidden = !format.value;
   for (const name of ["auto", "checklist", "notes", "counter"]) {
     starter.querySelector('option[value="' + name + '"]').hidden = isFlutter;
   }
   starter.querySelector('option[value="blank"]').textContent = isFlutter ? "Flutter starter" : "Blank";
-  if (starter.value !== "ai") starter.value = isFlutter ? "blank" : "auto";
+  if (isFlutter && starter.value !== "ai") starter.value = "blank";
   updateBrief();
+  updateLoadedProject();
 }
 
 function updateLoadedProject() {
   const sameName = nameField.value.trim().toLowerCase() === loadedProject.toLowerCase();
-  submit.disabled = Boolean(loadedProject && sameName);
+  submit.disabled = !format.value || Boolean(loadedProject && sameName);
   submit.textContent = loadedProject ? "Review as new project" : "Review prompt";
   openCurrentFolder.hidden = !loadedProject;
   for (const button of projects.querySelectorAll("[data-project-name]")) {
@@ -126,8 +147,8 @@ async function reopenProject(name) {
     nameField.value = settings.name;
     brief.value = settings.brief || "";
     byID("bundle").value = settings.bundle_id || "";
-    format.value = settings.format;
-    updateFormat();
+    selectedFormat = settings.format;
+    showFormats();
     starter.value = settings.starter;
     for (const input of form.querySelectorAll('input[name="platform"]')) {
       input.checked = settings.platforms.includes(input.value);
@@ -139,7 +160,7 @@ async function reopenProject(name) {
     show(importStatus, "");
     updateBrief();
     updateLoadedProject();
-    show(message, "Opened " + name + ". Use a different project name to create a new copy.");
+    show(message, "Opened " + name + (format.value ? ". Use a different project name to create a new copy." : "."));
     brief.focus();
   } catch (error) {
     if (sequence === openSequence) show(message, error.message, true);
@@ -169,7 +190,9 @@ async function request(path, body) {
 async function refresh() {
   const state = await request("/api/state");
   flutterSDK = state.flutter_sdk;
-  updateBrief();
+  availableFormats = state.project_formats.filter(id => Object.hasOwn(formatNames, id));
+  byID("flutter-sdk-help").hidden = flutterSDK;
+  showFormats();
   byID("workspace-path").textContent = state.workspace;
   byID("empty").hidden = state.projects.length !== 0;
   byID("project-instructions").hidden = state.projects.length === 0;
@@ -359,7 +382,10 @@ byID("admin-form").addEventListener("submit", event => {
 
 brief.addEventListener("input", updateBrief);
 starter.addEventListener("change", updateBrief);
-format.addEventListener("change", updateFormat);
+format.addEventListener("change", () => {
+  selectedFormat = format.value;
+  updateFormat();
+});
 byID("check-sdk").addEventListener("click", () => refresh().catch(error => show(message, error.message, true)));
 byID("go-projects").addEventListener("click", () => {
   const heading = byID("projects-heading");

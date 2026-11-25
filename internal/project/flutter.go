@@ -20,6 +20,18 @@ const FlutterBuildTimeout = 15 * time.Minute
 
 func FlutterAvailable() bool { return flutterExecutable() != "" }
 
+// CreationFormats reports the formats to present on this host.
+func CreationFormats(host string, flutter bool) []string {
+	formats := []string{}
+	if flutter {
+		formats = append(formats, "flutter")
+	}
+	if host == "darwin" {
+		formats = append(formats, "swiftui")
+	}
+	return formats
+}
+
 func flutterExecutable() string {
 	file := "flutter"
 	if runtime.GOOS == "windows" {
@@ -28,7 +40,7 @@ func flutterExecutable() string {
 	if sdk := os.Getenv("APPRIVET_FLUTTER_SDK"); sdk != "" {
 		if filepath.IsAbs(sdk) {
 			p := filepath.Join(sdk, "bin", file)
-			if regularFile(p) {
+			if flutterLauncher(p) {
 				return p
 			}
 		}
@@ -44,17 +56,23 @@ func flutterExecutable() string {
 		candidates = append(candidates, filepath.Join(cache, "AppRivet", "toolchains", "flutter", "bin", file))
 	}
 	if home != "" {
-		candidates = append(candidates, filepath.Join(home, "development", "flutter", "bin", file), filepath.Join(home, "flutter", "bin", file))
+		candidates = append(candidates, filepath.Join(home, "develop", "flutter", "bin", file),
+			filepath.Join(home, "development", "flutter", "bin", file), filepath.Join(home, "flutter", "bin", file))
 	}
 	if runtime.GOOS == "darwin" {
 		candidates = append(candidates, "/opt/homebrew/bin/flutter", "/usr/local/bin/flutter")
 	}
 	for _, path := range candidates {
-		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+		if flutterLauncher(path) {
 			return path
 		}
 	}
 	return ""
+}
+
+func flutterLauncher(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular() && (runtime.GOOS == "windows" || info.Mode().Perm()&0111 != 0)
 }
 
 func regularFile(path string) bool {

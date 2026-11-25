@@ -181,6 +181,10 @@ struct DesktopWorkflow: Sendable {
         try invoke(["inspect", "--form", "--project", url.path], fullOutput: true)
     }
 
+    func projectFormats() throws -> [String] {
+        try invoke(["doctor", "--project-formats"])
+    }
+
     func simulators() throws -> [DesktopSimulator] {
         let inventory: SimulatorInventory = try invoke(["devices", "--simulators", "--timeout", "5m"], timeout: 310)
         return inventory.devices.filter { $0.platform == "iOS" && $0.available == true && UUID(uuidString: $0.id) != nil }

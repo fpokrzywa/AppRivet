@@ -4,6 +4,8 @@ AppRivet creates Flutter apps for selected mobile, web and desktop platforms fro
 
 **[Install AppRivet on your MacBook](docs/DESKTOP.md#macos)** to download the app, generate a project from a brief, and run it in the iOS Simulator.
 
+**[Install AppRivet on Windows](docs/DESKTOP.md#install-on-windows)** to open the local browser workspace and build Flutter projects when the SDK is installed.
+
 Status: Milestone 2 device discovery is implemented with synthetic-fixture and offline tests. The repository owner made AppRivet public on 2026-11-22, removing the prior CI billing admission blocker. See [project status](docs/STATUS.md) for current live Mac evidence and remaining physical-device validation. This is an early engineering preview, not a production signing service.
 
 ## Principles

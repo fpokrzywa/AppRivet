@@ -96,6 +96,8 @@ jobs:
           if [ "$RUNNER_OS" = Windows ]; then
             go build -trimpath -ldflags=-H=windowsgui -o "$DEST/AppRivet.exe" ./cmd/apprivet-studio
             python .github/scripts/studio-smoke.py "$DEST/AppRivet.exe"
+            python -m zipfile -c "$DEST/AppRivet-Windows.zip" "$DEST/AppRivet.exe"
+            python -m zipfile -t "$DEST/AppRivet-Windows.zip"
           else
             go build -trimpath -o "$DEST/AppRivet" ./cmd/apprivet-studio
             python3 .github/scripts/studio-smoke.py "$DEST/AppRivet"
@@ -107,7 +109,7 @@ jobs:
         with:
           name: AppRivet-${{ runner.os }}-download
           path: |
-            ${{ runner.temp }}/frontend/AppRivet.exe
+            ${{ runner.temp }}/frontend/AppRivet-Windows.zip
             ${{ runner.temp }}/frontend/AppRivet-linux.tar.gz
           if-no-files-found: error
 
@@ -207,6 +209,18 @@ jobs:
           cache: false
       - name: Package the macOS frontend
         run: bash scripts/package-macos-app.sh "$RUNNER_TEMP/desktop-package"
+      - name: Verify the drag-to-Applications installer
+        run: |
+          IMAGE="$RUNNER_TEMP/desktop-package/AppRivet-macOS.dmg"
+          MOUNT="$RUNNER_TEMP/desktop-dmg"
+          hdiutil verify "$IMAGE"
+          mkdir "$MOUNT"
+          hdiutil attach "$IMAGE" -nobrowse -readonly -mountpoint "$MOUNT"
+          trap 'hdiutil detach "$MOUNT"' EXIT
+          test "$(readlink "$MOUNT/Applications")" = /Applications
+          mkdir "$RUNNER_TEMP/desktop-install"
+          ditto "$MOUNT/AppRivet.app" "$RUNNER_TEMP/desktop-install/AppRivet.app"
+          codesign --verify --deep --strict "$RUNNER_TEMP/desktop-install/AppRivet.app"
       - name: Create, build and launch through the packaged frontend
         timeout-minutes: 23
         run: |
@@ -221,11 +235,13 @@ jobs:
           xcrun lipo "$APP/Contents/MacOS/apprivet" -verify_arch arm64 x86_64
           xcrun lipo "$APP/Contents/Frameworks/Sparkle.framework/Sparkle" -verify_arch arm64 x86_64
           mkdir "$RUNNER_TEMP/desktop-smoke"
-          "$APP/Contents/MacOS/AppRivetDesktop" --smoke-test "$RUNNER_TEMP/desktop-smoke"
+          APPRIVET_FLUTTER_SDK="$RUNNER_TEMP/missing-sdk" "$APP/Contents/MacOS/AppRivetDesktop" --smoke-test "$RUNNER_TEMP/desktop-smoke"
       - name: Upload the macOS app download
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: AppRivet-desktop-download
-          path: ${{ runner.temp }}/desktop-package/AppRivet-macOS.zip
+          path: |
+            ${{ runner.temp }}/desktop-package/AppRivet-macOS.dmg
+            ${{ runner.temp }}/desktop-package/AppRivet-macOS.zip
           if-no-files-found: error

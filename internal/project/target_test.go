@@ -9,6 +9,25 @@ import (
 	"testing"
 )
 
+func TestCreationFormats(t *testing.T) {
+	for _, test := range []struct {
+		host    string
+		flutter bool
+		want    []string
+	}{
+		{"windows", false, []string{}},
+		{"windows", true, []string{"flutter"}},
+		{"darwin", false, []string{"swiftui"}},
+		{"darwin", true, []string{"flutter", "swiftui"}},
+		{"linux", false, []string{}},
+		{"linux", true, []string{"flutter"}},
+	} {
+		if got := CreationFormats(test.host, test.flutter); !slices.Equal(got, test.want) {
+			t.Errorf("%s with Flutter=%v: formats %v, want %v", test.host, test.flutter, got, test.want)
+		}
+	}
+}
+
 func TestFlutterReviewBindsSelectedPlatforms(t *testing.T) {
 	options := StarterOptions{Brief: "A travel planner that works on my laptop and phone."}
 	selected := TargetOptions{Format: "flutter", Platforms: []string{"linux", "ios", "web"}}
