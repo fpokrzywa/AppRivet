@@ -161,6 +161,10 @@ func TestStudioReviewsAIRequestBeforeCallingProvider(t *testing.T) {
 	changed = input
 	changed.Provider = "openai"
 	send("/api/create", changed, http.StatusBadRequest)
+	changed = input
+	changed.Format = "flutter"
+	changed.Platforms = []string{"web", "linux"}
+	send("/api/create", changed, http.StatusBadRequest)
 	if _, err := os.Stat(workspace); !os.IsNotExist(err) || calls != 0 {
 		t.Fatalf("review or unapproved requests had side effects: calls=%d, stat=%v", calls, err)
 	}

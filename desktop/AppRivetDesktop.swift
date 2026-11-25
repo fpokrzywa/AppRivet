@@ -21,6 +21,15 @@ private struct AIProfile {
     var key = ""
 }
 
+private let appPlatforms: [(id: String, label: String)] = [
+    ("ios", "iOS"), ("android", "Android"), ("web", "Web"),
+    ("windows", "Windows"), ("macos", "macOS"), ("linux", "Linux"),
+]
+
+private func platformLabel(_ id: String) -> String {
+    appPlatforms.first { $0.id == id }?.label ?? id
+}
+
 @MainActor
 private func chooseTextFile(title: String, extensions: [String]) -> URL? {
     let panel = NSOpenPanel()
@@ -80,6 +89,12 @@ struct AppRivetDesktop: App {
             guard aiDraft.prompt.contains(brief), aiDraft.approval?.count == 64, aiDraft.provider == "anthropic" else {
                 throw DesktopFailure(message: "The AI prompt review did not preserve the imported brief and target.")
             }
+            let sharedDraft = try workflow.review(name: "DesktopShared", bundleID: "", brief: imported, starter: "ai",
+                                                  provider: "anthropic", model: "claude-opus-5-5", format: "flutter", platforms: ["web", "linux"])
+            guard sharedDraft.platforms == ["web", "linux"], sharedDraft.format == "flutter",
+                  sharedDraft.prompt.contains("lib/main.dart") else {
+                throw DesktopFailure(message: "The shared project review did not preserve the selected Flutter platforms.")
+            }
             let draft = try workflow.review(name: "DesktopSmoke", bundleID: "org.example.apprivetdesktop", brief: imported,
                                             starter: "auto", provider: "", model: "")
             Self.smokeProgress("Creating the SwiftUI test project…")
@@ -121,7 +136,10 @@ struct AppRivetDesktop: App {
 private final class DesktopModel: ObservableObject {
     @Published var name = "MyFirstApp"
     @Published var brief = ""
-    @Published var starter = "auto"
+    @Published var starter = "blank"
+    @Published var format = "flutter"
+    @Published var platforms: Set<String> = ["ios", "android", "web"]
+    @Published var buildTarget = "web"
     @Published var bundleID = ""
     @Published var parent: URL?
     @Published var selectedSimulator: String?
@@ -135,14 +153,22 @@ private final class DesktopModel: ObservableObject {
     ]
     @Published private(set) var project: DesktopProject?
     @Published private(set) var simulators: [DesktopSimulator] = []
+    @Published private(set) var loadingSimulators = false
+    @Published private(set) var simulatorMessage = "No iOS simulators available"
     @Published private(set) var activity: String?
     @Published private(set) var status = "Choose a folder to create your first app."
     @Published private(set) var errorMessage: String?
     @Published private(set) var log = ""
+    @Published private(set) var buildArtifact: URL?
 
     var busy: Bool { activity != nil }
     var canCreate: Bool { parent != nil && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    var canRun: Bool { project != nil && selectedSimulator != nil && trusted }
+    var isFlutterProject: Bool { project?.kind == "flutter-project" }
+    var localTargets: [String] { (project?.platforms ?? []).filter { ["ios", "android", "web", "macos"].contains($0) } }
+    var canRun: Bool {
+        guard project != nil, trusted else { return false }
+        return isFlutterProject && buildTarget != "ios" ? localTargets.contains(buildTarget) : selectedSimulator != nil
+    }
 
     func chooseBrief() {
         guard let file = chooseTextFile(title: "Import app brief", extensions: ["txt", "md", "markdown"]) else { return }
@@ -185,13 +211,16 @@ private final class DesktopModel: ObservableObject {
 
     func reviewProject() {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let bundleID = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let format = self.format
+        let bundleID = format == "flutter" ? "" : bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
         let brief = self.brief
         let starter = self.starter
         let provider = selectedProvider
         let model = profiles[provider]?.model ?? ""
+        let platforms = format == "flutter" ? appPlatforms.map { $0.id }.filter { self.platforms.contains($0) } : ["ios"]
         perform("Validating the app brief…", work: {
-            try $0.review(name: name, bundleID: bundleID, brief: brief, starter: starter, provider: provider.rawValue, model: model)
+            try $0.review(name: name, bundleID: bundleID, brief: brief, starter: starter, provider: provider.rawValue, model: model,
+                          format: format, platforms: platforms)
         }) { self.draft = $0 }
     }
 
@@ -206,7 +235,7 @@ private final class DesktopModel: ObservableObject {
         let key = key(for: draft)
         guard !draft.isAI || key != nil else { return }
         self.draft = nil
-        perform(draft.isAI ? "Waiting for the model to generate SwiftUI…" : "Creating \(draft.name)…", work: {
+        perform(draft.isAI ? "Waiting for the model to generate the source…" : "Creating \(draft.name)…", work: {
             try $0.create(draft: draft, parent: parent, apiKey: key)
         }, done: selectProject)
     }
@@ -214,7 +243,11 @@ private final class DesktopModel: ObservableObject {
     private func selectProject(_ project: DesktopProject) {
         self.project = project
         trusted = false
-        if project.starter == "ai" {
+        buildArtifact = nil
+        if isFlutterProject {
+            buildTarget = localTargets.contains("web") ? "web" : localTargets.first ?? ""
+            status = "\(project.suggestedScheme) is ready for source review and building."
+        } else if project.starter == "ai" {
             status = "\(project.suggestedScheme) is ready for source review in Xcode."
         } else if let starter = project.starter {
             status = "\(project.suggestedScheme) was created with the \(starter) starter."
@@ -224,24 +257,41 @@ private final class DesktopModel: ObservableObject {
     }
 
     func refreshSimulators() {
-        perform("Looking for simulators…", work: { try $0.simulators() }) { devices in
-            self.simulators = devices
-            if !devices.contains(where: { $0.id == self.selectedSimulator }) {
-                self.selectedSimulator = (devices.first { $0.name.hasPrefix("iPhone") } ?? devices.first)?.id
-            }
-            if devices.isEmpty {
-                self.status = "Install an iOS Simulator runtime in Xcode Settings, then refresh."
-            } else if let project = self.project {
-                self.status = "\(project.suggestedScheme) is ready to build."
-            } else {
-                self.status = "Create or open an AppRivet project to get started."
+        guard !loadingSimulators else { return }
+        loadingSimulators = true
+        simulatorMessage = "Looking for iOS simulators…"
+        Task {
+            defer { loadingSimulators = false }
+            do {
+                let devices = try await Task.detached(priority: .userInitiated) { try DesktopWorkflow.bundled().simulators() }.value
+                self.simulators = devices
+                if !devices.contains(where: { $0.id == self.selectedSimulator }) {
+                    self.selectedSimulator = (devices.first { $0.name.hasPrefix("iPhone") } ?? devices.first)?.id
+                }
+                if devices.isEmpty {
+                    simulatorMessage = "Install an iOS runtime in Xcode Settings, then refresh."
+                }
+            } catch {
+                simulatorMessage = error.localizedDescription
             }
         }
     }
 
     func buildAndRun() {
-        guard let project, let simulator = simulators.first(where: { $0.id == selectedSimulator }), trusted else { return }
+        guard let project, canRun else { return }
         let trusted = self.trusted
+        if isFlutterProject && buildTarget != "ios" {
+            let target = buildTarget
+            buildArtifact = nil
+            perform("Building \(project.suggestedScheme) for \(platformLabel(target))…", work: {
+                try $0.buildFlutter(project: project, target: target, trusted: trusted)
+            }) { result in
+                self.buildArtifact = URL(fileURLWithPath: result.artifact)
+                self.status = "The \(platformLabel(target)) build is ready."
+            }
+            return
+        }
+        guard let simulator = simulators.first(where: { $0.id == selectedSimulator }) else { return }
         perform("Building \(project.suggestedScheme) and starting \(simulator.name)…", work: {
             try $0.buildAndRun(project: project, simulator: simulator, trusted: trusted, showSimulator: true) { message in
                 Task { @MainActor in if self.busy { self.activity = message } }
@@ -329,16 +379,43 @@ private struct DesktopView: View {
                     .accessibilityLabel("Describe your app")
                 Text(model.briefMessage.isEmpty ? "Describe what the app should do, or import a text or Markdown file." : model.briefMessage)
                     .font(.caption).foregroundStyle(.secondary)
+                Picker("Project format", selection: $model.format) {
+                    Text("Flutter (shared code)").tag("flutter")
+                    Text("SwiftUI (native iOS)").tag("swiftui")
+                }
+                .onChange(of: model.format) { _ in
+                    if model.starter != "ai" { model.starter = model.format == "flutter" ? "blank" : "auto" }
+                }
+                if model.format == "flutter" {
+                    Text("App platforms").font(.headline)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), alignment: .leading)]) {
+                        ForEach(appPlatforms.map { $0.id }, id: \.self) { id in
+                            Toggle(platformLabel(id), isOn: Binding(
+                                get: { model.platforms.contains(id) },
+                                set: { checked in
+                                    if checked { model.platforms.insert(id) } else { model.platforms.remove(id) }
+                                }
+                            ))
+                            .toggleStyle(.checkbox)
+                        }
+                    }
+                    Link("Flutter SDK and platform setup", destination: URL(string: "https://docs.flutter.dev/install/manual")!)
+                        .font(.caption)
+                }
                 Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                     GridRow {
                         Text("Creation method")
                         Picker("Creation method", selection: $model.starter) {
                             Text("Generate with AI").tag("ai")
-                            Text("Automatic from brief").tag("auto")
-                            Text("Checklist").tag("checklist")
-                            Text("Notes").tag("notes")
-                            Text("Counter").tag("counter")
-                            Text("Blank").tag("blank")
+                            if model.format == "flutter" {
+                                Text("Flutter starter").tag("blank")
+                            } else {
+                                Text("Automatic from brief").tag("auto")
+                                Text("Checklist").tag("checklist")
+                                Text("Notes").tag("notes")
+                                Text("Counter").tag("counter")
+                                Text("Blank").tag("blank")
+                            }
                         }
                         .labelsHidden()
                     }
@@ -353,9 +430,11 @@ private struct DesktopView: View {
                         Text("App name")
                         TextField("MyFirstApp", text: $model.name).labelsHidden().accessibilityLabel("App name")
                     }
-                    GridRow {
-                        Text("Bundle ID")
-                        TextField("Optional", text: $model.bundleID).labelsHidden().accessibilityLabel("Bundle ID")
+                    if model.format != "flutter" {
+                        GridRow {
+                            Text("Bundle ID")
+                            TextField("Optional", text: $model.bundleID).labelsHidden().accessibilityLabel("Bundle ID")
+                        }
                     }
                     GridRow {
                         Text("Save in")
@@ -380,7 +459,7 @@ private struct DesktopView: View {
                                 .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                         }
                         Spacer()
-                        Button("Open in Xcode") {
+                        Button(project.kind == "flutter-project" ? "Open project folder" : "Open in Xcode") {
                             NSWorkspace.shared.open(URL(fileURLWithPath: project.path, isDirectory: true))
                         }
                     }
@@ -392,29 +471,49 @@ private struct DesktopView: View {
     }
 
     private var simulatorSection: some View {
-        GroupBox("iOS Simulator") {
+        GroupBox(model.isFlutterProject ? "Build platform" : "iOS Simulator") {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    if model.simulators.isEmpty {
-                        Text("No iOS simulators available").foregroundStyle(.secondary)
+                if model.isFlutterProject {
+                    if model.localTargets.isEmpty {
+                        Text("Open this project on a host with a matching build target.").foregroundStyle(.secondary)
                     } else {
-                        Picker("Device", selection: $model.selectedSimulator) {
-                            ForEach(model.simulators) { device in
-                                Text(verbatim: device.label).tag(Optional(device.id))
+                        Picker("Target", selection: $model.buildTarget) {
+                            ForEach(model.localTargets, id: \.self) { target in
+                                Text(platformLabel(target)).tag(target)
                             }
                         }
                     }
-                    Spacer()
-                    Button("Refresh", action: model.refreshSimulators)
+                }
+                if !model.isFlutterProject || model.buildTarget == "ios" {
+                    simulatorPicker
                 }
                 Toggle("I have reviewed this project and trust it to build and run on this Mac", isOn: $model.trusted)
                     .disabled(model.project == nil)
-                Button("Build & Run", action: model.buildAndRun)
+                Button(model.isFlutterProject && model.buildTarget != "ios" ? "Build" : "Build & Run", action: model.buildAndRun)
                     .buttonStyle(.borderedProminent)
                     .disabled(!model.canRun)
+                if let artifact = model.buildArtifact {
+                    Button("Reveal build in Finder") { NSWorkspace.shared.activateFileViewerSelecting([artifact]) }
+                }
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var simulatorPicker: some View {
+        HStack {
+            if model.simulators.isEmpty {
+                Text(model.simulatorMessage).foregroundStyle(.secondary)
+            } else {
+                Picker("Device", selection: $model.selectedSimulator) {
+                    ForEach(model.simulators) { device in
+                        Text(verbatim: device.label).tag(Optional(device.id))
+                    }
+                }
+            }
+            Spacer()
+            Button("Refresh", action: model.refreshSimulators).disabled(model.loadingSimulators)
         }
     }
 
@@ -453,8 +552,11 @@ private struct DesktopView: View {
                 Text("Destination: \(target) · \(modelID). Approval sends this prompt and uses your API account.")
                     .foregroundStyle(.secondary)
             } else {
-                Text("Local project · \(draft.starter.capitalized) starter")
+                Text(draft.format == "flutter" ? "Local Flutter starter" : "Local project · \(draft.starter.capitalized) starter")
                     .foregroundStyle(.secondary)
+            }
+            if let platforms = draft.platforms {
+                Text(platforms.map(platformLabel).joined(separator: ", ")).foregroundStyle(.secondary)
             }
             ScrollView {
                 Text(verbatim: draft.prompt)
@@ -476,7 +578,9 @@ private struct DesktopView: View {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(draft.prompt, forType: .string)
                 }
-                Button(draft.isAI ? "Send & create project" : "Create SwiftUI starter") { model.createProject(draft) }
+                Button(draft.isAI ? "Send & create project" : (draft.format == "flutter" ? "Create Flutter project" : "Create SwiftUI starter")) {
+                    model.createProject(draft)
+                }
                     .buttonStyle(.borderedProminent)
                     .disabled(!ready)
             }

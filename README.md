@@ -1,6 +1,6 @@
 # AppRivet
 
-An independent iOS development CLI with environment diagnostics, SwiftUI project creation, simulator builds/tests, and read-only device discovery. Windows and Linux can prepare projects and inspect saved device reports; iOS builds and live discovery use official Xcode tools on a Mac. Remote Mac execution is planned, not implemented.
+AppRivet creates Flutter apps for selected mobile, web and desktop platforms from a shared Dart codebase. It also supports native SwiftUI projects, iOS Simulator builds and tests, and read-only Apple device discovery. Flutter projects build with the official SDK and the tools for each selected platform. iOS builds and live discovery use Xcode on a Mac.
 
 Status: Milestone 2 device discovery is implemented with synthetic-fixture and offline tests. The repository owner made AppRivet public on 2026-11-22, removing the prior CI billing admission blocker. See [project status](docs/STATUS.md) for current live Mac evidence and remaining physical-device validation. This is an early engineering preview, not a production signing service.
 
@@ -14,7 +14,7 @@ Status: Milestone 2 device discovery is implemented with synthetic-fixture and o
 
 ## Development
 
-The AppRivet frontends let you write or import an app brief, review the exact prompt, and generate SwiftUI source with OpenAI or Anthropic. Offline starters also work on Windows, Linux, and macOS. The Mac app builds and runs projects on a selected iOS Simulator. [Download and setup guide](docs/DESKTOP.md)
+The AppRivet frontends let you write or import an app brief, select platforms, review the exact prompt and generate Dart or SwiftUI source with OpenAI or Anthropic. Offline starters work without a model account. [Download and setup guide](docs/DESKTOP.md)
 
 Install Go from [go.dev](https://go.dev/dl/). The tested version and commands are recorded in [verification](docs/VERIFICATION.md).
 

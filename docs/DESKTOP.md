@@ -1,6 +1,6 @@
 # AppRivet frontends
 
-Use the Windows or Linux launcher to create a SwiftUI project in your browser. On macOS, open **AppRivet.app** from Finder to create, build, and run the project in an iOS Simulator. The Mac app includes the AppRivet command-line tool. The simulator flow uses unsigned builds and works without a phone or developer signing team.
+Use the Windows or Linux launcher in your browser, or open **AppRivet.app** from Finder on macOS. Choose Flutter for one shared project across mobile, web, and desktop, or SwiftUI for native iOS. The Mac app includes the AppRivet command-line tool and integrates with Xcode’s iOS Simulator.
 
 ## Windows and Linux
 
@@ -11,14 +11,31 @@ Open the [AppRivet CI run](https://github.com/fpokrzywa/AppRivet/actions/workflo
 
 Enter an idea under **Describe your app**, choose **Import brief** for a UTF-8 `.txt`, `.md` or `.markdown` file, or load a sample using **Try an example**. You can edit imported text before continuing. AppRivet does not cap brief length. Provider input limits apply when you send an AI request. Enter a project name, choose a creation method and click **Review prompt**. The browser launcher saves new projects in **AppRivet Projects** in your home folder. **Open Projects Folder** reveals the workspace so you can move the whole generated folder to a Mac. Use **Quit** to stop the launcher. The browser interface listens only on loopback.
 
-With **Automatic from brief**, AppRivet looks for checklist, notes, or counter terms. It creates a blank SwiftUI starter when there is no single match. The **Creation method** picker can set a starter explicitly. AppRivet saves your description in `APP_BRIEF.md`.
+For SwiftUI, **Automatic from brief** looks for checklist, notes, or counter terms and uses a blank starter when there is no single match. Flutter offers an offline starter or AI generation. AppRivet saves your description in `APP_BRIEF.md`.
+
+### One Flutter project, selected platforms
+
+1. Install the official Flutter SDK. AppRivet finds it on `PATH`, in `~/development/flutter` or `~/flutter`, or under the AppRivet toolchain cache. Set `APPRIVET_FLUTTER_SDK` to an absolute SDK directory to use a different location. A desktop launcher may need reopening after a PATH change. [Flutter installation](https://docs.flutter.dev/install/manual)
+2. Choose **Flutter (shared code)** under **Project format**. Check the platforms you want under **App platforms**, then review and create the project. AppRivet invokes `flutter create` for exactly those platform folders. All targets share `lib/main.dart` and `pubspec.yaml`.
+3. In **Your projects**, select a build target and click **Build**. In the Mac app, select it under **Build platform**. Review the source and confirm you trust the project’s build scripts. Web, Android and desktop builds display their output location. The Mac app can launch the iOS debug build in a selected Simulator.
+
+| Target | Build host and tools |
+| --- | --- |
+| Web | Windows, macOS, or Linux with Flutter |
+| Android | Windows, macOS, or Linux with Flutter and Android SDK tools |
+| iOS Simulator | macOS with Flutter, Xcode, and an installed iOS runtime |
+| Windows | Windows with Flutter and Visual Studio C++ desktop tools |
+| macOS | macOS with Flutter and Xcode |
+| Linux | Linux with Flutter and desktop development libraries |
+
+Copy the complete Flutter project folder to a matching host to build another target. AppRivet creates web output, debug Android APKs, desktop builds, and iOS Simulator builds. Store signing and publication are separate. [Official target setup](https://docs.flutter.dev/platform-integration)
 
 ### Generate with AI
 
 1. Open **Admin** between **Your projects** and **Quit**. Choose OpenAI or Anthropic and a model. Presets include GPT-6.2 Sol, GPT-6.2 Astra, Claude Opus 5.5 and Claude Fable 5.2. **Custom model ID** accepts another model on the selected provider that supports structured output.
 2. Paste a key or choose **Import key file** to read a `.txt` file containing one key. Use **Save settings** to select that provider and model and add or replace its key. Keys are held in memory separately for each provider. Closing or reloading the browser tab, or quitting the Mac app, clears the session settings. Provider API usage is billed to your API account.
-3. Under **Creation method**, choose **Generate with AI**, then **Review prompt**. Check the provider, model, and full text, or copy the prompt. The review validates the input format and project settings locally. **Send & create project** sends that exact text to the selected API and puts the returned SwiftUI source into a new Xcode project. The brief file itself stays on your machine.
-4. Open the new project on your Mac. Review the generated Swift source in Xcode before using **Build & Run**. Generation returns one Swift source file inside a fixed AppRivet project. Xcode compiles that source and reports any build errors. Generated apps can require source fixes or additional files for features beyond one self-contained SwiftUI view.
+3. Under **Creation method**, choose **Generate with AI**, then **Review prompt**. Check the provider, model, selected targets and full text, or copy the prompt. **Send & create project** sends that exact text and saves the returned SwiftUI or Dart source. AppRivet reads the brief file locally and sends the reviewed text.
+4. Review the generated source before building. Generation fills one source file in a fixed project. The compiler reports any errors. Complex apps can require source fixes, additional files, or target-specific integrations.
 
 The automated provider tests use mock HTTP responses. Live generation requires an API key with access to the selected model and is a separate validation step.
 

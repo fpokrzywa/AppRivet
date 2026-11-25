@@ -47,6 +47,8 @@ Usage:
   apprivet doctor [--json]
   apprivet init NAME [--bundle-id com.example.app] [--brief TEXT | --brief-stdin] [--starter TYPE] [--review] [--json]
   apprivet init NAME (--brief TEXT | --brief-stdin) --provider PROVIDER --model MODEL (--review | --approve HASH) [--json]
+  apprivet init NAME --format flutter --platforms ios,android,web,windows,macos,linux [--review] [--json]
+  apprivet flutter-build --project PATH --target PLATFORM --trust-project [--json]
   apprivet inspect [--project PATH] [--json]
   apprivet build [--project PATH] [--scheme NAME] --trust-project [--json]
   apprivet test [--project PATH] [--scheme NAME] --simulator UUID --trust-project [--json]
@@ -128,7 +130,7 @@ func (a App) Run(ctx context.Context, args []string) int {
 	if command == "install" || command == "launch" {
 		return fail("not_implemented", command+" is planned after Milestone 1; use Xcode's official device workflow", 3)
 	}
-	if command != "doctor" && command != "init" && command != "inspect" && command != "build" && command != "test" && command != "version" && command != "devices" {
+	if command != "doctor" && command != "init" && command != "inspect" && command != "build" && command != "test" && command != "version" && command != "devices" && command != "flutter-build" {
 		return fail("unknown_command", "unknown command; run apprivet help", 2)
 	}
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -137,6 +139,7 @@ func (a App) Run(ctx context.Context, args []string) int {
 	var starterOptions project.StarterOptions
 	briefStdin := false
 	var provider, model, approval string
+	var format, platforms, flutterTarget string
 	review := false
 	trust := false
 	simulators := false
@@ -156,12 +159,18 @@ func (a App) Run(ctx context.Context, args []string) int {
 		fs.StringVar(&provider, "provider", "", "OpenAI or Anthropic API provider ID")
 		fs.StringVar(&model, "model", "", "provider API model ID")
 		fs.StringVar(&approval, "approve", "", "approval hash from the current AI prompt review")
+		fs.StringVar(&format, "format", "", "project format: swiftui or flutter")
+		fs.StringVar(&platforms, "platforms", "", "comma-separated project platforms")
 		// The documented init NAME --options form also works with Go's flag parser.
 		if len(filtered) > 0 && !strings.HasPrefix(filtered[0], "-") {
 			filtered = append(append([]string{}, filtered[1:]...), filtered[0])
 		}
 	case "inspect":
 		fs.StringVar(&projectPath, "project", ".", "project root or Xcode container")
+	case "flutter-build":
+		fs.StringVar(&projectPath, "project", ".", "Flutter project folder")
+		fs.StringVar(&flutterTarget, "target", "", "selected platform: ios, android, web, windows, macos or linux")
+		fs.BoolVar(&trust, "trust-project", false, "acknowledge execution of trusted project code")
 	case "build", "test":
 		fs.StringVar(&projectPath, "project", ".", "project root or Xcode container")
 		fs.StringVar(&scheme, "scheme", "", "shared Xcode scheme")
@@ -244,8 +253,12 @@ func (a App) Run(ctx context.Context, args []string) int {
 		if bundle == "" {
 			bundle = "com.example." + strings.ToLower(name)
 		}
+		target := project.TargetOptions{Format: format}
+		if platforms != "" {
+			target.Platforms = strings.Split(platforms, ",")
+		}
 		if provider != "" {
-			draft, err := generation.Review(name, bundle, starterOptions.Brief, provider, model)
+			draft, err := generation.Review(name, bundle, starterOptions.Brief, provider, model, target)
 			if err != nil {
 				return fail("invalid_arguments", err.Error(), 2)
 			}
@@ -263,13 +276,23 @@ func (a App) Run(ctx context.Context, args []string) int {
 		if model != "" || approval != "" {
 			return fail("invalid_arguments", "select a provider when using an AI model or approval", 2)
 		}
-		if review {
-			draft, err := project.Review(name, bundle, starterOptions)
+		if review || format != "" || platforms != "" {
+			draft, err := project.ReviewTarget(name, bundle, starterOptions, target, false)
 			if err != nil {
 				return fail("invalid_arguments", err.Error(), 2)
 			}
-			response.Data = draft
-			break
+			if review {
+				response.Data = draft
+				break
+			}
+			if draft.Format == "flutter" {
+				info, err := project.CreateFlutter(ctx, a.Dir, draft, "")
+				if err != nil {
+					return fail("creation_failed", err.Error(), 4)
+				}
+				response.Data = info
+				break
+			}
 		}
 		info, err := project.CreateWithOptions(a.Dir, name, bundle, starterOptions)
 		if err != nil {
@@ -282,6 +305,12 @@ func (a App) Run(ctx context.Context, args []string) int {
 			return fail("invalid_project", err.Error(), 4)
 		}
 		response.Data = info
+	case "flutter-build":
+		result, err := project.BuildFlutter(ctx, projectPath, flutterTarget, trust)
+		response.Data = result
+		if err != nil {
+			return fail("flutter_build_failed", err.Error(), 5)
+		}
 	case "build", "test":
 		result, err := build.Execute(ctx, a.OS, a.Runner, build.Request{Project: projectPath, Scheme: scheme, Action: command, Simulator: simulator, TrustProject: trust, Timeout: timeout})
 		response.Data = result
@@ -394,13 +423,19 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 		if data.Scheme != "" {
 			fmt.Fprintln(a.Out, "Suggested scheme:", data.Scheme)
 		}
-		if response.Command == "init" {
+		if data.Kind == "flutter-project" {
+			fmt.Fprintln(a.Out, "Selected platforms:", strings.Join(data.Platforms, ", "))
+		} else if response.Command == "init" {
 			fmt.Fprintln(a.Out, "Next: on a Mac, run apprivet doctor, then apprivet build --project", data.Root, "--trust-project")
 		}
 	case project.Draft:
 		fmt.Fprintf(a.Out, "Local starter: %s\n\n%s\n", data.Starter, data.Prompt)
 	case generation.Draft:
 		fmt.Fprintf(a.Out, "Destination: %s (%s)\n\n%s\n\nApproval: %s\n", data.Provider, data.Model, data.Prompt, data.Approval)
+	case project.FlutterBuild:
+		if response.OK {
+			fmt.Fprintln(a.Out, "Flutter build:", data.Artifact)
+		}
 	case doctor.Report:
 		fmt.Fprintf(a.Out, "Host: %s/%s\n", data.HostOS, data.HostArch)
 		for _, check := range data.Checks {

@@ -18,11 +18,12 @@ import (
 var templates embed.FS
 
 type Info struct {
-	Kind    string `json:"kind"`
-	Path    string `json:"path"`
-	Root    string `json:"root"`
-	Scheme  string `json:"suggested_scheme,omitempty"`
-	Starter string `json:"starter,omitempty"`
+	Kind      string   `json:"kind"`
+	Path      string   `json:"path"`
+	Root      string   `json:"root"`
+	Scheme    string   `json:"suggested_scheme,omitempty"`
+	Starter   string   `json:"starter,omitempty"`
+	Platforms []string `json:"platforms,omitempty"`
 }
 
 var namePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]{0,49}$`)
@@ -34,11 +35,13 @@ func Create(parent, name, bundleID string) (Info, error) {
 }
 
 type Draft struct {
-	Name     string `json:"name"`
-	BundleID string `json:"bundle_id"`
-	Starter  string `json:"starter"`
-	Brief    string `json:"brief"`
-	Prompt   string `json:"prompt"`
+	Name      string   `json:"name"`
+	BundleID  string   `json:"bundle_id"`
+	Starter   string   `json:"starter"`
+	Brief     string   `json:"brief"`
+	Prompt    string   `json:"prompt"`
+	Format    string   `json:"format,omitempty"`
+	Platforms []string `json:"platforms,omitempty"`
 }
 
 // Review validates the same inputs used by project creation without writing files.
@@ -85,7 +88,7 @@ func ReviewAI(name, bundleID, brief string) (Draft, error) {
 	}
 	draft.Starter = "ai"
 	draft.Prompt = fmt.Sprintf(`Generate a working SwiftUI app for iPhone and iPad, targeting iOS 17 or later.
-Return JSON with a single "content_view" string containing the complete ContentView.swift source.
+Return JSON with a single "source" string containing the complete ContentView.swift source.
 Start with import SwiftUI and define struct ContentView: View with a default initializer.
 Use Apple frameworks and self-contained source. The surrounding Xcode project, app entry point,
 Greeting helper, and smoke tests already exist. Omit @main, package dependencies, entitlements, build settings,
@@ -238,7 +241,10 @@ func Detect(path string) (Info, error) {
 	} else if !os.IsNotExist(err) {
 		return Info{}, err
 	}
-	return Info{}, fmt.Errorf("no .xcodeproj, .xcworkspace, or Package.swift found at project root")
+	if platforms := flutterPlatforms(absolute); len(platforms) != 0 {
+		return Info{Kind: "flutter-project", Root: absolute, Path: absolute, Scheme: filepath.Base(absolute), Platforms: platforms}, nil
+	}
+	return Info{}, fmt.Errorf("no Xcode project, Swift package, or Flutter app found at project root")
 }
 
 func xcodeKind(path string) string {

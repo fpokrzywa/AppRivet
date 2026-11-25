@@ -20,7 +20,7 @@
   <main class="shell">
     <section class="intro" aria-labelledby="create-heading">
       <h1 id="create-heading">What app do you<br class="wide-break"> want to build?</h1>
-      <p>Start with an idea. Get an editable SwiftUI project you can open in Xcode.</p>
+      <p>Describe your app and choose the platforms it should run on.</p>
     </section>
     <noscript><p class="notice">Enable JavaScript and reopen AppRivet to create a project.</p></noscript>
     <div class="workspace">
@@ -64,7 +64,26 @@
               <p id="selected-model" class="field-help"></p>
             </div>
           </div>
-          <details class="advanced">
+          <div class="platform-settings">
+            <label for="format">Project format</label>
+            <select id="format" name="format">
+              <option value="flutter">Flutter (shared code)</option>
+              <option value="swiftui">SwiftUI (native iOS)</option>
+            </select>
+            <fieldset id="platform-settings">
+              <legend>App platforms</legend>
+              <div class="platform-options">
+                <label><input type="checkbox" name="platform" value="ios" checked> iOS</label>
+                <label><input type="checkbox" name="platform" value="android" checked> Android</label>
+                <label><input type="checkbox" name="platform" value="web" checked> Web</label>
+                <label><input type="checkbox" name="platform" value="windows"> Windows</label>
+                <label><input type="checkbox" name="platform" value="macos"> macOS</label>
+                <label><input type="checkbox" name="platform" value="linux"> Linux</label>
+              </div>
+              <p id="flutter-sdk-help" class="field-help" hidden>Install the <a href="https://docs.flutter.dev/install/manual" target="_blank" rel="noopener noreferrer">Flutter SDK</a> to create and build Flutter projects. <button id="check-sdk" type="button" class="quiet">Check again</button></p>
+            </fieldset>
+          </div>
+          <details id="bundle-settings" class="advanced">
             <summary>Bundle ID</summary>
             <label for="bundle">Custom bundle ID <span class="muted">(optional)</span></label>
             <input id="bundle" name="bundle" placeholder="com.example.myfirstapp" maxlength="255" spellcheck="false">
@@ -81,7 +100,7 @@
           <p id="starter-title" class="starter-name">Automatic from brief</p>
           <p id="starter-copy" class="starter-copy">Match a checklist, saved note or counter. Other ideas start with a blank SwiftUI project and the brief.</p>
           <div class="starter-files">
-            <div><strong>Xcode project</strong><span>Editable SwiftUI source</span></div>
+            <div><strong id="output-title">Flutter project</strong><span id="output-source">Shared Dart code</span></div>
             <div><strong>APP_BRIEF.md</strong><span>Included when you write a description</span></div>
           </div>
         </section>
@@ -95,8 +114,8 @@
           <p id="empty" class="muted">Projects you create will appear here.</p>
         </section>
         <section class="next-step" aria-labelledby="run-heading">
-          <h2 id="run-heading">Run in Simulator</h2>
-          <p>On your Mac, open the project in AppRivet and choose <strong>Build &amp; Run</strong>.</p>
+          <h2 id="run-heading">Build your app</h2>
+          <p id="run-copy">Pick a build target beside a saved project. Targets that require another host use the same project folder.</p>
         </section>
       </aside>
     </div>
@@ -146,6 +165,16 @@
       <button id="edit-brief" type="button" class="quiet" autofocus>Back to brief</button>
       <button id="copy-prompt" type="button" class="quiet">Copy prompt</button>
       <button id="confirm-create" type="button" class="primary">Create project</button>
+    </div>
+  </dialog>
+  <dialog id="build-review" class="panel dialog" aria-labelledby="build-heading">
+    <h2 id="build-heading">Build Flutter project</h2>
+    <p id="build-summary" class="dialog-info"></p>
+    <label class="trust-project"><input id="trust-build" type="checkbox"> I have reviewed this project and trust its build scripts.</label>
+    <p id="build-status" class="message" role="status"></p>
+    <div class="dialog-actions">
+      <button id="close-build" class="quiet" type="button">Close</button>
+      <button id="confirm-build" class="primary" type="button" disabled>Build</button>
     </div>
   </dialog>
   <!-- APP_SCRIPT -->

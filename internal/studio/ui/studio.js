@@ -12,6 +12,7 @@ const projects = byID("projects");
 const brief = byID("brief");
 const nameField = byID("name");
 const starter = byID("starter");
+const format = byID("format");
 const admin = byID("admin");
 const adminButton = byID("open-admin");
 const provider = byID("provider");
@@ -30,6 +31,11 @@ const importStatus = byID("import-status");
 let reviewedRequest;
 let creating = false;
 let activeProvider = "openai";
+let flutterSDK = false;
+let buildSelection;
+let building = false;
+
+const platformNames = {ios: "iOS", android: "Android", web: "Web", windows: "Windows", macos: "macOS", linux: "Linux"};
 
 const providers = {
   openai: {name: "OpenAI", models: [["gpt-6.2-sol", "GPT-6.2 Sol"], ["gpt-6.2-astra", "GPT-6.2 Astra"]]},
@@ -63,13 +69,37 @@ function show(element, text, error = false) {
 
 function updateBrief() {
   byID("brief-count").textContent = brief.value.length.toLocaleString() + " characters";
-  const [title, description] = starters[starter.value];
+  const isFlutter = format.value === "flutter";
+  const [title, description] = isFlutter
+    ? starter.value === "ai"
+      ? ["AI-generated Flutter", "The selected model writes shared Dart code for the platforms you checked."]
+      : ["Flutter starter", "One shared Dart project with build files for the platforms you checked."]
+    : starters[starter.value];
   byID("starter-title").textContent = title;
   byID("starter-copy").textContent = description;
+  byID("output-title").textContent = isFlutter ? "Flutter project" : "Xcode project";
+  byID("output-source").textContent = isFlutter ? "Shared Dart code in lib/main.dart" : "Editable SwiftUI source";
+  byID("run-heading").textContent = isFlutter ? "Build your app" : "Run in Simulator";
+  byID("run-copy").textContent = isFlutter
+    ? "Pick a build target beside a saved project. Targets that require another host use the same project folder."
+    : "On your Mac, open the project in AppRivet and choose Build & Run.";
+  byID("flutter-sdk-help").hidden = flutterSDK;
   const settings = profiles[activeProvider];
   byID("selected-model").textContent = starter.value === "ai"
     ? providers[activeProvider].name + " · " + settings.model + (settings.key ? "" : " · Add a key in Admin")
     : "";
+}
+
+function updateFormat() {
+  const isFlutter = format.value === "flutter";
+  byID("platform-settings").hidden = !isFlutter;
+  byID("bundle-settings").hidden = isFlutter;
+  for (const name of ["auto", "checklist", "notes", "counter"]) {
+    starter.querySelector('option[value="' + name + '"]').hidden = isFlutter;
+  }
+  starter.querySelector('option[value="blank"]').textContent = isFlutter ? "Flutter starter" : "Blank";
+  if (starter.value !== "ai") starter.value = isFlutter ? "blank" : "auto";
+  updateBrief();
 }
 
 async function request(path, body) {
@@ -88,16 +118,79 @@ async function request(path, body) {
 
 async function refresh() {
   const state = await request("/api/state");
+  flutterSDK = state.flutter_sdk;
+  updateBrief();
   byID("workspace-path").textContent = state.workspace;
   byID("empty").hidden = state.projects.length !== 0;
   const rows = document.createDocumentFragment();
   for (const name of state.projects) {
     const row = document.createElement("li");
     row.textContent = name;
+    const flutter = state.flutter_projects.find(project => project.name === name);
+    if (flutter) {
+      const targets = document.createElement("p");
+      targets.className = "field-help";
+      targets.textContent = flutter.platforms.map(platform => platformNames[platform]).join(", ");
+      row.append(targets);
+      if (flutterSDK && flutter.build_targets.length) {
+        const controls = document.createElement("div");
+        controls.className = "project-build";
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", "Build target for " + name);
+        select.append(...flutter.build_targets.map(platform => new Option(platformNames[platform], platform)));
+        const build = document.createElement("button");
+        build.type = "button";
+        build.className = "quiet";
+        build.textContent = "Build";
+        build.addEventListener("click", () => openBuild(name, select.value));
+        controls.append(select, build);
+        row.append(controls);
+      }
+    }
     rows.append(row);
   }
   projects.replaceChildren(rows);
 }
+
+const buildDialog = byID("build-review");
+const trusted = byID("trust-build");
+const confirmBuild = byID("confirm-build");
+const closeBuild = byID("close-build");
+const buildStatus = byID("build-status");
+
+function openBuild(name, target) {
+  buildSelection = {name, target};
+  trusted.checked = false;
+  confirmedTrust();
+  byID("build-summary").textContent = name + " · " + platformNames[target];
+  show(buildStatus, "");
+  buildDialog.showModal();
+}
+
+function confirmedTrust() {
+  confirmBuild.disabled = !trusted.checked || building;
+}
+
+trusted.addEventListener("change", confirmedTrust);
+closeBuild.addEventListener("click", () => buildDialog.close());
+buildDialog.addEventListener("cancel", event => { if (building) event.preventDefault(); });
+confirmBuild.addEventListener("click", async () => {
+  if (!buildSelection || !trusted.checked || building) return;
+  building = true;
+  trusted.disabled = closeBuild.disabled = true;
+  confirmedTrust();
+  show(buildStatus, "Building " + platformNames[buildSelection.target] + "… Flutter may download build dependencies.");
+  try {
+    const result = await request("/api/build", {...buildSelection, trusted: true});
+    show(buildStatus, "Build ready\n" + result.artifact);
+  } catch (error) {
+    show(buildStatus, error.message, true);
+  } finally {
+    building = false;
+    trusted.disabled = closeBuild.disabled = false;
+    confirmedTrust();
+  }
+});
 
 function watchFile(button, input, consume) {
   button.addEventListener("click", () => input.click());
@@ -204,6 +297,8 @@ byID("admin-form").addEventListener("submit", event => {
 
 brief.addEventListener("input", updateBrief);
 starter.addEventListener("change", updateBrief);
+format.addEventListener("change", updateFormat);
+byID("check-sdk").addEventListener("click", () => refresh().catch(error => show(message, error.message, true)));
 byID("go-projects").addEventListener("click", () => {
   const heading = byID("projects-heading");
   heading.focus({preventScroll: true});
@@ -215,7 +310,7 @@ for (const button of document.querySelectorAll("[data-example]")) {
     const replacingExample = Object.values(examples).some(([exampleName]) => exampleName === nameField.value);
     if (!nameField.value.trim() || replacingExample) nameField.value = sampleName;
     brief.value = sampleBrief;
-    if (starter.value !== "ai") starter.value = button.dataset.example;
+    if (format.value !== "flutter" && starter.value !== "ai") starter.value = button.dataset.example;
     show(importStatus, "");
     updateBrief();
     brief.focus();
@@ -225,10 +320,13 @@ for (const button of document.querySelectorAll("[data-example]")) {
 form.addEventListener("submit", async event => {
   event.preventDefault();
   const ai = starter.value === "ai";
+  const isFlutter = format.value === "flutter";
   const settings = profiles[activeProvider];
   const project = {
     name: nameField.value,
-    bundle_id: byID("bundle").value,
+    bundle_id: isFlutter ? "" : byID("bundle").value,
+    format: format.value,
+    platforms: isFlutter ? Array.from(form.querySelectorAll('input[name="platform"]:checked'), input => input.value) : ["ios"],
     brief: brief.value,
     ...(ai ? {provider: activeProvider, model: settings.model} : {starter: starter.value}),
   };
@@ -238,12 +336,15 @@ form.addEventListener("submit", async event => {
     const draft = await request("/api/review", project);
     reviewedRequest = ai ? {...project, approval: draft.approval} : project;
     promptText.value = draft.prompt;
-    byID("review-target").textContent = ai
+    const platforms = isFlutter ? " Flutter targets: " + draft.platforms.map(platform => platformNames[platform]).join(", ") + "." : "";
+    byID("review-target").textContent = (ai
       ? "Destination: " + providers[draft.provider].name + " · " + draft.model + ". Approval sends this prompt and uses your API account."
-      : "Local project · " + starters[draft.starter][0] + " starter. AppRivet will create the project on this machine.";
-    confirmCreate.textContent = ai ? "Send & create project" : "Create SwiftUI starter";
-    confirmCreate.disabled = ai && !settings.key;
-    show(reviewStatus, confirmCreate.disabled ? "Add a key for this provider in Admin to send the prompt." : "", confirmCreate.disabled);
+      : (isFlutter ? "Local Flutter starter." : "Local project · " + starters[draft.starter][0] + " starter.")) + platforms;
+    confirmCreate.textContent = ai ? "Send & create project" : (isFlutter ? "Create Flutter project" : "Create SwiftUI starter");
+    const blocker = isFlutter && !flutterSDK ? "Install the Flutter SDK before creating this project."
+      : ai && !settings.key ? "Add a key for this provider in Admin to send the prompt." : "";
+    confirmCreate.disabled = Boolean(blocker);
+    show(reviewStatus, blocker, confirmCreate.disabled);
     show(message, "");
     fields.disabled = false;
     submit.focus();
@@ -276,13 +377,14 @@ confirmCreate.addEventListener("click", async () => {
   const project = reviewedRequest;
   creating = true;
   confirmCreate.disabled = editBrief.disabled = true;
-  show(reviewStatus, project.provider ? "Waiting for the model to generate SwiftUI…" : "Creating your project…");
+  show(reviewStatus, project.provider ? "Waiting for the model to generate the source…" : "Creating your project…");
   try {
     const result = await request("/api/create", project.provider ? {...project, api_key: profiles[project.provider].key} : project);
     const label = starters[result.starter]?.[0] ?? "SwiftUI";
     review.close();
-    show(message, project.provider
-      ? "Created " + result.suggested_scheme + ". Review the generated SwiftUI in Xcode before building."
+    show(message, result.kind === "flutter-project"
+      ? "Created " + result.suggested_scheme + " for " + result.platforms.map(platform => platformNames[platform]).join(", ") + "."
+      : project.provider ? "Created " + result.suggested_scheme + ". Review the generated SwiftUI in Xcode before building."
       : "Created " + result.suggested_scheme + " with the " + label + " starter.");
     await refresh().catch(() => {});
   } catch (error) {
@@ -308,6 +410,7 @@ quit.addEventListener("click", async () => {
   }
 });
 
+updateFormat();
 if (!session) {
   show(message, "Start AppRivet from your desktop to open a new session.", true);
 } else {

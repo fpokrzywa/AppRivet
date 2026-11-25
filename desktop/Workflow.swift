@@ -13,9 +13,10 @@ struct DesktopProject: Decodable, Sendable {
     let root: String
     let suggestedScheme: String
     let starter: String?
+    let platforms: [String]?
 
     enum CodingKeys: String, CodingKey {
-        case kind, path, root, starter
+        case kind, path, root, starter, platforms
         case suggestedScheme = "suggested_scheme"
     }
 }
@@ -29,12 +30,14 @@ struct DesktopDraft: Decodable, Identifiable, Sendable {
     let provider: String?
     let model: String?
     let approval: String?
+    let format: String?
+    let platforms: [String]?
 
     var id: String { approval ?? name }
     var isAI: Bool { provider != nil }
 
     enum CodingKeys: String, CodingKey {
-        case name, starter, brief, prompt, provider, model, approval
+        case name, starter, brief, prompt, provider, model, approval, format, platforms
         case bundleID = "bundle_id"
     }
 }
@@ -82,6 +85,10 @@ struct DesktopRun: Sendable {
     let buildLog: String
 }
 
+struct DesktopFlutterBuild: Decodable, Sendable {
+    let artifact: String
+}
+
 struct DesktopWorkflow: Sendable {
     let cli: URL
 
@@ -96,8 +103,10 @@ struct DesktopWorkflow: Sendable {
         return Self(cli: cli)
     }
 
-    func review(name: String, bundleID: String, brief: String, starter: String, provider: String, model: String) throws -> DesktopDraft {
+    func review(name: String, bundleID: String, brief: String, starter: String, provider: String, model: String,
+                format: String = "swiftui", platforms: [String] = []) throws -> DesktopDraft {
         var args = ["init", "--review", "--bundle-id=\(bundleID)", "--brief-stdin", "--starter=\(starter)"]
+        args += ["--format=\(format)", "--platforms=\(platforms.joined(separator: ","))"]
         if starter == "ai" {
             args += ["--provider=\(provider)", "--model=\(model)"]
         }
@@ -106,19 +115,22 @@ struct DesktopWorkflow: Sendable {
 
     func create(draft: DesktopDraft, parent: URL, apiKey: String? = nil) throws -> DesktopProject {
         var args = ["init", "--bundle-id=\(draft.bundleID)", "--brief-stdin"]
+        if draft.format == "flutter", let platforms = draft.platforms {
+            args += ["--format=flutter", "--platforms=\(platforms.joined(separator: ","))"]
+        }
         if let provider = draft.provider, let model = draft.model, let approval = draft.approval {
             args += ["--provider=\(provider)", "--model=\(model)", "--approve=\(approval)"]
         } else {
             args.append("--starter=\(draft.starter)")
         }
-        return try invoke(args + [draft.name], directory: parent, timeout: draft.isAI ? 195 : 30,
+        return try invoke(args + [draft.name], directory: parent, timeout: draft.format == "flutter" ? 540 : (draft.isAI ? 195 : 30),
                           apiKey: apiKey, input: Data(draft.brief.utf8))
     }
 
     func inspect(_ url: URL) throws -> DesktopProject {
         let project: DesktopProject = try invoke(["inspect", "--project", url.path])
-        guard project.kind == "xcode-project" else {
-            throw DesktopFailure(message: "Choose a generated AppRivet project folder or its .xcodeproj file.")
+        guard project.kind == "xcode-project" || project.kind == "flutter-project" else {
+            throw DesktopFailure(message: "Choose a generated Flutter project folder or a SwiftUI project.")
         }
         return project
     }
@@ -129,6 +141,11 @@ struct DesktopWorkflow: Sendable {
             .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
     }
 
+    func buildFlutter(project: DesktopProject, target: String, trusted: Bool) throws -> DesktopFlutterBuild {
+        guard trusted else { throw DesktopFailure(message: "Confirm you trust this project before building it.") }
+        return try invoke(["flutter-build", "--project", project.root, "--target", target, "--trust-project"], timeout: 930)
+    }
+
     func buildAndRun(project: DesktopProject, simulator: DesktopSimulator, trusted: Bool, showSimulator: Bool,
                      progress: @Sendable (String) -> Void = { _ in }) throws -> DesktopRun {
         guard trusted else { throw DesktopFailure(message: "Confirm you trust this project before building it.") }
@@ -136,16 +153,30 @@ struct DesktopWorkflow: Sendable {
             throw DesktopFailure(message: "Select an available iOS simulator.")
         }
         let name = project.suggestedScheme
-        guard project.kind == "xcode-project",
-              name.range(of: #"^[A-Za-z][A-Za-z0-9]{0,49}\z"#, options: .regularExpression) != nil else {
-            throw DesktopFailure(message: "Open an AppRivet project with its generated app name and shared scheme.")
-        }
         progress("Building \(name)…")
-        let build: DesktopBuild = try invoke([
-            "build", "--project", project.path, "--scheme", name, "--simulator", simulator.id,
-            "--trust-project", "--timeout", "15m",
-        ], timeout: 920)
-        let (app, bundleID) = try simulatorProduct(build: build, name: name)
+        let app: URL
+        let log: String
+        if project.kind == "flutter-project" {
+            let product = try buildFlutter(project: project, target: "ios", trusted: trusted)
+            app = URL(fileURLWithPath: product.artifact, isDirectory: true)
+            log = ""
+        } else {
+            guard project.kind == "xcode-project",
+                  name.range(of: #"^[A-Za-z][A-Za-z0-9]{0,49}\z"#, options: .regularExpression) != nil else {
+                throw DesktopFailure(message: "Open an AppRivet project with its generated app name and shared scheme.")
+            }
+            let build: DesktopBuild = try invoke([
+                "build", "--project", project.path, "--scheme", name, "--simulator", simulator.id,
+                "--trust-project", "--timeout", "15m",
+            ], timeout: 920)
+            guard build.derivedData.hasPrefix("/") else {
+                throw DesktopFailure(message: "The build returned an invalid product directory.")
+            }
+            let root = URL(fileURLWithPath: build.derivedData, isDirectory: true).resolvingSymlinksInPath()
+            app = root.appendingPathComponent("Build/Products/Debug-iphonesimulator/\(name).app", isDirectory: true)
+            log = build.execution.output
+        }
+        let bundleID = try simulatorBundleID(app, details: log)
         do {
             progress("Starting \(simulator.name)…")
             _ = try appleTool("/usr/bin/xcrun", ["simctl", "bootstatus", simulator.id, "-b"], timeout: 480)
@@ -161,26 +192,23 @@ struct DesktopWorkflow: Sendable {
                 _ = try appleTool("/usr/bin/open", ["-a", simulatorApp.path], timeout: 30)
             }
         } catch let failure as DesktopFailure {
-            throw DesktopFailure(message: "The build succeeded. \(failure.message)", details: failure.details + "\n" + build.execution.output)
+            throw DesktopFailure(message: "The build succeeded. \(failure.message)", details: failure.details + "\n" + log)
         }
-        return DesktopRun(bundleIdentifier: bundleID, buildLog: build.execution.output)
+        return DesktopRun(bundleIdentifier: bundleID, buildLog: log)
     }
 
-    private func simulatorProduct(build: DesktopBuild, name: String) throws -> (URL, String) {
-        let root = URL(fileURLWithPath: build.derivedData, isDirectory: true).resolvingSymlinksInPath()
-        let app = root.appendingPathComponent("Build/Products/Debug-iphonesimulator/\(name).app", isDirectory: true)
+    private func simulatorBundleID(_ app: URL, details: String) throws -> String {
         let info = app.appendingPathComponent("Info.plist")
-        guard build.derivedData.hasPrefix("/"),
-              app.resolvingSymlinksInPath().path == app.path,
+        guard app.resolvingSymlinksInPath().path == app.path,
               info.resolvingSymlinksInPath().path == info.path,
               let plistData = try? Data(contentsOf: info),
               let plist = (try? PropertyListSerialization.propertyList(from: plistData, options: [], format: nil)) as? [String: Any],
               let platforms = plist["CFBundleSupportedPlatforms"] as? [String], platforms.contains("iPhoneSimulator"),
               let bundleID = plist["CFBundleIdentifier"] as? String,
               bundleID.range(of: #"^[A-Za-z0-9][A-Za-z0-9.-]*\z"#, options: .regularExpression) != nil else {
-            throw DesktopFailure(message: "The build did not produce the expected iOS Simulator app \(name).app.", details: build.execution.output)
+            throw DesktopFailure(message: "The build did not produce the expected iOS Simulator app.", details: details)
         }
-        return (app, bundleID)
+        return bundleID
     }
 
     private func invoke<Value: Decodable>(_ args: [String], directory: URL? = nil, timeout: Int = 30,

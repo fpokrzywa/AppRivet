@@ -20,9 +20,9 @@ func TestProviderRequestSendsReviewedPrompt(t *testing.T) {
 	const fakeKey = "fake-api-key-for-test"
 	for _, tc := range []struct{ provider, model, endpoint, authHeader, auth, response string }{
 		{"openai", "gpt-6.2-sol", "https://api.openai.com/v1/responses", "Authorization", "Bearer " + fakeKey,
-			`{"status":"completed","output":[{"type":"reasoning"},{"type":"message","content":[{"type":"output_text","text":"{\"content_view\":\"source\"}"}]}]}`},
+			`{"status":"completed","output":[{"type":"reasoning"},{"type":"message","content":[{"type":"output_text","text":"{\"source\":\"source\"}"}]}]}`},
 		{"anthropic", "claude-fable-5-2", "https://api.anthropic.com/v1/messages", "X-API-Key", fakeKey,
-			`{"stop_reason":"end_turn","content":[{"type":"thinking"},{"type":"text","text":"{\"content_view\":\"source\"}"}]}`},
+			`{"stop_reason":"end_turn","content":[{"type":"thinking"},{"type":"text","text":"{\"source\":\"source\"}"}]}`},
 	} {
 		t.Run(tc.provider, func(t *testing.T) {
 			httpClient := &http.Client{Transport: transportFunc(func(req *http.Request) (*http.Response, error) {

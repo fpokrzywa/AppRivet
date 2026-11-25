@@ -6,6 +6,8 @@ Implemented: doctor, init, inspect, build, test, devices, snapshot create/inspec
 apprivet doctor
 apprivet init MyFirstApp --bundle-id com.example.myfirstapp
 apprivet init TripPack --brief 'A packing checklist for weekend trips.' --starter auto
+apprivet init SharedTravel --format flutter --platforms ios,android,web,windows,macos,linux
+apprivet flutter-build --project SharedTravel --target web --trust-project
 apprivet inspect --project MyFirstApp
 apprivet build --project MyFirstApp --trust-project
 xcrun simctl list devices available
@@ -24,6 +26,8 @@ apprivet worker check --policy policy.json --request request.json --principal de
 Use `--brief TEXT` or pipe UTF-8 text to `--brief-stdin` to save a brief in `APP_BRIEF.md`. Standard input avoids operating-system command-line length limits. Provider input limits apply to AI requests. The default `--starter auto` matches checklist, notes, or counter terms, and falls back to a blank starter for other or ambiguous ideas. Select `checklist`, `notes`, `counter`, or `blank` explicitly to override the match.
 
 Add `--review` to preview the prompt and validate the inputs without creating files. To review an AI request, also pass `--provider openai|anthropic` and `--model MODEL_ID`. After reviewing, repeat the command with `--approve HASH` in place of `--review`, using the approval from the review and the provider key in the `APPRIVET_API_KEY` environment variable. Keep the brief, project settings, provider and model the same. Creation saves the model’s SwiftUI source for review and building on a Mac.
+
+Use `--format flutter --platforms LIST` with one or more of `ios`, `android`, `web`, `windows`, `macos`, and `linux`. This calls the installed Flutter SDK to generate the selected platform scaffolds and one shared `lib/main.dart`. AI generation fills that Dart file. The review approval includes the chosen platforms. Use `flutter-build` to compile one selected target with its required toolchain. [Flutter setup and host matrix](DESKTOP.md#one-flutter-project-selected-platforms)
 
 `inspect --project PATH` accepts a root directory or explicit `.xcodeproj`/`.xcworkspace` directory. One workspace takes precedence over projects. Multiple candidates are an error; select explicitly. A root Package.swift is detected passively if no Xcode container is selected. Marker discovery is not semantic project validation; actual Xcode validation happens during build. Package-to-app conversion is not implemented.
 

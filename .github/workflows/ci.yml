@@ -111,6 +111,39 @@ jobs:
             ${{ runner.temp }}/frontend/AppRivet-linux.tar.gz
           if-no-files-found: error
 
+  flutter-shared:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install the pinned Flutter SDK and Linux build tools
+        run: |
+          git -c advice.detachedHead=false clone --depth 1 --branch 3.50.1 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = ae9b586f34a8443573f82ef57c3bf914a908cbf7
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends clang cmake ninja-build pkg-config libgtk-3-dev libstdc++-12-dev
+      - name: Create selected targets and build web and Linux from one project
+        run: |
+          export APPRIVET_FLUTTER_SDK="$RUNNER_TEMP/flutter"
+          go build -o "$RUNNER_TEMP/apprivet" ./cmd/apprivet
+          cd "$RUNNER_TEMP"
+          ./apprivet init SharedApp --format flutter --platforms ios,android,web,windows,macos,linux
+          for platform in ios android web windows macos linux; do test -d "SharedApp/$platform"; done
+          ./apprivet init BrowserApp --format flutter --platforms web
+          for platform in ios android windows macos linux; do test ! -e "BrowserApp/$platform"; done
+          test -f SharedApp/lib/main.dart
+          ./apprivet flutter-build --project SharedApp --target web --trust-project
+          test -s SharedApp/build/web/index.html
+          test -s SharedApp/build/web/main.dart.js
+          ./apprivet flutter-build --project SharedApp --target linux --trust-project
+          test -x SharedApp/build/linux/x64/debug/bundle/apprivet_sharedapp
+
   ios-simulator:
     runs-on: macos-15
     timeout-minutes: 30

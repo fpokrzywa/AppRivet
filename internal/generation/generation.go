@@ -25,6 +25,7 @@ var (
 	apiKeyPattern = regexp.MustCompile("^[A-Za-z0-9_-]{8,512}$")
 	modelPattern  = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 	contentView   = regexp.MustCompile(`(?m)^\s*struct\s+ContentView\s*:\s*(?:SwiftUI\.)?View\b`)
+	dartMain      = regexp.MustCompile(`(?m)^\s*void\s+main\s*\(`)
 	client        = &http.Client{
 		Timeout: 180 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -40,7 +41,7 @@ type Draft struct {
 	Approval string `json:"approval"`
 }
 
-func Review(name, bundle, brief, provider, model string) (Draft, error) {
+func Review(name, bundle, brief, provider, model string, target project.TargetOptions) (Draft, error) {
 	if provider != "openai" && provider != "anthropic" {
 		return Draft{}, errors.New("choose OpenAI or Anthropic in Admin")
 	}
@@ -48,7 +49,7 @@ func Review(name, bundle, brief, provider, model string) (Draft, error) {
 	if !modelPattern.MatchString(model) {
 		return Draft{}, errors.New("enter a valid API model ID in Admin")
 	}
-	draft, err := project.ReviewAI(name, bundle, brief)
+	draft, err := project.ReviewTarget(name, bundle, project.StarterOptions{Brief: brief}, target, true)
 	if err != nil {
 		return Draft{}, err
 	}
@@ -72,13 +73,24 @@ func Create(ctx context.Context, parent string, draft Draft, approval, key strin
 	if generate == nil {
 		return project.Info{}, errors.New("AI generation is unavailable")
 	}
+	if draft.Format == "flutter" && !project.FlutterAvailable() {
+		return project.Info{}, errors.New("install the Flutter SDK before generating a Flutter project")
+	}
 	source, err := generate(ctx, draft.Provider, draft.Model, key, draft.Prompt)
 	if err != nil {
 		return project.Info{}, err
 	}
 	source = strings.TrimSpace(source)
-	if !utf8.ValidString(source) || len(source) > 128*1024 || strings.ContainsRune(source, 0) ||
-		!strings.HasPrefix(source, "import SwiftUI\n") && !strings.HasPrefix(source, "import SwiftUI\r\n") ||
+	if !utf8.ValidString(source) || len(source) > 128*1024 || strings.ContainsRune(source, 0) {
+		return project.Info{}, errors.New("the model did not return valid app source")
+	}
+	if draft.Format == "flutter" {
+		if !strings.HasPrefix(source, "import 'package:flutter/material.dart';") || !dartMain.MatchString(source) {
+			return project.Info{}, errors.New("the model did not return a complete Flutter main.dart")
+		}
+		return project.CreateFlutter(ctx, parent, draft.Draft, source)
+	}
+	if !strings.HasPrefix(source, "import SwiftUI\n") && !strings.HasPrefix(source, "import SwiftUI\r\n") ||
 		!contentView.MatchString(source) {
 		return project.Info{}, errors.New("the model did not return a complete SwiftUI ContentView. No project was created")
 	}
@@ -91,8 +103,8 @@ func Generate(ctx context.Context, provider, model, key, prompt string) (string,
 
 func requestSource(ctx context.Context, httpClient *http.Client, provider, model, key, prompt string) (string, error) {
 	schema := map[string]any{
-		"type": "object", "properties": map[string]any{"content_view": map[string]string{"type": "string"}},
-		"required": []string{"content_view"}, "additionalProperties": false,
+		"type": "object", "properties": map[string]any{"source": map[string]string{"type": "string"}},
+		"required": []string{"source"}, "additionalProperties": false,
 	}
 	var endpoint, label string
 	var payload map[string]any
@@ -193,12 +205,12 @@ func decodeSource(body io.Reader, provider string) (string, error) {
 		}
 	}
 	var output struct {
-		ContentView string `json:"content_view"`
+		Source string `json:"source"`
 	}
 	structured := json.NewDecoder(strings.NewReader(responseText))
 	structured.DisallowUnknownFields()
-	if err := structured.Decode(&output); err != nil || structured.Decode(new(any)) != io.EOF || output.ContentView == "" {
-		return "", errors.New("the provider returned an invalid SwiftUI source result")
+	if err := structured.Decode(&output); err != nil || structured.Decode(new(any)) != io.EOF || output.Source == "" {
+		return "", errors.New("the provider returned an invalid app source result")
 	}
-	return output.ContentView, nil
+	return output.Source, nil
 }
