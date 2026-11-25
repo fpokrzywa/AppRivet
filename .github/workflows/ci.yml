@@ -213,6 +213,10 @@ jobs:
           ditto -x -k "$RUNNER_TEMP/desktop-package/AppRivet-macOS.zip" "$RUNNER_TEMP/desktop-unpacked"
           APP="$RUNNER_TEMP/desktop-unpacked/AppRivet.app"
           codesign --verify --deep --strict "$APP"
+          ICON=$(plutil -extract CFBundleIconFile raw -o - "$APP/Contents/Info.plist")
+          iconutil -c iconset -o "$RUNNER_TEMP/desktop-icon.iconset" "$APP/Contents/Resources/$ICON"
+          test -s "$RUNNER_TEMP/desktop-icon.iconset/icon_16x16.png"
+          test -s "$RUNNER_TEMP/desktop-icon.iconset/icon_512x512@2x.png"
           xcrun lipo "$APP/Contents/MacOS/AppRivetDesktop" -verify_arch arm64 x86_64
           xcrun lipo "$APP/Contents/MacOS/apprivet" -verify_arch arm64 x86_64
           xcrun lipo "$APP/Contents/Frameworks/Sparkle.framework/Sparkle" -verify_arch arm64 x86_64

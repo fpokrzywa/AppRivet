@@ -46,6 +46,16 @@ cp "$scratch/sparkle/LICENSE" "$staged/Contents/Resources/Sparkle-LICENSE.txt"
 cp desktop/Info.plist "$staged/Contents/Info.plist"
 cp internal/studio/ui/apprivet-mark-light.png "$staged/Contents/Resources/AppRivetMarkLight.png"
 cp internal/studio/ui/apprivet-mark-dark.png "$staged/Contents/Resources/AppRivetMarkDark.png"
+iconset="$scratch/AppRivet.iconset"
+mkdir "$iconset"
+logo="$staged/Contents/Resources/AppRivetMarkDark.png"
+for points in 16 32 128 256 512; do
+  pixels=$((points * 2))
+  icon="$iconset/icon_${points}x${points}"
+  sips -Z "$points" "$logo" --out "$icon.png" >/dev/null
+  sips -Z "$pixels" "$logo" --out "${icon}@2x.png" >/dev/null
+done
+iconutil -c icns -o "$staged/Contents/Resources/AppRivet.icns" "$iconset"
 plutil -lint "$staged/Contents/Info.plist"
 xcrun lipo -create "$scratch/desktop-arm64" "$scratch/desktop-x86_64" -output "$staged/Contents/MacOS/AppRivetDesktop"
 xcrun lipo -create "$scratch/cli-arm64" "$scratch/cli-x86_64" -output "$staged/Contents/MacOS/apprivet"
