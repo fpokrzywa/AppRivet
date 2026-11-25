@@ -103,6 +103,8 @@ Version 0.4.5 introduced in-app updates. In 0.4.5, open the **AppRivet** menu in
 
 The updater verifies the download with AppRivet’s release key before unpacking it. It replaces the app in Applications. Project folders stay where you saved them. Finish active work and copy any unsaved brief before approving a relaunch. If your key was set before credential storage was added, enter it once in **Admin** and save it to the credential store.
 
+If AppRivet fails to reopen, select it in **Finder → Applications** and choose **File → Get Info**. If the version matches the update you just approved, the replacement is on disk. Open it from Applications and record any macOS alert. If the version is still the old one, record the last updater message. You can use the disk image above to replace the app and get back to work. [Apple’s Finder guide](https://support.apple.com/guide/mac-help/mchlp1774/mac)
+
 ### Set up the iOS Simulator
 
 Install full Xcode and open it once to finish setup. In **Xcode → Settings → Components**, install an iOS Simulator runtime compatible with the generated app’s iOS 17 minimum. Under **Settings → Locations → Command Line Tools**, select your Xcode installation. Runtime availability depends on your Xcode release. [Get Xcode](https://developer.apple.com/xcode/) · [Xcode system requirements](https://developer.apple.com/xcode/system-requirements/) · [Apple’s Simulator setup guide](https://developer.apple.com/documentation/xcode/downloading-and-installing-additional-xcode-components)
@@ -146,4 +148,4 @@ See the build results and platform downloads under **Artifacts** in GitHub Actio
    ```
 
 3. Publish the Mac DMG, Mac ZIP and Windows ZIP in GitHub Releases. Verify that the public Mac ZIP matches the archive you signed. Update `updates/appcast.xml` with the public Mac ZIP URL, signature and length, the bundle build number and display version, and the minimum macOS version. Commit the feed to `main` after the assets are public.
-4. Check for the release from an older installed build. Confirm that the signed download installs and relaunches, and reopen an existing project. CI verifies the packaged updater starts and tests an iOS Simulator build. In-place updates on real Macs, including Apple silicon and Intel, still need live validation.
+4. Check for the release from an older installed build. Confirm that the signed download installs and relaunches, and reopen an existing project. The hosted update smoke test exercised the 0.4.8 to 0.4.9 download, replacement and relaunch with an automated approval driver. The standard update dialogs and installed-app behavior on personal Apple silicon and Intel Macs still need live validation. [Hosted update test](https://github.com/fpokrzywa/AppRivet/actions/runs/45665268741)

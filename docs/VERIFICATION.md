@@ -1,5 +1,9 @@
 # Verification record
 
+## Mac update installation and relaunch
+
+On hosted macOS, Sparkle read the production appcast, downloaded the signed 0.4.9 archive, replaced the 0.4.8 bundle and launched a new AppRivet process from the same path. The test verified the installed bundle version and code signature. It used an automated approval driver inside a temporary copy, so the standard dialogs and in-place updates from Applications on a personal Mac still need live validation. [Passing update test](https://github.com/fpokrzywa/AppRivet/actions/runs/45665268741)
+
 ## Store builds and connection setup
 
 All six jobs passed at `8f73e19741797992cf66c90060790a04755ced84`. Release fixtures verified the Xcode archive and App Store export arguments, isolated release storage, rejection of untrusted builds, and the Android verifier’s acceptance of a pinned upload signer. The Java fixture rejected unsigned, debug-signed, tampered and mismatched AABs. Mock HTTPS responses verified signed Apple and Google requests and kept credential values out of the returned status and settings file. The packaged Mac app read publishing settings and history and launched a test app in Simulator. [CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45661501468) · [Desktop release](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.9)
