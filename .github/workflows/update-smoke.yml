@@ -1,0 +1,20 @@
+name: macOS update smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install-and-relaunch:
+    name: Install and relaunch the signed 0.4.9 update
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Run Sparkle against the production appcast
+        timeout-minutes: 8
+        run: bash .github/scripts/macos-update-smoke.sh
