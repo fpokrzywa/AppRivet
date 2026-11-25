@@ -1,5 +1,7 @@
 # Architecture
 
+See the [architecture and decision record](ARCHITECTURE_DECISIONS.md) for the desktop preview, AI generation, publishing, release process, and validation status as of 0.4.13. The foundation and remote-worker design below describe the original CLI milestones and their security boundaries.
+
 ## Foundation
 
 Go CLI -> application command -> project / doctor / build packages -> bounded process runner -> official Apple tools on macOS.
