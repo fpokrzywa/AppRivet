@@ -93,9 +93,9 @@ In **Generate with AI**, choose **Plan components before generating code**. AppR
 
 ### Install AppRivet
 
-1. Download and open **AppRivet-macOS.dmg**. Version 0.4.10 is signed with Developer ID and notarized by Apple. The app includes Apple silicon and Intel executables. [AppRivet 0.4.10 macOS disk image](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.10/AppRivet-macOS.dmg) and [AppRivet 0.4.10 release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.10).
-2. Drag **AppRivet.app** onto **Applications** in the disk image window. Eject the disk image, then open AppRivet from **Applications**.
-3. Open **AppRivet.app** from Finder. Version 0.4.9 and earlier previews use ad hoc signing. If macOS says it couldn’t verify an older preview is free of malware, click **Done**. If you trust the download, open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway** for AppRivet. Authenticate if prompted and confirm with **Open**. [Apple’s Gatekeeper guidance](https://support.apple.com/en-us/102445)
+1. Download and open the notarized **AppRivet-macOS.dmg**. The app includes Apple silicon and Intel executables. [AppRivet 0.4.10 macOS disk image](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.10/AppRivet-macOS.dmg) and [AppRivet 0.4.10 release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.10).
+2. Quit AppRivet if it’s open. Drag **AppRivet.app** onto **Applications** in the disk image window. If Finder asks what to do with the existing copy, choose **Replace**.
+3. Eject the disk image. Open AppRivet from **Finder → Applications** and check **AppRivet → About AppRivet** to confirm the installed version.
 
 ### Update AppRivet on your Mac
 
