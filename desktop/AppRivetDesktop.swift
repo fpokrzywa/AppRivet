@@ -317,6 +317,19 @@ struct AppRivetDesktop: App {
                   opened.settings.starter == "auto" else {
                 throw DesktopFailure(message: "The saved project form did not restore the original settings.")
             }
+            let creationModel = DesktopModel()
+            guard creationModel.starter == "ai", creationModel.usesStagedGeneration else {
+                throw DesktopFailure(message: "New projects must default to planned AI generation.")
+            }
+            creationModel.restoreProject(opened)
+            guard creationModel.openedOfflineStarter, !creationModel.canCreate else {
+                throw DesktopFailure(message: "Reopening an offline starter must identify it and protect its folder.")
+            }
+            creationModel.prepareAIFromStarter()
+            guard creationModel.name == "DesktopSmokeAI", creationModel.bundleID.isEmpty, creationModel.brief == brief,
+                  creationModel.usesStagedGeneration, creationModel.canCreate else {
+                throw DesktopFailure(message: "The saved brief was not carried into a separate AI project.")
+            }
             Self.smokeProgress("Checking the store publishing workspace…")
             _ = try workflow.publishingSettings()
             guard try workflow.storeBuildHistory(project: project).isEmpty else {
@@ -410,8 +423,8 @@ private struct DesktopPlanSession: Identifiable, Sendable {
 private final class DesktopModel: ObservableObject {
     @Published var name = "MyFirstApp"
     @Published var brief = ""
-    @Published var starter = "blank"
-    @Published var stageShortBriefs = false
+    @Published var starter = "ai"
+    @Published var stageShortBriefs = true
     @Published private(set) var format = ""
     @Published private(set) var projectFormats = ["swiftui"]
     @Published private(set) var checkingFormats = false
@@ -457,12 +470,17 @@ private final class DesktopModel: ObservableObject {
     var busy: Bool { activity != nil }
     var flutterAvailable: Bool { projectFormats.contains("flutter") }
     var hasSelectedFormat: Bool { projectFormats.contains(format) }
+    var hasBrief: Bool { !brief.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var largeBrief: Bool { brief.trimmingCharacters(in: .whitespacesAndNewlines).utf8.count > 4096 }
     var usesStagedGeneration: Bool { starter == "ai" && (largeBrief || stageShortBriefs) }
+    var openedOfflineStarter: Bool {
+        guard let method = project?.starter else { return false }
+        return method != "ai"
+    }
     var canCreate: Bool {
         guard hasSelectedFormat, let parent else { return false }
         let projectName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !projectName.isEmpty else { return false }
+        guard !projectName.isEmpty, starter != "ai" || hasBrief else { return false }
         if let project {
             let root = URL(fileURLWithPath: project.root, isDirectory: true)
             let sameFolder = root.deletingLastPathComponent().standardizedFileURL == parent.standardizedFileURL
@@ -555,7 +573,7 @@ private final class DesktopModel: ObservableObject {
         format = settings.format
         platforms = Set(settings.platforms)
         starter = settings.starter
-        stageShortBriefs = false
+        stageShortBriefs = true
         if let provider = settings.provider.flatMap(AIProvider.init(rawValue:)),
            let model = settings.model, validModelID(model) {
             selectedProvider = provider
@@ -564,6 +582,20 @@ private final class DesktopModel: ObservableObject {
         parent = URL(fileURLWithPath: opened.project.root, isDirectory: true).deletingLastPathComponent()
         selectProject(opened.project)
         status = "Opened \(settings.name). Use a different project name or save folder to create a new copy."
+    }
+
+    func prepareAIFromStarter() {
+        guard openedOfflineStarter, let project else { return }
+        let original = URL(fileURLWithPath: project.root, isDirectory: true).lastPathComponent
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(original) == .orderedSame {
+            let candidate = String(original.prefix(48)) + "AI"
+            name = candidate.caseInsensitiveCompare(original) == .orderedSame ? String(original.prefix(47)) + "App" : candidate
+            bundleID = ""
+        }
+        starter = "ai"
+        stageShortBriefs = true
+        trusted = false
+        status = "Review the brief and planning requests to generate a new project with AI."
     }
 
     func reviewProject() {
@@ -665,11 +697,11 @@ private final class DesktopModel: ObservableObject {
         webPreview = nil
         if isFlutterProject {
             buildTarget = localTargets.contains("web") ? "web" : localTargets.first ?? ""
-            status = "\(project.suggestedScheme) is ready for source review and building."
-        } else if project.starter == "ai" {
-            status = "\(project.suggestedScheme) is ready for source review in Xcode."
-        } else if let starter = project.starter {
-            status = "\(project.suggestedScheme) was created with the \(starter) starter."
+        }
+        if project.starter == "ai" {
+            status = "AI generated the source for \(project.suggestedScheme). Review the source before building."
+        } else if openedOfflineStarter {
+            status = "\(project.suggestedScheme) is an offline starter. Use its brief to generate a separate project with AI."
         } else {
             status = "\(project.suggestedScheme) is ready to build."
         }
@@ -931,13 +963,13 @@ private struct DesktopView: View {
                             Picker("Creation method", selection: $model.starter) {
                                 Text("Generate with AI").tag("ai")
                                 if model.format == "flutter" {
-                                    Text("Flutter starter").tag("blank")
+                                    Text("Offline Flutter starter").tag("blank")
                                 } else {
-                                    Text("Automatic from brief").tag("auto")
-                                    Text("Checklist").tag("checklist")
-                                    Text("Notes").tag("notes")
-                                    Text("Counter").tag("counter")
-                                    Text("Blank").tag("blank")
+                                    Text("Offline starter from brief").tag("auto")
+                                    Text("Offline checklist starter").tag("checklist")
+                                    Text("Offline notes starter").tag("notes")
+                                    Text("Offline counter starter").tag("counter")
+                                    Text("Offline blank starter").tag("blank")
                                 }
                             }
                             .labelsHidden()
@@ -971,6 +1003,10 @@ private struct DesktopView: View {
                     }
                 }
                 if model.hasSelectedFormat && model.starter == "ai" {
+                    if model.key(for: model.selectedProvider.rawValue) == nil {
+                        Text(model.missingKeyMessage(for: model.selectedProvider.rawValue))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     if model.largeBrief {
                         Text("This brief will use component planning before code generation.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -978,9 +1014,12 @@ private struct DesktopView: View {
                         Toggle("Plan components before generating code", isOn: $model.stageShortBriefs)
                             .toggleStyle(.checkbox)
                     }
+                } else if model.hasSelectedFormat {
+                    Text("Offline starters use template code. Choose Generate with AI to implement your brief.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 HStack {
-                    Button(model.usesStagedGeneration ? "Review planning requests" : (model.project == nil ? "Review prompt" : "Review as new project"),
+                    Button(model.usesStagedGeneration ? "Review planning requests" : (model.starter == "ai" ? "Review AI prompt" : "Review offline starter"),
                            action: model.reviewProject)
                         .disabled(!model.canCreate)
                     Button("Open Project…", action: model.openProject)
@@ -997,6 +1036,12 @@ private struct DesktopView: View {
                         Button(project.kind == "flutter-project" ? "Open project folder" : "Open in Xcode") {
                             NSWorkspace.shared.open(URL(fileURLWithPath: project.path, isDirectory: true))
                         }
+                    }
+                    if model.openedOfflineStarter {
+                        Text("This project was created as an offline starter. Build & Run uses its saved source files.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Button("Generate a new project from this brief", action: model.prepareAIFromStarter)
+                            .disabled(!model.hasSelectedFormat || !model.hasBrief)
                     }
                 }
             }
@@ -1111,12 +1156,12 @@ private struct DesktopView: View {
         let target = draft.provider.flatMap(AIProvider.init(rawValue:))?.label ?? ""
         let ready = !draft.isAI || model.key(for: draft.provider) != nil
         return VStack(alignment: .leading, spacing: 12) {
-            Text("Review prompt").font(.title2.bold())
+            Text(draft.isAI ? "Review AI prompt" : "Review offline starter").font(.title2.bold())
             if let modelID = draft.model {
                 Text("Destination: \(target) · \(modelID). Approval sends this prompt and uses your API account.")
                     .foregroundStyle(.secondary)
             } else {
-                Text(draft.format == "flutter" ? "Local Flutter starter" : "Local project · \(draft.starter.capitalized) starter")
+                Text("This project uses an offline template. Your brief is saved with the project.")
                     .foregroundStyle(.secondary)
             }
             if let platforms = draft.platforms {
@@ -1142,7 +1187,7 @@ private struct DesktopView: View {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(draft.prompt, forType: .string)
                 }
-                Button(draft.isAI ? "Send & create project" : (draft.format == "flutter" ? "Create Flutter project" : "Create SwiftUI starter")) {
+                Button(draft.isAI ? "Send & generate project" : "Create offline starter") {
                     model.createProject(draft)
                 }
                     .buttonStyle(.borderedProminent)

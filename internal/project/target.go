@@ -59,6 +59,7 @@ func ReviewTarget(name, bundleID string, starter StarterOptions, target TargetOp
 		draft.Prompt = fmt.Sprintf("Build a working Flutter app named %s for these targets: %s.\n\n"+
 			"Return JSON with one \"source\" string containing all of lib/main.dart. Start with import 'package:flutter/material.dart'; and define void main(). "+
 			"Use Flutter and Dart SDK libraries only. Keep core behavior in the shared file and adapt the layout to narrow and wide screens. "+
+			"Launch into the requested interface and connect user actions to state and persistence where requested. Avoid generic greetings, placeholder screens and unfinished handlers. "+
 			"Use APIs supported on all selected targets. Omit dependencies, build scripts, shell commands, secrets and platform-specific files. "+
 			"The Flutter platform scaffolds and pubspec already exist.", name, strings.Join(draft.Platforms, ", "))
 	}

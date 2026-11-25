@@ -161,9 +161,9 @@ func summaryPrompt(draft Draft, text string) string {
 func planPrompt(draft Draft, brief string) string {
 	return targetDescription(draft) + "\n\nPlan a coherent first implementation in two to eight source files. " +
 		"The first file is the app UI entry point. Give each other file a focused, separate role. " +
-		"Assign the brief's requirements to components. Keep each component small enough for an 8,000-output-token code request. " +
-		"Describe cross-file names and signatures for shared types, state, functions and views in architecture. " +
-		"The entry point must wire the components into the app. Use SDK frameworks and local data only. " +
+		"Assign the requested screens, user actions, state changes and persistence to components. Keep each component small enough for an 8,000-output-token code request. " +
+		"Describe cross-file names and signatures for shared types, state, functions and views in architecture. State any requirements that cannot be implemented within the supported SDK and local data constraints. " +
+		"The entry point must open the requested app and wire the components into working user flows. Exclude greetings, placeholder screens and simulated success for missing features. " +
 		"Do not plan external dependencies, build scripts, credentials, platform setup, or changes to the app scaffold. " +
 		"Do not generate app code. Return a JSON source string containing a JSON object of this shape:\n" +
 		`{"architecture":"shared contracts and architecture","components":[{"title":"descriptive label","scope":"specific feature requirements"}]}` +
@@ -322,7 +322,8 @@ func reviewComponents(draft Draft, plan *ComponentPlan) (PlanReview, error) {
 		review.Prompts = append(review.Prompts, PlanPrompt{
 			Title: component.Title, File: files[i], MaxOutputTokens: componentTokens,
 			Prompt: targetDescription(draft) + "\n\nReturn JSON with one source string containing only the complete source for " + files[i] + ". " +
-				entryRules + "\nImplement the assigned scope and use the exact shared contracts. Components are generated independently. " +
+				entryRules + "\nImplement the assigned behavior and use the exact shared contracts. Components are generated independently. " +
+				"Connect UI controls to their actions and state. Avoid placeholder screens, unfinished handlers and TODO-only features. " +
 				"Use local data and SDK libraries. Omit commands, build scripts, secrets, dependencies and setup instructions.\n\n" +
 				"Project files: " + strings.Join(files, ", ") + "\n\nShared architecture:\n" + plan.Architecture +
 				"\n\nComponent: " + component.Title + "\nRequirements:\n" + component.Scope,
@@ -363,6 +364,9 @@ func CreatePlanned(ctx context.Context, parent string, input PlanRequest, genera
 			return project.Info{}, fmt.Errorf("component %d of %d returned credential material", i+1, review.RequestCount)
 		}
 		source = strings.TrimSpace(source)
+		if draft.Format != "flutter" && i == 0 && strings.Contains(source, offlineStarterText) {
+			return project.Info{}, errors.New("the model returned an offline starter instead of implementing the component plan. No project was created")
+		}
 		if !validPlanText(source, 128*1024) || !validComponentSource(draft.Format, i, source, review.Prompts) {
 			return project.Info{}, fmt.Errorf("component %d of %d (%s) did not return complete source for %s", i+1, review.RequestCount, step.Title, step.File)
 		}

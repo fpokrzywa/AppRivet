@@ -75,6 +75,16 @@ func TestComponentPlanBindsEveryCodeRequest(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	parent = t.TempDir()
+	_, err = CreatePlanned(t.Context(), parent, input, func(context.Context, string, string, string, string, int) (string, error) {
+		return returnedStarter, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "offline starter") {
+		t.Fatalf("expected a starter-specific error from planned generation, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(parent, input.Name)); !os.IsNotExist(err) {
+		t.Fatal("a planned project was created from the returned starter")
+	}
 }
 
 func TestLongBriefPlanningBoundsInputAndAccountsForEveryCall(t *testing.T) {

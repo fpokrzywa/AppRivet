@@ -22,13 +22,13 @@ AppRivet shows Flutter when it detects the installed SDK. On Windows and Linux, 
 
 Enter an idea under **Describe your app**, choose **Import brief** for a UTF-8 `.txt`, `.md` or `.markdown` file, or load a sample using **Try an example**. You can edit imported text before continuing. AppRivet does not cap brief length. Provider input limits apply when you send an AI request. Enter a project name, choose a creation method and click **Review prompt**. The browser launcher saves new projects in **AppRivet Projects** in your home folder. **Open Projects Folder** reveals the workspace so you can move the whole generated folder to a Mac. Use **Quit** to stop the launcher. The browser interface listens only on loopback.
 
-For SwiftUI, **Automatic from brief** looks for checklist, notes, or counter terms and uses a blank starter when there is no single match. Flutter offers an offline starter or AI generation. AppRivet saves your description in `APP_BRIEF.md`.
+New SwiftUI and Flutter projects default to **Generate with AI**. Choose an offline starter to try the build tools with template code. The SwiftUI offline starter from brief picks a checklist, notes or counter template when it finds a match. AppRivet saves your description in `APP_BRIEF.md`.
 
 ### Reopen a project
 
 Click a project name under **Your projects** in the browser. On macOS, choose **Your projects** and select its main folder, `APP_BRIEF.md`, or Xcode project. Selecting Flutter’s `ios/Runner.xcodeproj` or `ios/Runner.xcworkspace` reopens the surrounding Flutter project. AppRivet restores the brief, format, platforms, and saved creation settings. The browser’s **Open project folder** button reveals the selected files. The existing build controls work with the reopened project.
 
-Use a different name to **Review as new project** if you want to create a separate copy from the restored settings. Older projects restore data from their saved brief and platform files. The original provider and model can be restored only when the project recorded those settings. Manage provider keys in **Admin**.
+For a project marked as an offline starter, choose **Generate a new project from this brief** to keep your description and create a separate AI project. AppRivet suggests a new name, which you can edit. Build and Run compiles the selected project's saved source. Older projects restore data from their saved brief and platform files. AppRivet restores the original provider and model when the project recorded them.
 
 **Admin → Appearance** switches between the dark and light gradients for the current session. The header uses the ivory emblem on dark and the charcoal emblem on light.
 
@@ -74,7 +74,7 @@ Only identifiers and signing fingerprints go in the local settings file. Store c
 
 1. Open **Admin** between **Your projects** and **Quit**. Choose OpenAI or Anthropic and a model. Presets include GPT-6.2 Sol, GPT-6.2 Astra, Claude Opus 5.5 and Claude Fable 5.2. **Custom model ID** accepts another model on the selected provider that supports structured output.
 2. Select the provider and paste its key, or choose **Import key (.txt)**. Use a UTF-8 plain-text file with just the key on one line. Click **Save settings** to add or replace that provider’s key. **Remove key** clears the selected provider’s saved credential.
-3. Under **Creation method**, choose **Generate with AI**, then **Review prompt**. Check the provider, model, selected targets and full text, or copy the prompt. **Send & create project** sends that exact text and saves the returned SwiftUI or Dart source. AppRivet reads the brief file locally and sends the reviewed text.
+3. Keep **Generate with AI** under **Creation method** and choose **Review planning requests**. For a simple brief, you can turn off component planning and choose **Review AI prompt**. Check the provider, model, selected targets and full text. **Send & generate project** sends the approved single prompt and saves the returned SwiftUI or Dart source.
 4. Review the generated source before building. The compiler reports any errors. Complex apps can require source fixes or target-specific integrations.
 
 AppRivet stores OpenAI and Anthropic keys separately in macOS Keychain, Windows Credential Manager, or Linux Secret Service when available. If the browser launcher displays session storage, the key is cleared when the session ends. Provider API usage is billed to your API account.
@@ -83,7 +83,7 @@ The automated provider tests use mock HTTP responses. Live generation requires a
 
 ### Plan a complex app
 
-In **Generate with AI**, choose **Plan components before generating code**. AppRivet selects this workflow automatically for briefs over 4 KiB of UTF-8 text. You can select it for a short brief that still describes complex features.
+**Plan components before generating code** is selected by default. For briefs over 4 KiB of UTF-8 text, AppRivet requires component planning to keep the requests bounded.
 
 1. Review the planning prompts and request budget, then choose **Send to plan**. AppRivet splits very long briefs at text boundaries and synthesizes the extracted requirements into a plan. It saves the original brief in full.
 2. Check the component responsibilities and shared interfaces against your brief. Review the exact code prompt, destination file and output-token cap for each component. Approve once to send all of the displayed code prompts. Input sizes are shown in UTF-8 bytes, and output caps are upper limits for each request.
@@ -113,7 +113,7 @@ Install full Xcode and open it once to finish setup. In **Xcode → Settings →
 
 1. Write your idea under **Describe your app** or use **Import brief**. Enter an app name such as `MyFirstApp` and choose a save folder.
 2. Choose **SwiftUI (native iOS)** for an iPhone or iPad app. Choose **Flutter (shared code)** for multiple platforms and check the targets you want. Creating a Flutter project requires the Flutter SDK. [Flutter setup](https://docs.flutter.dev/install/manual)
-3. To generate code from your description, open **Admin**, choose OpenAI or Anthropic and a model, and enter your provider API key. Then select **Generate with AI**, click **Review prompt**, and choose **Send & create project**. To try an iOS Simulator build without an API key, choose a SwiftUI starter instead. [AI setup and key handling](#generate-with-ai)
+3. To generate code from your description, open **Admin**, choose OpenAI or Anthropic and a model, and save your provider API key. Keep **Generate with AI** selected and review the planning requests and component plan. To try an iOS Simulator build without an API key, choose an offline SwiftUI starter. [AI setup and key handling](#generate-with-ai)
 4. To run an iOS project, review the generated source, select an available iPhone or iPad simulator, confirm that you trust the project to build and run, and click **Build & Run**. If no simulator appears, check the runtime in Xcode and click **Refresh** in AppRivet. If building or launching fails, expand **Build details** for the command output.
 5. Use **Your projects** to reopen a project. Use **Open in Xcode** to edit a SwiftUI project or **Open project folder** to access the generated Flutter code.
 

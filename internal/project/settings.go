@@ -105,6 +105,7 @@ func OpenSettings(path string) (Opened, error) {
 			}
 			if validChoice(settings.Format, saved.Settings.Starter) {
 				settings.Starter = saved.Settings.Starter
+				info.Starter = saved.Settings.Starter
 			}
 			if settings.Starter == "ai" && (saved.Settings.Provider == "openai" || saved.Settings.Provider == "anthropic") {
 				settings.Provider = saved.Settings.Provider

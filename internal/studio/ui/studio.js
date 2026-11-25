@@ -35,6 +35,7 @@ const confirmCreate = byID("confirm-create");
 const editBrief = byID("edit-brief");
 const importStatus = byID("import-status");
 const openCurrentFolder = byID("open-current-folder");
+const generateFromStarter = byID("generate-from-starter");
 
 let reviewedRequest;
 let creating = false;
@@ -45,8 +46,9 @@ let selectedFormat = "";
 let buildSelection;
 let building = false;
 let loadedProject = "";
+let loadedStarter = "";
 let openSequence = 0;
-let preferComponentPlan = false;
+let preferComponentPlan = true;
 let credentialStorage = false;
 let savedKeys = new Set();
 let vaultRevision = 0;
@@ -123,7 +125,7 @@ function hasProviderKey(id) {
 
 const starters = {
   ai: ["AI-generated SwiftUI", "A model writes the app’s SwiftUI source from your brief. Review the source before building in Xcode."],
-  auto: ["Automatic from brief", "Match a checklist, saved note or counter. Other ideas start with a blank SwiftUI project and the brief."],
+  auto: ["Offline starter from brief", "Pick a checklist, saved note or counter template. Other ideas start with a blank SwiftUI screen."],
   checklist: ["Checklist", "Add items, check them off, and swipe to delete. Items are saved on the device."],
   notes: ["Notes", "Start with a note editor that saves your text on the device."],
   counter: ["Counter", "Add, subtract or reset a saved count."],
@@ -147,6 +149,7 @@ function updateBrief() {
   byID("generation-settings").hidden = !ai;
   planComponents.disabled = needsComponentPlan;
   planComponents.checked = needsComponentPlan || preferComponentPlan;
+  updateLoadedProject();
   byID("generation-help").textContent = needsComponentPlan
     ? "Descriptions over 4,096 UTF-8 bytes use component planning."
     : "Review a component plan before sending the code prompts.";
@@ -155,7 +158,7 @@ function updateBrief() {
   const [title, description] = isFlutter
     ? ai
       ? ["AI-generated Flutter", "The selected model writes shared Dart code for the platforms you checked."]
-      : ["Flutter starter", "One shared Dart project with build files for the platforms you checked."]
+      : ["Offline Flutter starter", "A template screen and build files for the platforms you checked."]
     : starters[starter.value];
   byID("starter-title").textContent = title;
   byID("starter-copy").textContent = description;
@@ -170,7 +173,7 @@ function updateBrief() {
   const settings = profiles[activeProvider];
   byID("selected-model").textContent = ai
     ? providers[activeProvider].name + " · " + settings.model + (hasProviderKey(activeProvider) ? "" : " · Add a key in Settings")
-    : "";
+    : "Offline starters use template code. Choose Generate with AI to implement your brief.";
 }
 
 function showFormats() {
@@ -197,17 +200,19 @@ function updateFormat() {
   for (const name of ["auto", "checklist", "notes", "counter"]) {
     starter.querySelector('option[value="' + name + '"]').hidden = isFlutter;
   }
-  starter.querySelector('option[value="blank"]').textContent = isFlutter ? "Flutter starter" : "Blank";
+  starter.querySelector('option[value="blank"]').textContent = isFlutter ? "Offline Flutter starter" : "Blank";
   if (isFlutter && starter.value !== "ai") starter.value = "blank";
   updateBrief();
-  updateLoadedProject();
 }
 
 function updateLoadedProject() {
   const sameName = nameField.value.trim().toLowerCase() === loadedProject.toLowerCase();
-  submit.disabled = !format.value || Boolean(loadedProject && sameName);
-  submit.textContent = loadedProject ? "Review as new project" : "Review prompt";
+  const ai = starter.value === "ai";
+  submit.disabled = !format.value || Boolean(loadedProject && sameName) || (ai && !brief.value.trim());
+  submit.textContent = ai ? (planComponents.checked ? "Review planning requests" : "Review AI prompt") : "Review offline starter";
   openCurrentFolder.hidden = !loadedProject;
+  generateFromStarter.hidden = !loadedStarter || loadedStarter === "ai";
+  generateFromStarter.disabled = !format.value || !brief.value.trim();
   for (const button of projects.querySelectorAll("[data-project-name]")) {
     button.setAttribute("aria-current", String(button.dataset.projectName === loadedProject));
   }
@@ -219,9 +224,10 @@ async function reopenProject(name) {
   const sequence = ++openSequence;
   show(message, "Reopening " + name + "…");
   try {
-    const {settings} = await request("/api/project", {name});
+    const {project, settings} = await request("/api/project", {name});
     if (sequence !== openSequence) return;
     loadedProject = name;
+    loadedStarter = project.starter ?? "";
     nameField.value = settings.name;
     brief.value = settings.brief || "";
     byID("bundle").value = settings.bundle_id || "";
@@ -237,8 +243,9 @@ async function reopenProject(name) {
     }
     show(importStatus, "");
     updateBrief();
-    updateLoadedProject();
-    show(message, "Opened " + name + (format.value ? ". Use a different project name to create a new copy." : "."));
+    show(message, "Opened " + name + (loadedStarter && loadedStarter !== "ai"
+      ? ". This project was created as an offline starter."
+      : format.value ? ". Use a different project name to create a new copy." : "."));
     brief.focus();
   } catch (error) {
     if (sequence === openSequence) show(message, error.message, true);
@@ -246,6 +253,18 @@ async function reopenProject(name) {
 }
 
 nameField.addEventListener("input", updateLoadedProject);
+generateFromStarter.addEventListener("click", () => {
+  if (nameField.value.trim().toLowerCase() === loadedProject.toLowerCase()) {
+    const candidate = loadedProject.slice(0, 48) + "AI";
+    nameField.value = candidate.toLowerCase() === loadedProject.toLowerCase() ? loadedProject.slice(0, 47) + "App" : candidate;
+    byID("bundle").value = "";
+  }
+  starter.value = "ai";
+  preferComponentPlan = true;
+  updateBrief();
+  show(message, "Review the brief and planning requests to generate a new project with AI.");
+  nameField.focus();
+});
 openCurrentFolder.addEventListener("click", async () => {
   try { await request("/api/open-project-folder", {name: loadedProject}); }
   catch (error) { show(message, error.message, true); }
@@ -829,7 +848,6 @@ for (const button of document.querySelectorAll("[data-example]")) {
     if (format.value !== "flutter" && starter.value !== "ai") starter.value = button.dataset.example;
     show(importStatus, "");
     updateBrief();
-    updateLoadedProject();
     brief.focus();
   });
 }
@@ -899,15 +917,15 @@ form.addEventListener("submit", async event => {
     if (staged) {
       displayStagedReview(draft);
     } else {
-      reviewHeading.textContent = "Review prompt";
+      reviewHeading.textContent = ai ? "Review AI prompt" : "Review offline starter";
       promptText.value = draft.prompt;
-      confirmCreate.textContent = ai ? "Send & create project" : (isFlutter ? "Create Flutter project" : "Create SwiftUI starter");
+      confirmCreate.textContent = ai ? "Send & generate project" : "Create offline starter";
     }
     const platforms = isFlutter ? " Flutter targets are " + (draft.platforms ?? project.platforms).map(platform => platformNames[platform]).join(", ") + "." : "";
     byID("review-target").textContent = (ai
       ? providers[draft.provider ?? project.provider].name + " (" + (draft.model ?? project.model)
         + "). Approval sends " + (staged ? "the requests for this step" : "this prompt") + " using your API account."
-      : (isFlutter ? "Local Flutter starter." : "Local project · " + starters[draft.starter][0] + " starter.")) + platforms;
+      : "This project uses an offline template. Your brief is saved with the project.") + platforms;
     const blocker = isFlutter && !flutterSDK ? "Install the Flutter SDK before creating this project."
       : ai && !hasProviderKey(project.provider) ? "Add a key for this provider in Settings before sending." : "";
     confirmCreate.disabled = Boolean(blocker);
@@ -966,14 +984,13 @@ confirmCreate.addEventListener("click", async () => {
       return;
     }
     const result = await request(stage === "generation" ? "/api/plan/create" : "/api/create", approvedRequest);
-    const label = starters[result.starter]?.[0] ?? "SwiftUI";
     review.close();
     loadedProject = result.suggested_scheme;
+    loadedStarter = result.starter;
     updateLoadedProject();
-    show(message, result.kind === "flutter-project"
-      ? "Created " + result.suggested_scheme + " for " + result.platforms.map(platform => platformNames[platform]).join(", ") + "."
-      : project.provider ? "Created " + result.suggested_scheme + ". Review the generated SwiftUI in Xcode before building."
-      : "Created " + result.suggested_scheme + " with the " + label + " starter.");
+    show(message, result.starter === "ai"
+      ? "AI generated the source for " + result.suggested_scheme + ". Review the source before building."
+      : "Created " + result.suggested_scheme + " as an offline starter.");
     await refresh().catch(() => {});
   } catch (error) {
     show(reviewStatus, key ? error.message.replaceAll(key, "[redacted]") : error.message, true);

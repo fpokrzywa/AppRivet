@@ -22,6 +22,7 @@ import (
 )
 
 const RequestTimeout = 6 * time.Minute
+const offlineStarterText = `Text("Your first iOS app is ready to build.")`
 
 var (
 	apiKeyPattern = regexp.MustCompile("^[A-Za-z0-9_-]{8,512}$")
@@ -102,6 +103,9 @@ func Create(ctx context.Context, parent string, draft Draft, approval, key strin
 	if !strings.HasPrefix(source, "import SwiftUI\n") && !strings.HasPrefix(source, "import SwiftUI\r\n") ||
 		!contentView.MatchString(source) {
 		return project.Info{}, errors.New("the model did not return a complete SwiftUI ContentView. No project was created")
+	}
+	if strings.Contains(source, offlineStarterText) {
+		return project.Info{}, errors.New("the model returned an offline starter instead of implementing the brief. No project was created")
 	}
 	return project.CreateGenerated(parent, draft.Draft, source)
 }

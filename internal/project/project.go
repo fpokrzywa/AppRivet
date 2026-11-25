@@ -101,7 +101,9 @@ Start with import SwiftUI and define struct ContentView: View with a default ini
 Use Apple frameworks and self-contained source. The surrounding Xcode project, app entry point,
 Greeting helper, and smoke tests already exist. Omit @main, package dependencies, entitlements, build settings,
 commands, script files, and setup instructions. Implement the brief as fully as possible within one
-Swift source file. Use local data and avoid credentials or external services.
+Swift source file. Launch into the requested interface and connect user actions to state and persistence
+where requested. Avoid generic greetings, placeholder screens and unfinished handlers. Use local data
+and avoid credentials or external services.
 
 Project name: %s
 Bundle ID: %s

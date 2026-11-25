@@ -23,6 +23,9 @@ func TestOpenSettingsRestoresSwiftUIProject(t *testing.T) {
 		!slices.Equal(settings.Platforms, []string{"ios"}) {
 		t.Fatal("reopening did not restore the original SwiftUI form")
 	}
+	if opened.Project.Starter != "auto" {
+		t.Fatal("the reopened project lost its offline creation method")
+	}
 	body, err := os.ReadFile(filepath.Join(created.Root, settingsFilename))
 	if err != nil || strings.Contains(string(body), "Keep a list") {
 		t.Fatal("the saved settings unnecessarily repeated the full brief")

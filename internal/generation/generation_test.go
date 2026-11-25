@@ -5,9 +5,35 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/fpokrzywa/AppRivet/internal/project"
 )
+
+const returnedStarter = `import SwiftUI
+struct ContentView: View {
+    var body: some View { Text("Your first iOS app is ready to build.") }
+}`
+
+func TestGenerationDoesNotSaveTheOfflineStarter(t *testing.T) {
+	parent := t.TempDir()
+	draft, err := Review("Watchmaker", "com.example.watchmaker", "Teach me to assemble a watch.", "anthropic", "test-model", project.TargetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = Create(t.Context(), parent, draft, draft.Approval, "fake-test-key", func(context.Context, string, string, string, string) (string, error) {
+		return returnedStarter, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "offline starter") {
+		t.Fatalf("expected a starter-specific error, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(parent, draft.Name)); !os.IsNotExist(err) {
+		t.Fatal("a project was created from the returned starter")
+	}
+}
 
 type transportFunc func(*http.Request) (*http.Response, error)
 

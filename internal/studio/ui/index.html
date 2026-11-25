@@ -52,9 +52,9 @@
             <div id="creation-method-settings" hidden>
               <label for="starter">Creation method</label>
               <select id="starter" name="starter">
-                <option value="ai">Generate with AI</option>
+                <option value="ai" selected>Generate with AI</option>
                 <optgroup label="Offline starters">
-                  <option value="auto" selected>Automatic from brief</option>
+                  <option value="auto">Offline starter from brief</option>
                   <option value="checklist">Checklist</option>
                   <option value="notes">Notes</option>
                   <option value="counter">Counter</option>
@@ -93,6 +93,7 @@
           </details>
           <div class="form-footer">
             <button id="submit" type="submit" class="primary" disabled>Review prompt</button>
+            <button id="generate-from-starter" type="button" class="quiet" hidden>Generate a new project from this brief</button>
             <button id="open-current-folder" type="button" class="quiet" hidden>Open project folder</button>
             <p id="message" role="status" aria-live="polite" class="message">Opening your local workspace…</p>
           </div>
