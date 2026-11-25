@@ -1,5 +1,9 @@
 # Verification record
 
+## Developer ID signing and notarization
+
+The hosted signing rehearsal built the universal 0.4.9 release candidate, verified its bundle signature and architecture slices, and confirmed that missing Apple credentials prevent the workflow from creating release assets. Mocked Apple tools also exercised successful packaging and refusals after a rejected app, rejected disk image, failed submission, or failed Gatekeeper assessment. The first run with real Apple credentials must still verify Developer ID signing, Apple's acceptance and stapled tickets, and the notarized app's Simulator smoke test. A clean Finder install and a Sparkle update from the ad hoc preview still need live checks. [Passing signing rehearsal](https://github.com/fpokrzywa/AppRivet/actions/runs/45670415614)
+
 ## Mac update installation and relaunch
 
 On hosted macOS, Sparkle read the production appcast, downloaded the signed 0.4.9 archive, replaced the 0.4.8 bundle and launched a new AppRivet process from the same path. The test verified the installed bundle version and code signature. It used an automated approval driver inside a temporary copy, so the standard dialogs and in-place updates from Applications on a personal Mac still need live validation. [Passing update test](https://github.com/fpokrzywa/AppRivet/actions/runs/45665268741)
