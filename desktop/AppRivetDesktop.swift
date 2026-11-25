@@ -167,6 +167,7 @@ struct AppRivetDesktop: App {
                   opened.settings.starter == "auto" else {
                 throw DesktopFailure(message: "The saved project form did not restore the original settings.")
             }
+            try Self.smokeWebPreviewAndReopen(workflow, parent: parent)
             Self.smokeProgress("Discovering an iPhone simulator…")
             guard let simulator = try workflow.simulators().first(where: { $0.name.hasPrefix("iPhone") }) else {
                 throw DesktopFailure(message: "An iPhone simulator is unavailable.")
@@ -190,9 +191,42 @@ struct AppRivetDesktop: App {
         FileHandle.standardOutput.write(Data("\(message)\n".utf8))
     }
 
+    private static func smokeWebPreviewAndReopen(_ workflow: DesktopWorkflow, parent: URL) throws {
+        let root = parent.appendingPathComponent("Renamed Flutter Project", isDirectory: true)
+        let selection = root.appendingPathComponent("ios/Runner.xcodeproj", isDirectory: true)
+        for directory in [selection, root.appendingPathComponent("lib"), root.appendingPathComponent("web"),
+                          root.appendingPathComponent("build/web")] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        let page = "<!doctype html><title>AppRivet Web preview smoke test</title>"
+        let files = [
+            "pubspec.yaml": "name: apprivet_previewfixture\n",
+            "lib/main.dart": "void main() {}\n",
+            "ios/Runner.xcodeproj/project.pbxproj": "",
+            "APP_BRIEF.md": "Assemble a watch and show the time.\n",
+            ".apprivet.json": #"{"version":1,"settings":{"format":"flutter","name":"PreviewFixture","starter":"ai","provider":"anthropic","model":"claude-opus-5-5"}}"#,
+            "build/web/index.html": page,
+        ]
+        for (name, body) in files {
+            try Data(body.utf8).write(to: root.appendingPathComponent(name))
+        }
+        let opened = try workflow.open(selection)
+        let model = DesktopModel()
+        model.restoreProject(opened)
+        guard model.name == "PreviewFixture", model.brief == "Assemble a watch and show the time.",
+              model.format == "flutter", model.platforms == ["ios", "web"], model.starter == "ai",
+              model.selectedProvider == .anthropic, model.profiles[.anthropic]?.model == "claude-opus-5-5" else {
+            throw DesktopFailure(message: "The Flutter project selection did not restore the saved form.")
+        }
+        let preview = try workflow.previewWeb(project: opened.project, trusted: true)
+        guard try String(contentsOf: preview.url, encoding: .utf8) == page else {
+            throw DesktopFailure(message: "The Web preview did not serve the completed build.")
+        }
+    }
+
     var body: some Scene {
         Window("AppRivet", id: "main") {
-            DesktopView()
+            DesktopView(updateCheck: updateCheck, checkForUpdates: updaterController.updater.checkForUpdates)
         }
         .defaultSize(width: 680, height: 740)
         .commands {
@@ -202,6 +236,11 @@ struct AppRivetDesktop: App {
             }
         }
     }
+}
+
+private enum CompletedBuild {
+    case simulator
+    case flutter(DesktopFlutterBuild)
 }
 
 @MainActor
@@ -232,7 +271,8 @@ private final class DesktopModel: ObservableObject {
     @Published private(set) var status = "Choose a folder to create your first app."
     @Published private(set) var errorMessage: String?
     @Published private(set) var log = ""
-    @Published private(set) var buildArtifact: URL?
+    @Published private(set) var completedBuild: CompletedBuild?
+    private var webPreview: DesktopWebPreview?
 
     var busy: Bool { activity != nil }
     var canCreate: Bool {
@@ -285,14 +325,14 @@ private final class DesktopModel: ObservableObject {
     func openProject() {
         let panel = NSOpenPanel()
         panel.title = "Open an AppRivet project"
-        panel.message = "Choose the project folder or its .xcodeproj file."
+        panel.message = "Choose the AppRivet project folder, its saved brief, or its Xcode project."
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         perform("Opening project…", work: { try $0.open(url) }, done: restoreProject)
     }
 
-    private func restoreProject(_ opened: DesktopOpened) {
+    func restoreProject(_ opened: DesktopOpened) {
         let settings = opened.settings
         name = settings.name
         brief = settings.brief ?? ""
@@ -346,7 +386,8 @@ private final class DesktopModel: ObservableObject {
     private func selectProject(_ project: DesktopProject) {
         self.project = project
         trusted = false
-        buildArtifact = nil
+        completedBuild = nil
+        webPreview = nil
         if isFlutterProject {
             buildTarget = localTargets.contains("web") ? "web" : localTargets.first ?? ""
             status = "\(project.suggestedScheme) is ready for source review and building."
@@ -381,15 +422,16 @@ private final class DesktopModel: ObservableObject {
     }
 
     func buildAndRun() {
-        guard let project, canRun else { return }
+        guard let project, canRun, !busy else { return }
         let trusted = self.trusted
+        completedBuild = nil
         if isFlutterProject && buildTarget != "ios" {
             let target = buildTarget
-            buildArtifact = nil
+            if target == "web" { webPreview = nil }
             perform("Building \(project.suggestedScheme) for \(platformLabel(target))…", work: {
                 try $0.buildFlutter(project: project, target: target, trusted: trusted)
             }) { result in
-                self.buildArtifact = URL(fileURLWithPath: result.artifact)
+                self.completedBuild = .flutter(result)
                 self.status = "The \(platformLabel(target)) build is ready."
             }
             return
@@ -402,7 +444,33 @@ private final class DesktopModel: ObservableObject {
         }) { result in
             self.status = "\(project.suggestedScheme) is running on \(simulator.name)."
             self.log = result.buildLog
+            self.completedBuild = .simulator
         }
+    }
+
+    func openWebBuild() {
+        guard let project, trusted, !busy else { return }
+        if let webPreview, webPreview.isRunning {
+            openPreviewInBrowser(webPreview.url)
+            return
+        }
+        perform("Starting the Web preview…", work: { try $0.previewWeb(project: project, trusted: true) }) { preview in
+            self.webPreview = preview
+            self.openPreviewInBrowser(preview.url)
+        }
+    }
+
+    private func openPreviewInBrowser(_ url: URL) {
+        if NSWorkspace.shared.open(url) {
+            errorMessage = nil
+            status = "Web build opened in your browser."
+        } else {
+            errorMessage = "Could not open the Web build in your default browser."
+        }
+    }
+
+    func showSimulator() {
+        perform("Opening Simulator…", work: { try $0.showSimulator() }) { _ in }
     }
 
     private func perform<Value: Sendable>(_ message: String, work: @escaping @Sendable (DesktopWorkflow) throws -> Value, done: @escaping (Value) -> Void) {
@@ -427,6 +495,8 @@ private final class DesktopModel: ObservableObject {
 
 @MainActor
 private struct DesktopView: View {
+    @ObservedObject var updateCheck: UpdateCheckState
+    let checkForUpdates: () -> Void
     @StateObject private var model = DesktopModel()
     @State private var showDetails = false
     @State private var loaded = false
@@ -443,12 +513,13 @@ private struct DesktopView: View {
                     Spacer()
                     Button("Your projects", action: model.openProject).disabled(model.busy)
                     Button("Admin") { showAdmin = true }.disabled(model.busy)
+                    Button("Check for Updates…", action: checkForUpdates).disabled(!updateCheck.canCheck || model.busy)
                     Button("Quit") { NSApp.terminate(nil) }
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("What app do you want to build?").font(.largeTitle.weight(.semibold))
                         .accessibilityAddTraits(.isHeader)
-                    Text("Create a SwiftUI project, then run it in the iOS Simulator.")
+                    Text("Create a SwiftUI or Flutter project, then build it for your selected platform.")
                         .foregroundStyle(.secondary)
                 }
                 projectSection.disabled(model.busy)
@@ -601,12 +672,32 @@ private struct DesktopView: View {
                 Button(model.isFlutterProject && model.buildTarget != "ios" ? "Build" : "Build & Run", action: model.buildAndRun)
                     .buttonStyle(.borderedProminent)
                     .disabled(!model.canRun)
-                if let artifact = model.buildArtifact {
-                    Button("Reveal build in Finder") { NSWorkspace.shared.activateFileViewerSelecting([artifact]) }
+                if let build = model.completedBuild {
+                    buildActions(build)
                 }
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func buildActions(_ build: CompletedBuild) -> some View {
+        switch build {
+        case .simulator:
+            Button("Show Simulator", action: model.showSimulator)
+        case .flutter(let build):
+            let artifact = URL(fileURLWithPath: build.artifact)
+            if build.target == "web" {
+                Button("Open in Browser", action: model.openWebBuild).disabled(!model.trusted)
+            }
+            if build.target == "android" {
+                Button("Show APK in Finder") { NSWorkspace.shared.activateFileViewerSelecting([artifact]) }
+                Text("Drag the APK onto a running Android Studio emulator to install it.")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else {
+                Button("Reveal build in Finder") { NSWorkspace.shared.activateFileViewerSelecting([artifact]) }
+            }
         }
     }
 

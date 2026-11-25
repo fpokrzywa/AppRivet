@@ -49,6 +49,7 @@ Usage:
   apprivet init NAME (--brief TEXT | --brief-stdin) --provider PROVIDER --model MODEL (--review | --approve HASH) [--json]
   apprivet init NAME --format flutter --platforms ios,android,web,windows,macos,linux [--review] [--json]
   apprivet flutter-build --project PATH --target PLATFORM --trust-project [--json]
+  apprivet flutter-preview --project PATH --trust-project
   apprivet inspect [--project PATH] [--form] [--json]
   apprivet build [--project PATH] [--scheme NAME] --trust-project [--json]
   apprivet test [--project PATH] [--scheme NAME] --simulator UUID --trust-project [--json]
@@ -130,7 +131,9 @@ func (a App) Run(ctx context.Context, args []string) int {
 	if command == "install" || command == "launch" {
 		return fail("not_implemented", command+" is planned after Milestone 1; use Xcode's official device workflow", 3)
 	}
-	if command != "doctor" && command != "init" && command != "inspect" && command != "build" && command != "test" && command != "version" && command != "devices" && command != "flutter-build" {
+	switch command {
+	case "doctor", "init", "inspect", "build", "test", "version", "devices", "flutter-build", "flutter-preview":
+	default:
 		return fail("unknown_command", "unknown command; run apprivet help", 2)
 	}
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -172,6 +175,9 @@ func (a App) Run(ctx context.Context, args []string) int {
 	case "flutter-build":
 		fs.StringVar(&projectPath, "project", ".", "Flutter project folder")
 		fs.StringVar(&flutterTarget, "target", "", "selected platform: ios, android, web, windows, macos or linux")
+		fs.BoolVar(&trust, "trust-project", false, "acknowledge execution of trusted project code")
+	case "flutter-preview":
+		fs.StringVar(&projectPath, "project", ".", "Flutter project folder")
 		fs.BoolVar(&trust, "trust-project", false, "acknowledge execution of trusted project code")
 	case "build", "test":
 		fs.StringVar(&projectPath, "project", ".", "project root or Xcode container")
@@ -321,6 +327,14 @@ func (a App) Run(ctx context.Context, args []string) int {
 		if err != nil {
 			return fail("flutter_build_failed", err.Error(), 5)
 		}
+	case "flutter-preview":
+		if jsonMode {
+			return fail("invalid_arguments", "the Web preview streams a local URL without --json", 2)
+		}
+		if err := project.PreviewFlutterWeb(ctx, projectPath, trust, a.In, a.Out); err != nil {
+			return fail("flutter_preview_failed", err.Error(), 5)
+		}
+		return 0
 	case "build", "test":
 		result, err := build.Execute(ctx, a.OS, a.Runner, build.Request{Project: projectPath, Scheme: scheme, Action: command, Simulator: simulator, TrustProject: trust, Timeout: timeout})
 		response.Data = result

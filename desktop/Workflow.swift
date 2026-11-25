@@ -109,7 +109,24 @@ struct DesktopRun: Sendable {
 }
 
 struct DesktopFlutterBuild: Decodable, Sendable {
+    let target: String
     let artifact: String
+}
+
+final class DesktopWebPreview: @unchecked Sendable {
+    let url: URL
+    private let child: Process
+    private let lifetime: FileHandle
+
+    init(url: URL, child: Process, lifetime: FileHandle) {
+        self.url = url
+        self.child = child
+        self.lifetime = lifetime
+    }
+
+    var isRunning: Bool { child.isRunning }
+
+    deinit { try? lifetime.close() }
 }
 
 struct DesktopWorkflow: Sendable {
@@ -175,6 +192,43 @@ struct DesktopWorkflow: Sendable {
         return try invoke(["flutter-build", "--project", project.root, "--target", target, "--trust-project"], timeout: 930)
     }
 
+    func previewWeb(project: DesktopProject, trusted: Bool) throws -> DesktopWebPreview {
+        guard trusted else { throw DesktopFailure(message: "Confirm you trust this project before opening its web build.") }
+        let child = Process()
+        let input = Pipe()
+        let output = Pipe()
+        child.executableURL = cli
+        child.arguments = ["flutter-preview", "--project", project.root, "--trust-project"]
+        child.currentDirectoryURL = FileManager.default.temporaryDirectory
+        child.standardInput = input
+        child.standardOutput = output
+        child.standardError = FileHandle.nullDevice
+        child.environment = [:]
+        try child.run()
+        let lifetime = input.fileHandleForWriting
+        let ready = output.fileHandleForReading
+        var descriptor = pollfd(fd: ready.fileDescriptor, events: Int16(POLLIN), revents: 0)
+        // The preview emits a single short line after its socket is ready.
+        guard poll(&descriptor, 1, 8000) > 0,
+              let data = try? ready.read(upToCount: 256),
+              let url = URL(string: String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)),
+              let port = url.port, (1...65535).contains(port),
+              url.absoluteString == "http://127.0.0.1:\(port)/" else {
+            try? lifetime.close()
+            if child.isRunning { child.terminate() }
+            throw DesktopFailure(message: "Could not start the Web preview. Rebuild the Web target and try again.")
+        }
+        return DesktopWebPreview(url: url, child: child, lifetime: lifetime)
+    }
+
+    func showSimulator() throws {
+        let developer = try appleTool("/usr/bin/xcode-select", ["-p"], timeout: 15)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let simulatorApp = URL(fileURLWithPath: developer, isDirectory: true)
+            .appendingPathComponent("Applications/Simulator.app", isDirectory: true)
+        _ = try appleTool("/usr/bin/open", ["-a", simulatorApp.path], timeout: 30)
+    }
+
     func buildAndRun(project: DesktopProject, simulator: DesktopSimulator, trusted: Bool, showSimulator: Bool,
                      progress: @Sendable (String) -> Void = { _ in }) throws -> DesktopRun {
         guard trusted else { throw DesktopFailure(message: "Confirm you trust this project before building it.") }
@@ -213,13 +267,7 @@ struct DesktopWorkflow: Sendable {
             _ = try appleTool("/usr/bin/xcrun", ["simctl", "install", simulator.id, app.path], timeout: 240)
             progress("Launching \(name)…")
             _ = try appleTool("/usr/bin/xcrun", ["simctl", "launch", "--terminate-running-process", simulator.id, bundleID], timeout: 240)
-            if showSimulator {
-                let developer = try appleTool("/usr/bin/xcode-select", ["-p"], timeout: 15)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                let simulatorApp = URL(fileURLWithPath: developer, isDirectory: true)
-                    .appendingPathComponent("Applications/Simulator.app", isDirectory: true)
-                _ = try appleTool("/usr/bin/open", ["-a", simulatorApp.path], timeout: 30)
-            }
+            if showSimulator { try self.showSimulator() }
         } catch let failure as DesktopFailure {
             throw DesktopFailure(message: "The build succeeded. \(failure.message)", details: failure.details + "\n" + log)
         }

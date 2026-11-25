@@ -56,7 +56,7 @@ var legacyBundle = regexp.MustCompile(`PRODUCT_BUNDLE_IDENTIFIER\s*=\s*"?([A-Za-
 // OpenSettings reconstructs the project form. Older projects remain openable
 // from their platform files, bundle identifier, and saved brief.
 func OpenSettings(path string) (Opened, error) {
-	info, err := Detect(path)
+	info, err := detectSavedProject(path)
 	if err != nil {
 		return Opened{}, err
 	}
@@ -100,6 +100,9 @@ func OpenSettings(path string) (Opened, error) {
 	if len(body) != 0 {
 		var saved diskSettings
 		if json.Unmarshal(body, &saved) == nil && saved.Version == 1 && saved.Settings.Format == settings.Format {
+			if namePattern.MatchString(saved.Settings.Name) && !reserved.MatchString(saved.Settings.Name) {
+				settings.Name = saved.Settings.Name
+			}
 			if validChoice(settings.Format, saved.Settings.Starter) {
 				settings.Starter = saved.Settings.Starter
 			}
@@ -110,6 +113,35 @@ func OpenSettings(path string) (Opened, error) {
 		}
 	}
 	return Opened{Project: info, Settings: settings}, nil
+}
+
+func detectSavedProject(selection string) (Info, error) {
+	path, err := filepath.Abs(selection)
+	if err != nil {
+		return Info{}, err
+	}
+	stat, err := os.Lstat(path)
+	if err != nil {
+		return Info{}, fmt.Errorf("inspect project selection: %w", err)
+	}
+	name := filepath.Base(path)
+	if stat.Mode().IsRegular() && (name == "APP_BRIEF.md" || name == settingsFilename || name == "pubspec.yaml") {
+		return Detect(filepath.Dir(path))
+	}
+	if stat.IsDir() {
+		platformDir := path
+		if name == "Runner.xcodeproj" || name == "Runner.xcworkspace" {
+			platformDir = filepath.Dir(path)
+		}
+		platform := filepath.Base(platformDir)
+		if platform == "ios" || platform == "macos" {
+			if parent, err := Detect(filepath.Dir(platformDir)); err == nil && parent.Kind == "flutter-project" &&
+				slices.Contains(parent.Platforms, platform) {
+				return parent, nil
+			}
+		}
+	}
+	return Detect(path)
 }
 
 func validChoice(format, choice string) bool {

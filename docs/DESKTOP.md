@@ -15,7 +15,7 @@ For SwiftUI, **Automatic from brief** looks for checklist, notes, or counter ter
 
 ### Reopen a project
 
-Click a project name under **Your projects** in the browser. On macOS, choose **Your projects** and select its folder or SwiftUI `.xcodeproj`. AppRivet restores the brief, format, platforms, and saved creation settings. The browser’s **Open project folder** button reveals the selected files. The existing build controls work with the reopened project.
+Click a project name under **Your projects** in the browser. On macOS, choose **Your projects** and select its main folder, `APP_BRIEF.md`, or Xcode project. Selecting Flutter’s `ios/Runner.xcodeproj` or `ios/Runner.xcworkspace` reopens the surrounding Flutter project. AppRivet restores the brief, format, platforms, and saved creation settings. The browser’s **Open project folder** button reveals the selected files. The existing build controls work with the reopened project.
 
 Use a different name to **Review as new project** if you want to create a separate copy from the restored settings. Older projects restore data from their saved brief and platform files. The original provider and model can be restored only when the project recorded those settings. API keys stay in Admin for the current session.
 
@@ -26,6 +26,8 @@ Use a different name to **Review as new project** if you want to create a separa
 1. Install the official Flutter SDK. AppRivet finds it on `PATH`, in `~/development/flutter` or `~/flutter`, or under the AppRivet toolchain cache. Set `APPRIVET_FLUTTER_SDK` to an absolute SDK directory to use a different location. A desktop launcher may need reopening after a PATH change. [Flutter installation](https://docs.flutter.dev/install/manual)
 2. Choose **Flutter (shared code)** under **Project format**. Check the platforms you want under **App platforms**, then review and create the project. AppRivet invokes `flutter create` for exactly those platform folders. All targets share `lib/main.dart` and `pubspec.yaml`.
 3. In **Your projects**, select a build target and click **Build**. In the Mac app, select it under **Build platform**. Review the source and confirm you trust the project’s build scripts. Web, Android and desktop builds display their output location. The Mac app can launch the iOS debug build in a selected Simulator.
+
+After building in the Mac app, **Open in Browser** previews the built Web app on your Mac while the project remains open. **Show APK in Finder** reveals the Android build. Drag the APK onto a running Android Studio emulator and open the app there. **Show Simulator** brings the iOS Simulator back to the foreground after a successful iOS build and launch. [Installing an APK in the Android Emulator](https://developer.android.com/studio/run/emulator-install-add-files)
 
 | Target | Build host and tools |
 | --- | --- |
@@ -59,7 +61,7 @@ If the provider reaches its output limit, simplify what the first version must d
 
 ### Update AppRivet on your Mac
 
-Version 0.4.5 introduces in-app updates. To move from 0.4.4 or earlier, quit AppRivet and replace the copy in Applications with the 0.4.5 release. From then on, open **AppRivet → Check for Updates…** in the Mac menu bar. AppRivet also checks periodically. When a release is available, choose **Install Update**, then **Install and Relaunch** when prompted.
+Version 0.4.5 introduced in-app updates. In 0.4.5, open the **AppRivet** menu in the macOS menu bar while AppRivet is active and choose **Check for Updates…**. Starting in 0.4.6, the same button appears in the main window. To move from 0.4.4 or earlier, quit AppRivet and replace the copy in Applications with the download above. AppRivet also checks periodically. When a release is available, choose **Install Update**, then **Install and Relaunch** when prompted.
 
 The updater verifies the download with AppRivet’s release key before unpacking it. It replaces the app in Applications. Project folders stay where you saved them. Finish active work and copy any unsaved brief before approving a relaunch. Re-enter your provider API key in **Admin** after reopening, as with any fresh session.
 

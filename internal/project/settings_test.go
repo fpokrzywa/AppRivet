@@ -75,3 +75,38 @@ func TestOpenSettingsRejectsSymlinkedBrief(t *testing.T) {
 		t.Fatal("opened a brief linked outside its project folder")
 	}
 }
+
+func TestOpenSettingsRestoresFlutterFromRunnerSelection(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "Watchmaker Version 3")
+	for _, dir := range []string{"ios/Runner.xcodeproj", "ios/Runner.xcworkspace", "lib", "web", "android"} {
+		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(dir)), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const brief = "Assemble a watch and show the current time."
+	for file, content := range map[string]string{
+		"pubspec.yaml": "name: apprivet_watchmakerv3", "lib/main.dart": "void main() {}",
+		"ios/Runner.xcodeproj/project.pbxproj": "", "ios/Runner.xcworkspace/contents.xcworkspacedata": "",
+		"APP_BRIEF.md":   "# App brief: WatchmakerV3\n\nPlatforms: ios, android, web\n\n## My idea\n\n" + brief + "\n",
+		settingsFilename: `{"version":1,"settings":{"name":"WatchmakerV3","format":"flutter","starter":"ai","provider":"openai","model":"gpt-6.2-sol"}}`,
+	} {
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(file)), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, selection := range []string{".", "ios", "ios/Runner.xcodeproj", "ios/Runner.xcworkspace", "APP_BRIEF.md"} {
+		t.Run(selection, func(t *testing.T) {
+			opened, err := OpenSettings(filepath.Join(root, filepath.FromSlash(selection)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if settings := opened.Settings; opened.Project.Root != root ||
+				settings.Name != "WatchmakerV3" || settings.Format != "flutter" ||
+				settings.Brief != brief || settings.Starter != "ai" ||
+				settings.Provider != "openai" || settings.Model != "gpt-6.2-sol" ||
+				!slices.Equal(settings.Platforms, []string{"ios", "android", "web"}) {
+				t.Fatalf("did not restore the Flutter form: %+v", opened)
+			}
+		})
+	}
+}
