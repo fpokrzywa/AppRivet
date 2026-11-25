@@ -248,6 +248,7 @@ form.addEventListener("submit", async event => {
     fields.disabled = false;
     submit.focus();
     review.showModal();
+    promptText.scrollTop = 0;
   } catch (error) {
     show(message, error.message, true);
   } finally {
