@@ -1,5 +1,9 @@
 # Verification record
 
+## Scrolling for long app briefs
+
+Chrome imported a 624,040-character Markdown brief at desktop and narrow widths. The full brief was editable, the editor stayed the same size, and the text scrolled within the editor. All six 0.4.13 CI jobs passed. Apple accepted the signed Mac app and disk image, the notarized app passed its Simulator smoke test, and all public downloads matched the staged packages by SHA-256. The native editor still needs a visual check with a long brief on a personal Mac. [Passing CI](https://github.com/fpokrzywa/AppRivet/actions/runs/45708771775) and [notarized release check](https://github.com/fpokrzywa/AppRivet/actions/runs/45708786712).
+
 ## Installed version and planning output limit
 
 All six 0.4.12 CI jobs passed. Packaged Windows and Linux launchers reported the version from their release build. Chrome verified the version stayed at the bottom right at desktop and narrow widths while scrolling. The planning review showed the optional retry and the combined maximum budget. Provider fixtures verified that a truncated Anthropic plan retries the approved prompt once, that other provider failures stop after the first call, and that Claude's lower planning effort leaves code-generation requests unchanged. A live Anthropic run with the watchmaker brief still needs validation. [Passing CI](https://github.com/fpokrzywa/AppRivet/actions/runs/45700530995)

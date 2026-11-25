@@ -5,16 +5,16 @@
     <link>https://github.com/fpokrzywa/AppRivet/releases</link>
     <description>AppRivet desktop updates</description>
     <item>
-      <title>AppRivet 0.4.12</title>
-      <link>https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.12</link>
-      <pubDate>Wed, 25 Nov 2026 21:19:18 +0000</pubDate>
-      <sparkle:version>16</sparkle:version>
-      <sparkle:shortVersionString>0.4.12</sparkle:shortVersionString>
+      <title>AppRivet 0.4.13</title>
+      <link>https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.13</link>
+      <pubDate>Wed, 25 Nov 2026 22:09:07 +0000</pubDate>
+      <sparkle:version>17</sparkle:version>
+      <sparkle:shortVersionString>0.4.13</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <enclosure
-        url="https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.12/AppRivet-macOS-0.4.12.zip"
-        sparkle:edSignature="Oy24pJ4SG8W4AcObrbKG56bZpVjflrKnpPpOUTjxLv6lnaKcRLQOciOEr7MJOqKO9jRigRNdlYlfiGlxZyZ9CA=="
-        length="24465851"
+        url="https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.13/AppRivet-macOS-0.4.13.zip"
+        sparkle:edSignature="jQ0+G+VbpAz6erWuDIyDcWXFF77wj2ihAbSUYbHZbg26ClS7pdmt63D7n79PEbJdwnfLvpgahDU7IO2JFh+zCQ=="
+        length="24468109"
         type="application/octet-stream" />
     </item>
   </channel>
