@@ -134,10 +134,6 @@ func Handler(config Config) http.Handler {
 		}
 		target := project.TargetOptions{Format: req.Format, Platforms: req.Platforms}
 		if req.Format == "flutter" {
-			if r.URL.Path == "/api/create" && !project.FlutterAvailable() {
-				writeError(w, http.StatusConflict, "Install or locate the Flutter SDK before creating this project.")
-				return
-			}
 			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(10 * time.Minute))
 		}
 		if req.Provider != "" {
