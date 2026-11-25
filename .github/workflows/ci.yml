@@ -161,8 +161,8 @@ jobs:
           ditto -x -k "$RUNNER_TEMP/desktop-package/AppRivet-macOS.zip" "$RUNNER_TEMP/desktop-unpacked"
           APP="$RUNNER_TEMP/desktop-unpacked/AppRivet.app"
           codesign --verify --deep --strict "$APP"
-          xcrun lipo -verify_arch arm64 x86_64 "$APP/Contents/MacOS/AppRivetDesktop"
-          xcrun lipo -verify_arch arm64 x86_64 "$APP/Contents/MacOS/apprivet"
+          xcrun lipo "$APP/Contents/MacOS/AppRivetDesktop" -verify_arch arm64 x86_64
+          xcrun lipo "$APP/Contents/MacOS/apprivet" -verify_arch arm64 x86_64
           SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for k,vs in d["devices"].items() if "iOS" in k for v in vs if v.get("isAvailable") and "iPhone" in v["name"]))')
           mkdir "$RUNNER_TEMP/desktop-smoke"
           "$APP/Contents/MacOS/AppRivetDesktop" --smoke-test "$RUNNER_TEMP/desktop-smoke" "$SIMULATOR_ID"
