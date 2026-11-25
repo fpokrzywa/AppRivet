@@ -137,8 +137,10 @@ func requestSource(ctx context.Context, httpClient *http.Client, provider, model
 	case http.StatusOK:
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return "", fmt.Errorf("%s rejected the API key or project permissions", label)
+	case http.StatusRequestEntityTooLarge:
+		return "", fmt.Errorf("%s rejected the prompt because it exceeds the provider's request limit", label)
 	case http.StatusBadRequest, http.StatusNotFound:
-		return "", fmt.Errorf("%s rejected the request. Check that the selected model ID supports structured output and is enabled for this key", label)
+		return "", fmt.Errorf("%s rejected the request. Check model access, structured output support, and the model's input limit", label)
 	case http.StatusTooManyRequests:
 		return "", fmt.Errorf("%s reported a rate or usage limit. Check your API project", label)
 	default:

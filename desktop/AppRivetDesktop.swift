@@ -32,15 +32,20 @@ private func chooseTextFile(title: String, extensions: [String]) -> URL? {
     return panel.url
 }
 
-private func readTextFile(_ url: URL, extensions: [String], maxBytes: Int) throws -> String {
+private func readTextFile(_ url: URL, extensions: [String], maxBytes: Int? = nil) throws -> String {
     let values = try url.resourceValues(forKeys: [.isRegularFileKey])
     guard values.isRegularFile == true, extensions.contains(url.pathExtension.lowercased()) else {
         throw DesktopFailure(message: "Choose a file in a supported format.")
     }
     let file = try FileHandle(forReadingFrom: url)
     defer { try? file.close() }
-    let bytes = try file.read(upToCount: maxBytes + 1) ?? Data()
-    guard bytes.count <= maxBytes else { throw DesktopFailure(message: "This file is too large.") }
+    let bytes: Data
+    if let maxBytes {
+        bytes = try file.read(upToCount: maxBytes + 1) ?? Data()
+        guard bytes.count <= maxBytes else { throw DesktopFailure(message: "This file is too large.") }
+    } else {
+        bytes = try file.readToEnd() ?? Data()
+    }
     guard var text = String(data: bytes, encoding: .utf8) else {
         throw DesktopFailure(message: "Choose a file saved as UTF-8 plain text.")
     }
@@ -49,10 +54,10 @@ private func readTextFile(_ url: URL, extensions: [String], maxBytes: Int) throw
 }
 
 private func importBrief(_ url: URL) throws -> String {
-    let text = try readTextFile(url, extensions: ["txt", "md", "markdown"], maxBytes: 8004)
-    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf16.count <= 2000,
+    let text = try readTextFile(url, extensions: ["txt", "md", "markdown"])
+    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
           !text.unicodeScalars.contains(where: { $0.properties.generalCategory == .control && $0.value != 9 && $0.value != 10 }) else {
-        throw DesktopFailure(message: "Use 1–2,000 characters of plain text or Markdown.")
+        throw DesktopFailure(message: "Choose a file containing plain text or Markdown.")
     }
     return text
 }
@@ -67,7 +72,7 @@ struct AppRivetDesktop: App {
             let workflow = try DesktopWorkflow.bundled()
             let parent = URL(fileURLWithPath: arguments[2], isDirectory: true)
             let file = parent.appendingPathComponent("TripBrief.md")
-            let brief = "A checklist for a weekend trip."
+            let brief = "A checklist for a weekend trip." + String(repeating: "\nKeep track of gear.", count: 120_000)
             try Data(brief.utf8).write(to: file, options: .withoutOverwriting)
             let imported = try importBrief(file)
             let aiDraft = try workflow.review(name: "DesktopAI", bundleID: "", brief: imported, starter: "ai",

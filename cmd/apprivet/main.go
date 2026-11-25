@@ -22,7 +22,7 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	app := cli.App{OS: runtime.GOOS, Arch: runtime.GOARCH, Dir: cwd, Version: version, Runner: runner.Exec{}, Out: os.Stdout, Err: os.Stderr}
+	app := cli.App{OS: runtime.GOOS, Arch: runtime.GOARCH, Dir: cwd, Version: version, Runner: runner.Exec{}, In: os.Stdin, Out: os.Stdout, Err: os.Stderr}
 	code := app.Run(ctx, os.Args[1:])
 	stop()
 	os.Exit(code)

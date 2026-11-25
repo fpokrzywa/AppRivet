@@ -97,21 +97,22 @@ struct DesktopWorkflow: Sendable {
     }
 
     func review(name: String, bundleID: String, brief: String, starter: String, provider: String, model: String) throws -> DesktopDraft {
-        var args = ["init", "--review", "--bundle-id=\(bundleID)", "--brief=\(brief)", "--starter=\(starter)"]
+        var args = ["init", "--review", "--bundle-id=\(bundleID)", "--brief-stdin", "--starter=\(starter)"]
         if starter == "ai" {
             args += ["--provider=\(provider)", "--model=\(model)"]
         }
-        return try invoke(args + [name])
+        return try invoke(args + [name], input: Data(brief.utf8), fullOutput: true)
     }
 
     func create(draft: DesktopDraft, parent: URL, apiKey: String? = nil) throws -> DesktopProject {
-        var args = ["init", "--bundle-id=\(draft.bundleID)", "--brief=\(draft.brief)"]
+        var args = ["init", "--bundle-id=\(draft.bundleID)", "--brief-stdin"]
         if let provider = draft.provider, let model = draft.model, let approval = draft.approval {
             args += ["--provider=\(provider)", "--model=\(model)", "--approve=\(approval)"]
         } else {
             args.append("--starter=\(draft.starter)")
         }
-        return try invoke(args + [draft.name], directory: parent, timeout: draft.isAI ? 195 : 30, apiKey: apiKey)
+        return try invoke(args + [draft.name], directory: parent, timeout: draft.isAI ? 195 : 30,
+                          apiKey: apiKey, input: Data(draft.brief.utf8))
     }
 
     func inspect(_ url: URL) throws -> DesktopProject {
@@ -182,8 +183,10 @@ struct DesktopWorkflow: Sendable {
         return (app, bundleID)
     }
 
-    private func invoke<Value: Decodable>(_ args: [String], directory: URL? = nil, timeout: Int = 30, apiKey: String? = nil) throws -> Value {
-        let result = try runProcess(cli, args + ["--json"], directory: directory, timeout: timeout, apiKey: apiKey)
+    private func invoke<Value: Decodable>(_ args: [String], directory: URL? = nil, timeout: Int = 30,
+                                          apiKey: String? = nil, input: Data? = nil, fullOutput: Bool = false) throws -> Value {
+        let result = try runProcess(cli, args + ["--json"], directory: directory, timeout: timeout,
+                                    apiKey: apiKey, input: input, fullOutput: fullOutput)
         guard let response = try? JSONDecoder().decode(CLIEnvelope<Value>.self, from: result.stdout), response.schema_version == 1 else {
             throw DesktopFailure(message: "AppRivet returned an unreadable result.", details: result.diagnostics)
         }
@@ -217,7 +220,8 @@ private struct ProcessResult {
 
 // Use files for separate stdout and stderr so a verbose child cannot deadlock
 // on a full pipe. Bound what the app reads back into memory.
-private func runProcess(_ executable: URL, _ args: [String], directory: URL? = nil, timeout: Int, apiKey: String? = nil) throws -> ProcessResult {
+private func runProcess(_ executable: URL, _ args: [String], directory: URL? = nil, timeout: Int,
+                        apiKey: String? = nil, input: Data? = nil, fullOutput: Bool = false) throws -> ProcessResult {
     let manager = FileManager.default
     let scratch = manager.temporaryDirectory.appendingPathComponent("apprivet-ui-\(UUID().uuidString)", isDirectory: true)
     try manager.createDirectory(at: scratch, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
@@ -231,12 +235,21 @@ private func runProcess(_ executable: URL, _ args: [String], directory: URL? = n
     defer { try? output.close() }
     let errors = try FileHandle(forUpdating: stderr)
     defer { try? errors.close() }
+    let standardInput: FileHandle?
+    if let input {
+        let stdin = scratch.appendingPathComponent("stdin")
+        try input.write(to: stdin, options: .withoutOverwriting)
+        standardInput = try FileHandle(forReadingFrom: stdin)
+    } else {
+        standardInput = nil
+    }
+    defer { try? standardInput?.close() }
 
     let child = Process()
     child.executableURL = executable
     child.arguments = args
     child.currentDirectoryURL = directory ?? manager.temporaryDirectory
-    child.standardInput = FileHandle.nullDevice
+    child.standardInput = standardInput ?? FileHandle.nullDevice
     child.standardOutput = output
     child.standardError = errors
     var environment = ProcessInfo.processInfo.environment.filter { key, _ in
@@ -248,8 +261,9 @@ private func runProcess(_ executable: URL, _ args: [String], directory: URL? = n
     func readOutput() throws -> ProcessResult {
         try output.seek(toOffset: 0)
         try errors.seek(toOffset: 0)
+        let stdout = try fullOutput ? output.readToEnd() : output.read(upToCount: 4 * 1024 * 1024)
         return ProcessResult(status: child.isRunning ? -1 : child.terminationStatus,
-                             stdout: try output.read(upToCount: 4 * 1024 * 1024) ?? Data(),
+                             stdout: stdout ?? Data(),
                              stderr: try errors.read(upToCount: 256 * 1024) ?? Data())
     }
 

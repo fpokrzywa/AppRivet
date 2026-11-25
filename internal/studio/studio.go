@@ -92,7 +92,7 @@ func Handler(config Config) http.Handler {
 	})
 	projectRequest := func(w http.ResponseWriter, r *http.Request) {
 		var req createRequest
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32768))
+		decoder := json.NewDecoder(r.Body)
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&req); err != nil || decoder.Decode(new(any)) != io.EOF {
 			writeError(w, http.StatusBadRequest, "Enter an app name, brief and starter using the form.")

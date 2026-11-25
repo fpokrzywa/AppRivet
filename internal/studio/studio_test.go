@@ -112,7 +112,7 @@ func TestStudioBuildsChecklistStarterFromBrief(t *testing.T) {
 
 func TestStudioReviewsAIRequestBeforeCallingProvider(t *testing.T) {
 	workspace := filepath.Join(t.TempDir(), "projects")
-	const brief = "A timer that saves the latest lap."
+	brief := strings.Repeat("Keep the latest lap.\n", 5000) + "A timer that saves the latest lap."
 	const key = "sk-ant-example-fake"
 	const source = "import SwiftUI\n\nstruct ContentView: View {\n    var body: some View { Text(\"Lap timer\") }\n}"
 	var calls int

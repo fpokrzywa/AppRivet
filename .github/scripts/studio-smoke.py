@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory(prefix="apprivet-studio-") as home:
                 assert b"<script>" in html and b"X-AppRivet-Session" in html
                 assert b"Import brief" in html and b"Review prompt" in html and b'aria-labelledby="admin-heading"' in html
                 assert "style-src 'sha256-" in page.headers["Content-Security-Policy"]
-            brief = "A checklist I can use to pack for a weekend trip."
+            brief = "A checklist I can use to pack for a weekend trip.\n" + "Store the list on the device.\n" * 2000 + "Show my trip plan."
             project = {"name": "BrowserSmoke", "brief": brief}
             with request("/api/review", json.dumps({**project, "provider": "openai", "model": "gpt-6.2-sol"}).encode()) as review:
                 draft = json.load(review)

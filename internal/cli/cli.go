@@ -26,6 +26,7 @@ import (
 type App struct {
 	OS, Arch, Dir, Version string
 	Runner                 runner.Runner
+	In                     io.Reader
 	Out, Err               io.Writer
 }
 type Error struct {
@@ -44,8 +45,8 @@ const help = `AppRivet - independent iOS development toolkit
 
 Usage:
   apprivet doctor [--json]
-  apprivet init NAME [--bundle-id com.example.app] [--brief TEXT] [--starter TYPE] [--review] [--json]
-  apprivet init NAME --brief TEXT --provider PROVIDER --model MODEL (--review | --approve HASH) [--json]
+  apprivet init NAME [--bundle-id com.example.app] [--brief TEXT | --brief-stdin] [--starter TYPE] [--review] [--json]
+  apprivet init NAME (--brief TEXT | --brief-stdin) --provider PROVIDER --model MODEL (--review | --approve HASH) [--json]
   apprivet inspect [--project PATH] [--json]
   apprivet build [--project PATH] [--scheme NAME] --trust-project [--json]
   apprivet test [--project PATH] [--scheme NAME] --simulator UUID --trust-project [--json]
@@ -134,6 +135,7 @@ func (a App) Run(ctx context.Context, args []string) int {
 	fs.SetOutput(io.Discard)
 	projectPath, scheme, bundle, simulator := ".", "", "", ""
 	var starterOptions project.StarterOptions
+	briefStdin := false
 	var provider, model, approval string
 	review := false
 	trust := false
@@ -148,6 +150,7 @@ func (a App) Run(ctx context.Context, args []string) int {
 	case "init":
 		fs.StringVar(&bundle, "bundle-id", "", "reverse-DNS bundle identifier")
 		fs.StringVar(&starterOptions.Brief, "brief", "", "app idea to save with the project")
+		fs.BoolVar(&briefStdin, "brief-stdin", false, "read the brief from standard input")
 		fs.StringVar(&starterOptions.Starter, "starter", "", "auto, blank, checklist, notes or counter")
 		fs.BoolVar(&review, "review", false, "validate inputs and preview the prompt without creating a project")
 		fs.StringVar(&provider, "provider", "", "OpenAI or Anthropic API provider ID")
@@ -228,6 +231,16 @@ func (a App) Run(ctx context.Context, args []string) int {
 		}
 	case "init":
 		name := fs.Arg(0)
+		if briefStdin {
+			if starterOptions.Brief != "" || a.In == nil {
+				return fail("invalid_arguments", "use either --brief or --brief-stdin with a standard input stream", 2)
+			}
+			body, err := io.ReadAll(a.In)
+			if err != nil {
+				return fail("invalid_arguments", "could not read the brief from standard input", 2)
+			}
+			starterOptions.Brief = string(body)
+		}
 		if bundle == "" {
 			bundle = "com.example." + strings.ToLower(name)
 		}

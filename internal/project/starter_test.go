@@ -39,7 +39,7 @@ func TestStarterSelectionAndBriefEscaping(t *testing.T) {
 
 func TestInvalidBriefLeavesNoProject(t *testing.T) {
 	root := t.TempDir()
-	for _, options := range []StarterOptions{{Brief: strings.Repeat("x", 2001)}, {Brief: "line\x00"}, {Starter: "unsupported"}} {
+	for _, options := range []StarterOptions{{Brief: "line\x00"}, {Starter: "unsupported"}} {
 		if _, err := CreateWithOptions(root, "Rejected", "com.example.rejected", options); err == nil {
 			t.Fatalf("accepted invalid options: %+v", options)
 		}

@@ -62,7 +62,7 @@ function show(element, text, error = false) {
 }
 
 function updateBrief() {
-  byID("brief-count").textContent = brief.value.length.toLocaleString() + " / 2,000";
+  byID("brief-count").textContent = brief.value.length.toLocaleString() + " characters";
   const [title, description] = starters[starter.value];
   byID("starter-title").textContent = title;
   byID("starter-copy").textContent = description;
@@ -110,7 +110,7 @@ function watchFile(button, input, consume) {
 
 async function readTextFile(file, extension, maxBytes) {
   if (!extension.test(file.name)) throw new Error("Choose a file in a supported format.");
-  if (file.size > maxBytes) throw new Error("This file is too large.");
+  if (maxBytes !== undefined && file.size > maxBytes) throw new Error("This file is too large.");
   try {
     return new TextDecoder("utf-8", {fatal: true}).decode(await file.arrayBuffer()).replace(/\r\n?/g, "\n");
   } catch {
@@ -120,9 +120,9 @@ async function readTextFile(file, extension, maxBytes) {
 
 watchFile(byID("import-brief"), byID("brief-file"), async file => {
   try {
-    const contents = await readTextFile(file, /\.(txt|md|markdown)$/i, 8004);
-    if (!contents.trim() || contents.length > 2000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(contents)) {
-      throw new Error("Use 1–2,000 characters of plain text or Markdown.");
+    const contents = await readTextFile(file, /\.(txt|md|markdown)$/i);
+    if (!contents.trim() || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(contents)) {
+      throw new Error("Choose a file containing plain text or Markdown.");
     }
     brief.value = contents;
     updateBrief();

@@ -16,10 +16,10 @@ type StarterOptions struct {
 
 func resolveStarter(options StarterOptions) (kind, brief string, err error) {
 	brief = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(options.Brief, "\r\n", "\n"), "\r", "\n"))
-	if !utf8.ValidString(brief) || utf8.RuneCountInString(brief) > 2000 || strings.IndexFunc(brief, func(r rune) bool {
+	if !utf8.ValidString(brief) || strings.IndexFunc(brief, func(r rune) bool {
 		return unicode.IsControl(r) && r != '\n' && r != '\t'
 	}) >= 0 {
-		return "", "", fmt.Errorf("describe the app in up to 2,000 characters of plain text")
+		return "", "", fmt.Errorf("describe the app in UTF-8 plain text or Markdown")
 	}
 	switch options.Starter {
 	case "", "auto":
@@ -35,7 +35,7 @@ func resolveStarter(options StarterOptions) (kind, brief string, err error) {
 func inferStarter(brief string) string {
 	match := ""
 	words := strings.ReplaceAll(strings.ToLower(brief), "to-do", "todo")
-	for _, word := range strings.FieldsFunc(words, func(r rune) bool { return !unicode.IsLetter(r) }) {
+	for word := range strings.FieldsFuncSeq(words, func(r rune) bool { return !unicode.IsLetter(r) }) {
 		var candidate string
 		switch word {
 		case "checklist", "checklists", "task", "tasks", "todo", "todos":
