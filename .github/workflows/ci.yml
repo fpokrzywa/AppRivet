@@ -29,7 +29,11 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Test
-        run: go test -count=1 -cover ./...
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == Windows ]]; then export JAVA_HOME="$JAVA_HOME_17_X64"; fi
+          go test -count=1 -cover ./...
       - name: Vet
         run: go vet ./...
       - name: Exercise journal ENOSPC on a bounded tmpfs

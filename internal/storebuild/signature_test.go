@@ -82,6 +82,21 @@ func TestVerifyBundleWithJDKSignatures(t *testing.T) {
 	}
 }
 
+func TestSupportedJavaVersion(t *testing.T) {
+	for output, want := range map[string]bool{
+		`java version "1.8.0_512"`:  false,
+		`openjdk version "11.0.33"`: false,
+		`openjdk version "17.0.21"`: true,
+		`openjdk version "21.0.13"`: true,
+		"openjdk 25.0.5 2026-10-20": true,
+		"Unknown Java runtime":      false,
+	} {
+		if got := supportedJavaVersion(output); got != want {
+			t.Errorf("%q supported=%t, want %t", output, got, want)
+		}
+	}
+}
+
 func rewriteBundle(t *testing.T, signed, entryName string, replace bool) string {
 	t.Helper()
 	input, err := zip.OpenReader(signed)

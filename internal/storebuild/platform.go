@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 )
 
 var releaseSchemePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 ._-]{0,127}$`)
+var javaVersionPattern = regexp.MustCompile(`(?m)^(?:openjdk|java)(?: version)? "?([0-9]+)[.+ "-]`)
 
 func (b builder) archiveIOS(ctx context.Context, info project.Info, team, work, destination string) (Result, error) {
 	projectDir := info.Root
@@ -222,12 +224,32 @@ func findJava() string {
 			continue
 		}
 		path := filepath.Join(home, "bin", java)
-		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && (runtime.GOOS == "windows" || info.Mode().Perm()&0111 != 0) {
+		if supportsBundleVerification(path) {
 			return path
 		}
 	}
-	if path, err := exec.LookPath(java); err == nil && filepath.IsAbs(path) {
+	if path, err := exec.LookPath(java); err == nil && filepath.IsAbs(path) && supportsBundleVerification(path) {
 		return path
 	}
 	return ""
+}
+
+func supportsBundleVerification(executable string) bool {
+	info, err := os.Stat(executable)
+	if err != nil || !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0111 == 0) {
+		return false
+	}
+	result, err := (runner.Exec{}).Run(context.Background(), runner.Spec{
+		Path: executable, Args: []string{"-version"}, Timeout: 5 * time.Second,
+	})
+	return err == nil && supportedJavaVersion(result.Output)
+}
+
+func supportedJavaVersion(output string) bool {
+	match := javaVersionPattern.FindStringSubmatch(output)
+	if len(match) != 2 {
+		return false
+	}
+	major, err := strconv.Atoi(match[1])
+	return err == nil && major >= 17
 }
