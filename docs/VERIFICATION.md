@@ -1,5 +1,9 @@
 # Verification record
 
+## AI generation defaults and offline starter recovery
+
+All six CI jobs passed on the AppRivet 0.4.11 source. The packaged Mac smoke test verified the new AI default, reopened an offline starter and carried its full brief into a separate project form, and exercised iOS Simulator build and launch. A local Chrome test with fixture responses verified the same recovery path and showed that reviewing a brief sends no provider request before approval. Go tests exercised both single and component generation and rejected the known SwiftUI starter response before creating project files. Apple accepted the app and disk image, Gatekeeper verified both, and the notarized app passed the Simulator smoke test. A real generation run with the selected provider and a feature-by-feature review of its output still need live validation. [Passing CI](https://github.com/fpokrzywa/AppRivet/actions/runs/45696611048) and [passing notarized release check](https://github.com/fpokrzywa/AppRivet/actions/runs/45696610930).
+
 ## Developer ID signing and notarization
 
 Apple accepted the 0.4.10 app and disk image. The hosted Mac validated both stapled tickets, Gatekeeper identified both packages as notarized Developer ID software, and the notarized desktop app built, installed and launched a SwiftUI sample in the iOS Simulator. The three public release assets matched the staged CI packages by SHA-256. A fresh Finder install and the in-place update from 0.4.9 on a personal Mac still need validation. [Passing live signing run](https://github.com/fpokrzywa/AppRivet/actions/runs/45689754094) and [AppRivet 0.4.10 release](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.10).
