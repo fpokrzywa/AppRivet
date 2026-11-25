@@ -152,6 +152,11 @@ func Handler(config Config) http.Handler {
 				writeError(w, http.StatusInternalServerError, "Could not create your AppRivet Projects folder.")
 				return
 			}
+			timeout := generation.RequestTimeout + 15*time.Second
+			if draft.Format == "flutter" {
+				timeout += 5 * time.Minute
+			}
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(timeout))
 			info, err := generation.Create(r.Context(), config.Workspace, draft, req.Approval, req.APIKey, config.Generate)
 			if err != nil {
 				writeError(w, http.StatusBadRequest, err.Error())

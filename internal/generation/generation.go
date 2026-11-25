@@ -21,13 +21,15 @@ import (
 	"github.com/fpokrzywa/AppRivet/internal/project"
 )
 
+const RequestTimeout = 6 * time.Minute
+
 var (
 	apiKeyPattern = regexp.MustCompile("^[A-Za-z0-9_-]{8,512}$")
 	modelPattern  = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 	contentView   = regexp.MustCompile(`(?m)^\s*struct\s+ContentView\s*:\s*(?:SwiftUI\.)?View\b`)
 	dartMain      = regexp.MustCompile(`(?m)^\s*void\s+main\s*\(`)
 	client        = &http.Client{
-		Timeout: 180 * time.Second,
+		Timeout: RequestTimeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -109,17 +111,24 @@ func requestSource(ctx context.Context, httpClient *http.Client, provider, model
 	}
 	var endpoint, label string
 	var payload map[string]any
+	budget := 10000
 	switch provider {
 	case "openai":
 		endpoint, label = "https://api.openai.com/v1/responses", "OpenAI"
+		if model == "gpt-6.2-sol" || model == "gpt-6.2-astra" {
+			budget = 25000
+		}
 		payload = map[string]any{
-			"model": model, "input": prompt, "store": false, "max_output_tokens": 10000,
+			"model": model, "input": prompt, "store": false, "max_output_tokens": budget,
 			"text": map[string]any{"format": map[string]any{"type": "json_schema", "name": "swiftui_source", "strict": true, "schema": schema}},
 		}
 	case "anthropic":
 		endpoint, label = "https://api.anthropic.com/v1/messages", "Anthropic"
+		if model == "claude-opus-5-5" || model == "claude-fable-5-2" {
+			budget = 20000
+		}
 		payload = map[string]any{
-			"model": model, "max_tokens": 10000,
+			"model": model, "max_tokens": budget,
 			"messages":      []map[string]string{{"role": "user", "content": prompt}},
 			"output_config": map[string]any{"format": map[string]any{"type": "json_schema", "schema": schema}},
 		}
@@ -143,6 +152,9 @@ func requestSource(ctx context.Context, httpClient *http.Client, provider, model
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", fmt.Errorf("%s took too long to respond. Try again or request fewer features in the first version", label)
+		}
 		return "", fmt.Errorf("could not reach %s. Check your connection and try again", label)
 	}
 	defer resp.Body.Close()
@@ -166,7 +178,8 @@ func decodeSource(body io.Reader, provider string) (string, error) {
 	type part struct{ Type, Text string }
 	var result struct {
 		Status     string
-		StopReason string `json:"stop_reason"`
+		StopReason string                  `json:"stop_reason"`
+		Incomplete struct{ Reason string } `json:"incomplete_details"`
 		Content    []part
 		Output     []struct {
 			Type    string
@@ -175,12 +188,22 @@ func decodeSource(body io.Reader, provider string) (string, error) {
 	}
 	decoder := json.NewDecoder(io.LimitReader(body, 512*1024))
 	if err := decoder.Decode(&result); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", errors.New("the provider took too long to finish. Try again or request fewer features in the first version")
+		}
 		return "", errors.New("the provider returned an unreadable response")
 	}
 	parts := result.Content
 	if provider == "openai" {
 		if result.Status != "completed" {
-			return "", errors.New("the provider returned an incomplete response. Try a smaller app brief")
+			switch result.Incomplete.Reason {
+			case "max_output_tokens":
+				return "", errors.New("OpenAI reached its output limit before finishing the code. Request fewer features in the first version or choose another model")
+			case "content_filter":
+				return "", errors.New("OpenAI stopped generation because of its content filter. Review the requested features before trying again")
+			default:
+				return "", errors.New("OpenAI did not return complete app source. Try again or choose another model")
+			}
 		}
 		parts = nil
 		for _, item := range result.Output {
@@ -188,10 +211,18 @@ func decodeSource(body io.Reader, provider string) (string, error) {
 				parts = append(parts, item.Content...)
 			}
 		}
-	} else if result.StopReason == "refusal" {
-		return "", errors.New("the provider declined to generate source for this prompt")
-	} else if result.StopReason != "end_turn" {
-		return "", errors.New("the provider returned an incomplete response. Try a smaller app brief")
+	} else {
+		switch result.StopReason {
+		case "end_turn":
+		case "refusal":
+			return "", errors.New("Anthropic declined to generate source for this prompt")
+		case "max_tokens":
+			return "", errors.New("Anthropic reached its output limit before finishing the code. Request fewer features in the first version or choose another model")
+		case "model_context_window_exceeded":
+			return "", errors.New("Anthropic reached the model's context limit. Reduce the prompt size or choose a model with more context")
+		default:
+			return "", errors.New("Anthropic did not return complete app source. Try again or choose another model")
+		}
 	}
 	var responseText string
 	for _, part := range parts {

@@ -33,12 +33,14 @@ func TestProviderRequestSendsReviewedPrompt(t *testing.T) {
 					t.Fatal("Anthropic API version missing")
 				}
 				var payload struct {
-					Model    string
-					Input    string
-					Store    *bool
-					Text     json.RawMessage
-					Messages []struct{ Role, Content string }
-					Output   json.RawMessage `json:"output_config"`
+					Model           string
+					Input           string
+					Store           *bool
+					Text            json.RawMessage
+					Messages        []struct{ Role, Content string }
+					Output          json.RawMessage `json:"output_config"`
+					MaxTokens       int             `json:"max_tokens"`
+					MaxOutputTokens int             `json:"max_output_tokens"`
 				}
 				if err := json.NewDecoder(req.Body).Decode(&payload); err != nil || payload.Model != tc.model {
 					t.Fatalf("invalid generation request: %v", err)
@@ -50,11 +52,33 @@ func TestProviderRequestSendsReviewedPrompt(t *testing.T) {
 					payload.Messages[0].Content != prompt || len(payload.Output) == 0) {
 					t.Fatal("Anthropic call changed the reviewed prompt or omitted structured output")
 				}
+				if tc.provider == "openai" && payload.MaxOutputTokens != 25000 ||
+					tc.provider == "anthropic" && payload.MaxTokens != 20000 {
+					t.Fatal("the built-in model did not receive its generation budget")
+				}
 				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(tc.response))}, nil
 			})}
 			source, err := requestSource(context.Background(), httpClient, tc.provider, tc.model, fakeKey, prompt)
 			if err != nil || source != "source" {
 				t.Fatalf("did not decode source: %q, %v", source, err)
+			}
+		})
+	}
+}
+
+func TestIncompleteProviderResponse(t *testing.T) {
+	for _, tc := range []struct{ name, provider, response, want string }{
+		{"OpenAI budget", "openai", `{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","content":[{"type":"output_text","text":"{\"source\":\"partial\"}"}]}]}`, "OpenAI reached its output limit"},
+		{"OpenAI filter", "openai", `{"status":"incomplete","incomplete_details":{"reason":"content_filter"}}`, "OpenAI stopped generation because of its content filter"},
+		{"OpenAI other", "openai", `{"status":"incomplete","incomplete_details":{"reason":"private diagnostic"}}`, "OpenAI did not return complete app source"},
+		{"Anthropic budget", "anthropic", `{"stop_reason":"max_tokens","content":[{"type":"text","text":"{\"source\":\"partial\"}"}]}`, "Anthropic reached its output limit"},
+		{"Anthropic context", "anthropic", `{"stop_reason":"model_context_window_exceeded"}`, "Anthropic reached the model's context limit"},
+		{"Anthropic refusal", "anthropic", `{"stop_reason":"refusal"}`, "Anthropic declined to generate source"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source, err := decodeSource(strings.NewReader(tc.response), tc.provider)
+			if source != "" || err == nil || !strings.HasPrefix(err.Error(), tc.want) || strings.Contains(err.Error(), "private diagnostic") {
+				t.Fatalf("expected %q without source or provider diagnostics, got %q, %v", tc.want, source, err)
 			}
 		})
 	}

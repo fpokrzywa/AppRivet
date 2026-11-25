@@ -215,6 +215,7 @@ jobs:
           codesign --verify --deep --strict "$APP"
           xcrun lipo "$APP/Contents/MacOS/AppRivetDesktop" -verify_arch arm64 x86_64
           xcrun lipo "$APP/Contents/MacOS/apprivet" -verify_arch arm64 x86_64
+          xcrun lipo "$APP/Contents/Frameworks/Sparkle.framework/Sparkle" -verify_arch arm64 x86_64
           mkdir "$RUNNER_TEMP/desktop-smoke"
           "$APP/Contents/MacOS/AppRivetDesktop" --smoke-test "$RUNNER_TEMP/desktop-smoke"
       - name: Upload the macOS app download

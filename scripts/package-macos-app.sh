@@ -20,6 +20,14 @@ fi
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/apprivet-package.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
+sparkle_version=2.10.1
+sparkle_sha256=1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27
+curl --fail --location --silent --show-error --retry 3 \
+  "https://github.com/sparkle-project/Sparkle/releases/download/$sparkle_version/Sparkle-$sparkle_version.tar.xz" \
+  -o "$scratch/sparkle.tar.xz"
+(cd "$scratch" && printf '%s  sparkle.tar.xz\n' "$sparkle_sha256" | shasum -a 256 -c -)
+mkdir "$scratch/sparkle"
+tar -xf "$scratch/sparkle.tar.xz" -C "$scratch/sparkle" ./Sparkle.framework ./LICENSE
 sdk=$(xcrun --sdk macosx --show-sdk-path)
 for arch in arm64 x86_64; do
   go_arch=$arch
@@ -27,11 +35,14 @@ for arch in arm64 x86_64; do
   CGO_ENABLED=0 GOOS=darwin GOARCH=$go_arch go build -trimpath -o "$scratch/cli-$arch" ./cmd/apprivet
   xcrun swiftc -parse-as-library -swift-version 5 -O -whole-module-optimization \
     -sdk "$sdk" -target "$arch-apple-macosx13.0" \
+    -F "$scratch/sparkle" -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
     desktop/Workflow.swift desktop/AppRivetDesktop.swift -o "$scratch/desktop-$arch"
 done
 
 staged="$scratch/AppRivet.app"
-mkdir -p "$staged/Contents/MacOS" "$staged/Contents/Resources"
+mkdir -p "$staged/Contents/MacOS" "$staged/Contents/Resources" "$staged/Contents/Frameworks"
+ditto "$scratch/sparkle/Sparkle.framework" "$staged/Contents/Frameworks/Sparkle.framework"
+cp "$scratch/sparkle/LICENSE" "$staged/Contents/Resources/Sparkle-LICENSE.txt"
 cp desktop/Info.plist "$staged/Contents/Info.plist"
 cp internal/studio/ui/apprivet-mark-light.png "$staged/Contents/Resources/AppRivetMarkLight.png"
 cp internal/studio/ui/apprivet-mark-dark.png "$staged/Contents/Resources/AppRivetMarkDark.png"

@@ -17,14 +17,26 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.4.4</string>
+    <string>0.4.5</string>
     <key>CFBundleVersion</key>
-    <string>8</string>
+    <string>9</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.developer-tools</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/fpokrzywa/AppRivet/main/updates/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>H0hoVJciH/vY/oz64yWgXm6UL8S+tgBf6ow0cwKY6gE=</string>
+    <key>SUVerifyUpdateBeforeExtraction</key>
+    <true/>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUAllowsAutomaticUpdates</key>
+    <false/>
+    <key>SUShowReleaseNotes</key>
+    <false/>
 </dict>
 </plist>

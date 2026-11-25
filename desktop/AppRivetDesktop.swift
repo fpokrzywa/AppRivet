@@ -1,5 +1,6 @@
 import AppKit
 import Darwin
+import Sparkle
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -110,13 +111,30 @@ private func importBrief(_ url: URL) throws -> String {
     return text
 }
 
+@MainActor
+private final class UpdateCheckState: ObservableObject {
+    @Published var canCheck = false
+
+    init(_ updater: SPUUpdater) {
+        updater.publisher(for: \.canCheckForUpdates).assign(to: &$canCheck)
+    }
+}
+
 @main
 struct AppRivetDesktop: App {
+    private let updaterController: SPUStandardUpdaterController
+    @StateObject private var updateCheck: UpdateCheckState
+
     init() {
         let arguments = CommandLine.arguments
-        guard arguments.dropFirst().first == "--smoke-test" else { return }
+        let smokeTest = arguments.dropFirst().first == "--smoke-test"
+        let controller = SPUStandardUpdaterController(startingUpdater: !smokeTest, updaterDelegate: nil, userDriverDelegate: nil)
+        updaterController = controller
+        _updateCheck = StateObject(wrappedValue: UpdateCheckState(controller.updater))
+        guard smokeTest else { return }
         do {
             guard arguments.count == 3 else { throw DesktopFailure(message: "Smoke test requires a parent folder.") }
+            try controller.updater.start()
             guard Bundle.main.url(forResource: "AppRivetMarkLight", withExtension: "png") != nil,
                   Bundle.main.url(forResource: "AppRivetMarkDark", withExtension: "png") != nil else {
                 throw DesktopFailure(message: "The AppRivet emblems are missing from the package.")
@@ -177,6 +195,12 @@ struct AppRivetDesktop: App {
             DesktopView()
         }
         .defaultSize(width: 680, height: 740)
+        .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…", action: updaterController.updater.checkForUpdates)
+                    .disabled(!updateCheck.canCheck)
+            }
+        }
     }
 }
 
