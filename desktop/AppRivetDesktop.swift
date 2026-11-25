@@ -30,13 +30,21 @@ private func platformLabel(_ id: String) -> String {
     appPlatforms.first { $0.id == id }?.label ?? id
 }
 
+private enum WorkspaceAppearance: String, Hashable {
+    case dark, light
+
+    var scheme: ColorScheme { self == .dark ? .dark : .light }
+}
+
 @MainActor
 private enum DesktopBrand {
-    private static let artwork = Bundle.main.url(forResource: "AppRivetMark", withExtension: "png")
+    private static let lightMark = Bundle.main.url(forResource: "AppRivetMarkLight", withExtension: "png")
+        .flatMap { NSImage(contentsOf: $0) }
+    private static let darkMark = Bundle.main.url(forResource: "AppRivetMarkDark", withExtension: "png")
         .flatMap { NSImage(contentsOf: $0) }
 
-    @ViewBuilder static var mark: some View {
-        if let artwork {
+    @ViewBuilder static func mark(_ appearance: WorkspaceAppearance) -> some View {
+        if let artwork = appearance == .dark ? lightMark : darkMark {
             Image(nsImage: artwork)
                 .resizable()
                 .scaledToFit()
@@ -45,13 +53,14 @@ private enum DesktopBrand {
         }
     }
 
-    static var backdrop: some View {
-        GeometryReader { geometry in
+    static func backdrop(_ appearance: WorkspaceAppearance) -> some View {
+        let dark = appearance == .dark
+        return GeometryReader { geometry in
             ZStack {
-                Color(red: 0.063, green: 0.094, blue: 0.122)
-                RadialGradient(colors: [Color(red: 0.114, green: 0.278, blue: 0.282), .clear],
+                dark ? Color(red: 0.063, green: 0.094, blue: 0.122) : Color(red: 0.929, green: 0.957, blue: 0.949)
+                RadialGradient(colors: [dark ? Color(red: 0.114, green: 0.278, blue: 0.282) : Color(red: 0.761, green: 0.867, blue: 0.839), .clear],
                                center: UnitPoint(x: 0.08, y: 0), startRadius: 0, endRadius: geometry.size.width * 0.65)
-                RadialGradient(colors: [Color(red: 0.149, green: 0.224, blue: 0.29), .clear],
+                RadialGradient(colors: [dark ? Color(red: 0.149, green: 0.224, blue: 0.29) : Color(red: 0.859, green: 0.906, blue: 0.941), .clear],
                                center: UnitPoint(x: 0.88, y: 0.30), startRadius: 0, endRadius: geometry.size.width * 0.54)
             }
         }
@@ -108,8 +117,9 @@ struct AppRivetDesktop: App {
         guard arguments.dropFirst().first == "--smoke-test" else { return }
         do {
             guard arguments.count == 3 else { throw DesktopFailure(message: "Smoke test requires a parent folder.") }
-            guard Bundle.main.url(forResource: "AppRivetMark", withExtension: "png") != nil else {
-                throw DesktopFailure(message: "The AppRivet emblem is missing from the package.")
+            guard Bundle.main.url(forResource: "AppRivetMarkLight", withExtension: "png") != nil,
+                  Bundle.main.url(forResource: "AppRivetMarkDark", withExtension: "png") != nil else {
+                throw DesktopFailure(message: "The AppRivet emblems are missing from the package.")
             }
             let workflow = try DesktopWorkflow.bundled()
             let parent = URL(fileURLWithPath: arguments[2], isDirectory: true)
@@ -178,6 +188,7 @@ private final class DesktopModel: ObservableObject {
     @Published var format = "flutter"
     @Published var platforms: Set<String> = ["ios", "android", "web"]
     @Published var buildTarget = "web"
+    @Published var appearance = WorkspaceAppearance.dark
     @Published var bundleID = ""
     @Published var parent: URL?
     @Published var selectedSimulator: String?
@@ -402,7 +413,7 @@ private struct DesktopView: View {
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
                     HStack(spacing: 10) {
-                        DesktopBrand.mark
+                        DesktopBrand.mark(model.appearance)
                         Text("AppRivet").font(.title3.weight(.semibold))
                     }
                     Spacer()
@@ -424,8 +435,8 @@ private struct DesktopView: View {
             .frame(maxWidth: 740)
             .frame(maxWidth: .infinity)
         }
-        .background { DesktopBrand.backdrop }
-        .preferredColorScheme(.dark)
+        .background { DesktopBrand.backdrop(model.appearance) }
+        .preferredColorScheme(model.appearance.scheme)
         .frame(minWidth: 540, minHeight: 510)
         .sheet(isPresented: $showAdmin) { AdminSheet(model: model) }
         .sheet(item: $model.draft) { draft in reviewSheet(draft) }
@@ -669,6 +680,7 @@ private struct AdminSheet: View {
     @ObservedObject var model: DesktopModel
     @Environment(\.dismiss) private var dismiss
     @State private var provider = AIProvider.openai
+    @State private var appearance = WorkspaceAppearance.dark
     @State private var preset = ""
     @State private var custom = ""
     @State private var key = ""
@@ -681,6 +693,10 @@ private struct AdminSheet: View {
             Text("Admin").font(.title2.bold())
             Text("Choose the AI provider and model. API keys stay in memory for this AppRivet session.")
                 .foregroundStyle(.secondary)
+            Picker("Appearance", selection: $appearance) {
+                Text("Dark").tag(WorkspaceAppearance.dark)
+                Text("Light").tag(WorkspaceAppearance.light)
+            }
             Picker("Provider", selection: $provider) {
                 ForEach(AIProvider.allCases) { choice in
                     Text(choice.label).tag(choice)
@@ -719,6 +735,7 @@ private struct AdminSheet: View {
         .frame(width: 480)
         .onAppear {
             provider = model.selectedProvider
+            appearance = model.appearance
             loadSettings()
         }
         .onChange(of: provider) { _ in loadSettings() }
@@ -759,6 +776,7 @@ private struct AdminSheet: View {
             return
         }
         model.saveSettings(provider: provider, model: modelID, key: replacement)
+        model.appearance = appearance
         dismiss()
     }
 }

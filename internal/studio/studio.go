@@ -21,7 +21,7 @@ import (
 	"github.com/fpokrzywa/AppRivet/internal/project"
 )
 
-//go:embed ui/index.html ui/studio.css ui/studio.js ui/apprivet-mark.png
+//go:embed ui/index.html ui/studio.css ui/studio.js ui/apprivet-mark-light.png ui/apprivet-mark-dark.png
 var assets embed.FS
 
 type Config struct {
@@ -70,10 +70,6 @@ func Handler(config Config) http.Handler {
 		return strings.ReplaceAll(strings.ReplaceAll(string(body), "\r\n", "\n"), "\r", "\n")
 	}
 	style, script := asset("studio.css"), asset("studio.js")
-	artwork, err := assets.ReadFile("ui/apprivet-mark.png")
-	if err != nil {
-		panic(err)
-	}
 	hash := func(value string) string {
 		digest := sha256.Sum256([]byte(value))
 		return "'sha256-" + base64.StdEncoding.EncodeToString(digest[:]) + "'"
@@ -84,10 +80,16 @@ func Handler(config Config) http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = io.WriteString(w, page)
 	})
-	mux.HandleFunc("GET /apprivet-mark.png", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write(artwork)
-	})
+	for _, name := range []string{"apprivet-mark-light.png", "apprivet-mark-dark.png"} {
+		artwork, err := assets.ReadFile("ui/" + name)
+		if err != nil {
+			panic(err)
+		}
+		mux.HandleFunc("GET /"+name, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write(artwork)
+		})
+	}
 	mux.HandleFunc("GET /api/state", func(w http.ResponseWriter, _ *http.Request) {
 		inventory := state{Workspace: config.Workspace, Projects: []string{}, FlutterSDK: project.FlutterAvailable(), FlutterProjects: []flutterProject{}}
 		if err := checkWorkspace(config.Workspace); err != nil && !errors.Is(err, os.ErrNotExist) {

@@ -153,6 +153,7 @@ button:disabled { opacity: .57; cursor: default; }
 .dialog h2 { margin: 0; font-size: 1.55rem; letter-spacing: -.035em; }
 .dialog-info { margin: 8px 0 16px; color: var(--muted); font-size: .92rem; }
 .dialog-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.appearance-field { margin-bottom: 13px; }
 #custom-model-field { margin-top: 12px; }
 .key-label { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 7px; margin: 16px 0 6px; }
 .key-label label { margin: 0; }
@@ -179,3 +180,37 @@ button:disabled { opacity: .57; cursor: default; }
   .top-actions button { padding-inline: 5px; }
   .dialog-fields { grid-template-columns: minmax(0, 1fr); }
 }
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  color: #1a3131;
+  background: #edf4f2;
+  --muted: #45605f;
+  --line: #a7bdb8;
+  --focus: #087862;
+}
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(ellipse at 8% 0%, #c2ddd6 0%, transparent 48%),
+    radial-gradient(ellipse at 88% 30%, #dbe7f0 0%, transparent 54%),
+    #edf4f2;
+}
+:root[data-theme="light"] .topbar { background: #f3faf7eb; border-color: #9fb9b5; }
+:root[data-theme="light"] .composer, :root[data-theme="light"] .panel {
+  background: linear-gradient(150deg, #fbfdfce8, #edf4f3f2);
+  box-shadow: 0 15px 35px #364f4822, inset 0 1px #fff;
+}
+:root[data-theme="light"] .composer { border-color: #91aaa3; }
+:root[data-theme="light"] :is(textarea, input, select) { background: #fcfefe; border-color: #97b0aa; }
+:root[data-theme="light"] textarea::placeholder,
+:root[data-theme="light"] input::placeholder { color: #536c68; }
+:root[data-theme="light"] :is(.brief-field, #projects li) { border-color: #a7bdb8; }
+:root[data-theme="light"] :is(.examples button, .quiet) { background: #e4efeb; border-color: #a0b8b1; }
+:root[data-theme="light"] :is(.examples button, .quiet):hover:enabled { background: #d5e8e1; }
+:root[data-theme="light"] :is(.advanced summary, .message, .starter-panel h2, .project-name),
+:root[data-theme="light"] #flutter-sdk-help a { color: #165e4e; }
+:root[data-theme="light"] :is(.message.error, .field-help.error, .notice) { color: #9e2c36; }
+:root[data-theme="light"] .starter-files > div { background: #f9fcfa; border-color: #b8cbc6; }
+:root[data-theme="light"] :is(.platform-options input, .trust-project input) { accent-color: #1b7664; }
+:root[data-theme="light"] .dialog { background: #f5faf8; border-color: #91aaa3; }
+:root[data-theme="light"] .dialog::backdrop { background: #25494077; }

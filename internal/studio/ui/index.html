@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div class="shell topbar-inner">
-      <div class="brand"><img class="brand-mark" src="/apprivet-mark.png" alt=""><span>AppRivet</span></div>
+      <div class="brand"><img id="brand-mark" class="brand-mark" src="/apprivet-mark-light.png" alt=""><span>AppRivet</span></div>
       <nav class="top-actions" aria-label="Workspace">
         <button id="go-projects" type="button" class="quiet">Your projects</button>
         <button id="open-admin" type="button" class="quiet" disabled>Admin</button>
@@ -126,6 +126,13 @@
     <form id="admin-form">
       <h2 id="admin-heading">Admin</h2>
       <p class="dialog-info">Set your AI provider, model and key. You can keep a separate key for each provider during this session.</p>
+      <div class="appearance-field">
+        <label for="appearance">Appearance</label>
+        <select id="appearance">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </div>
       <div class="dialog-fields">
         <div>
           <label for="provider">Provider</label>

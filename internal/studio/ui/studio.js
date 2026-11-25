@@ -21,6 +21,7 @@ const customModel = byID("custom-model");
 const apiKey = byID("api-key");
 const keyStatus = byID("key-status");
 const clearKey = byID("clear-key");
+const appearance = byID("appearance");
 const review = byID("prompt-review");
 const reviewStatus = byID("review-status");
 const promptText = byID("prompt-text");
@@ -306,6 +307,7 @@ function showProviderSettings() {
 
 adminButton.addEventListener("click", () => {
   provider.value = activeProvider;
+  appearance.value = document.documentElement.dataset.theme;
   showProviderSettings();
   admin.showModal();
 });
@@ -348,6 +350,9 @@ byID("admin-form").addEventListener("submit", event => {
   activeProvider = provider.value;
   profiles[activeProvider].model = modelID;
   if (key) profiles[activeProvider].key = key;
+  const theme = appearance.value;
+  document.documentElement.dataset.theme = theme;
+  byID("brand-mark").src = theme === "light" ? "/apprivet-mark-dark.png" : "/apprivet-mark-light.png";
   admin.close();
   updateBrief();
 });

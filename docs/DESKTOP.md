@@ -19,6 +19,8 @@ Click a project name under **Your projects** in the browser. On macOS, choose **
 
 Use a different name to **Review as new project** if you want to create a separate copy from the restored settings. Older projects restore data from their saved brief and platform files. The original provider and model can be restored only when the project recorded those settings. API keys stay in Admin for the current session.
 
+**Admin → Appearance** switches between the dark and light gradients for the current session. The header uses the ivory emblem on dark and the charcoal emblem on light.
+
 ### One Flutter project, selected platforms
 
 1. Install the official Flutter SDK. AppRivet finds it on `PATH`, in `~/development/flutter` or `~/flutter`, or under the AppRivet toolchain cache. Set `APPRIVET_FLUTTER_SDK` to an absolute SDK directory to use a different location. A desktop launcher may need reopening after a PATH change. [Flutter installation](https://docs.flutter.dev/install/manual)
