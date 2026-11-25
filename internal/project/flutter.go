@@ -85,6 +85,7 @@ func CreateFlutter(ctx context.Context, parent string, draft Draft, source strin
 	if err != nil {
 		return Info{}, err
 	}
+	validated.SourceProvider, validated.SourceModel = draft.SourceProvider, draft.SourceModel
 	executable := flutterExecutable()
 	if executable == "" {
 		return Info{}, errors.New("install the Flutter SDK before creating a Flutter project")
@@ -112,10 +113,13 @@ func CreateFlutter(ctx context.Context, parent string, draft Draft, source strin
 		}
 	}
 	if validated.Brief != "" {
-		content := "# App brief: " + validated.Name + "\n\nPlatforms: " + strings.Join(validated.Platforms, ", ") + "\n\n" + validated.Brief + "\n"
+		content := "# App brief: " + validated.Name + "\n\nPlatforms: " + strings.Join(validated.Platforms, ", ") + "\n\n## My idea\n\n" + validated.Brief + "\n"
 		if err := os.WriteFile(filepath.Join(root, "APP_BRIEF.md"), []byte(content), 0644); err != nil {
 			return Info{}, err
 		}
+	}
+	if err := os.WriteFile(filepath.Join(root, settingsFilename), settingsData(validated), 0644); err != nil {
+		return Info{}, err
 	}
 	return Info{Kind: "flutter-project", Path: root, Root: root, Scheme: validated.Name, Starter: validated.Starter, Platforms: validated.Platforms}, nil
 }

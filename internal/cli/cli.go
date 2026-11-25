@@ -49,7 +49,7 @@ Usage:
   apprivet init NAME (--brief TEXT | --brief-stdin) --provider PROVIDER --model MODEL (--review | --approve HASH) [--json]
   apprivet init NAME --format flutter --platforms ios,android,web,windows,macos,linux [--review] [--json]
   apprivet flutter-build --project PATH --target PLATFORM --trust-project [--json]
-  apprivet inspect [--project PATH] [--json]
+  apprivet inspect [--project PATH] [--form] [--json]
   apprivet build [--project PATH] [--scheme NAME] --trust-project [--json]
   apprivet test [--project PATH] [--scheme NAME] --simulator UUID --trust-project [--json]
   apprivet devices [--simulators] [--timeout 30s] [--json]
@@ -138,6 +138,7 @@ func (a App) Run(ctx context.Context, args []string) int {
 	projectPath, scheme, bundle, simulator := ".", "", "", ""
 	var starterOptions project.StarterOptions
 	briefStdin := false
+	projectForm := false
 	var provider, model, approval string
 	var format, platforms, flutterTarget string
 	review := false
@@ -167,6 +168,7 @@ func (a App) Run(ctx context.Context, args []string) int {
 		}
 	case "inspect":
 		fs.StringVar(&projectPath, "project", ".", "project root or Xcode container")
+		fs.BoolVar(&projectForm, "form", false, "reopen the saved project settings and brief")
 	case "flutter-build":
 		fs.StringVar(&projectPath, "project", ".", "Flutter project folder")
 		fs.StringVar(&flutterTarget, "target", "", "selected platform: ios, android, web, windows, macos or linux")
@@ -300,6 +302,14 @@ func (a App) Run(ctx context.Context, args []string) int {
 		}
 		response.Data = info
 	case "inspect":
+		if projectForm {
+			opened, err := project.OpenSettings(projectPath)
+			if err != nil {
+				return fail("project_not_found", err.Error(), 4)
+			}
+			response.Data = opened
+			break
+		}
 		info, err := project.Detect(projectPath)
 		if err != nil {
 			return fail("invalid_project", err.Error(), 4)
@@ -430,6 +440,8 @@ func (a App) emit(response Envelope, jsonMode bool, exit int) int {
 		}
 	case project.Draft:
 		fmt.Fprintf(a.Out, "Local starter: %s\n\n%s\n", data.Starter, data.Prompt)
+	case project.Opened:
+		fmt.Fprintf(a.Out, "Project: %s\nFormat: %s\nPlatforms: %s\n", data.Project.Root, data.Settings.Format, strings.Join(data.Settings.Platforms, ", "))
 	case generation.Draft:
 		fmt.Fprintf(a.Out, "Destination: %s (%s)\n\n%s\n\nApproval: %s\n", data.Provider, data.Model, data.Prompt, data.Approval)
 	case project.FlutterBuild:

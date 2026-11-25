@@ -25,6 +25,7 @@ struct DesktopDraft: Decodable, Identifiable, Sendable {
     let name: String
     let bundleID: String
     let starter: String
+    let starterChoice: String
     let brief: String
     let prompt: String
     let provider: String?
@@ -39,7 +40,29 @@ struct DesktopDraft: Decodable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey {
         case name, starter, brief, prompt, provider, model, approval, format, platforms
         case bundleID = "bundle_id"
+        case starterChoice = "starter_choice"
     }
+}
+
+struct DesktopOpened: Decodable, Sendable {
+    struct Settings: Decodable, Sendable {
+        let name: String
+        let format: String
+        let platforms: [String]
+        let starter: String
+        let bundleID: String?
+        let provider: String?
+        let model: String?
+        let brief: String?
+
+        enum CodingKeys: String, CodingKey {
+            case name, format, platforms, starter, provider, model, brief
+            case bundleID = "bundle_id"
+        }
+    }
+
+    let project: DesktopProject
+    let settings: Settings
 }
 
 struct DesktopSimulator: Decodable, Identifiable, Sendable {
@@ -121,7 +144,7 @@ struct DesktopWorkflow: Sendable {
         if let provider = draft.provider, let model = draft.model, let approval = draft.approval {
             args += ["--provider=\(provider)", "--model=\(model)", "--approve=\(approval)"]
         } else {
-            args.append("--starter=\(draft.starter)")
+            args.append("--starter=\(draft.starterChoice)")
         }
         return try invoke(args + [draft.name], directory: parent, timeout: draft.format == "flutter" ? 540 : (draft.isAI ? 195 : 30),
                           apiKey: apiKey, input: Data(draft.brief.utf8))
@@ -133,6 +156,10 @@ struct DesktopWorkflow: Sendable {
             throw DesktopFailure(message: "Choose a generated Flutter project folder or a SwiftUI project.")
         }
         return project
+    }
+
+    func open(_ url: URL) throws -> DesktopOpened {
+        try invoke(["inspect", "--form", "--project", url.path], fullOutput: true)
     }
 
     func simulators() throws -> [DesktopSimulator] {

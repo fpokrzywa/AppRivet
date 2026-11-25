@@ -42,6 +42,10 @@ with tempfile.TemporaryDirectory(prefix="apprivet-studio-") as home:
             work = Path(home, "AppRivet Projects", "BrowserSmoke")
             assert (work / "BrowserSmoke.xcodeproj" / "project.pbxproj").is_file()
             assert brief in (work / "APP_BRIEF.md").read_text(encoding="utf8")
+            with request("/api/project", json.dumps({"name": "BrowserSmoke"}).encode()) as reopened:
+                settings = json.load(reopened)["settings"]
+                assert settings["name"] == "BrowserSmoke" and settings["brief"] == brief
+                assert settings["format"] == "swiftui" and settings["platforms"] == ["ios"]
             with request("/api/state") as state:
                 assert json.load(state)["projects"] == ["BrowserSmoke"]
             with request("/api/quit", b"") as stopped:

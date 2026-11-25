@@ -11,6 +11,7 @@
 - Remove AppRivet's brief-size cap and send imported briefs to the Mac CLI through standard input.
 - Add **Admin** for provider and model selection and separate session keys. Generate SwiftUI source through the OpenAI Responses API or Anthropic Messages API after approval.
 - Add Flutter projects with selectable iOS, Android, Web, Windows, macOS and Linux targets. Build targets supported by the current host from the same Dart codebase.
+- Reopen projects from the frontend and restore the brief, platform choices, and saved generation settings.
 
 ## Unreleased: native Linux journal writeback testing
 

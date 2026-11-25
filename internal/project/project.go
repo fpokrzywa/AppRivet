@@ -35,13 +35,16 @@ func Create(parent, name, bundleID string) (Info, error) {
 }
 
 type Draft struct {
-	Name      string   `json:"name"`
-	BundleID  string   `json:"bundle_id"`
-	Starter   string   `json:"starter"`
-	Brief     string   `json:"brief"`
-	Prompt    string   `json:"prompt"`
-	Format    string   `json:"format,omitempty"`
-	Platforms []string `json:"platforms,omitempty"`
+	Name           string   `json:"name"`
+	BundleID       string   `json:"bundle_id"`
+	Starter        string   `json:"starter"`
+	Brief          string   `json:"brief"`
+	Prompt         string   `json:"prompt"`
+	Format         string   `json:"format,omitempty"`
+	Platforms      []string `json:"platforms,omitempty"`
+	StarterChoice  string   `json:"starter_choice"`
+	SourceProvider string   `json:"-"`
+	SourceModel    string   `json:"-"`
 }
 
 // Review validates the same inputs used by project creation without writing files.
@@ -67,7 +70,11 @@ func Review(name, bundleID string, options StarterOptions) (Draft, error) {
 	} else {
 		prompt += "\n\nApp brief:\n" + brief
 	}
-	return Draft{Name: name, BundleID: bundleID, Starter: starter, Brief: brief, Prompt: prompt}, nil
+	choice := options.Starter
+	if choice == "" {
+		choice = "auto"
+	}
+	return Draft{Name: name, BundleID: bundleID, Starter: starter, StarterChoice: choice, Brief: brief, Prompt: prompt}, nil
 }
 
 func CreateWithOptions(parent, name, bundleID string, options StarterOptions) (Info, error) {
@@ -87,6 +94,7 @@ func ReviewAI(name, bundleID, brief string) (Draft, error) {
 		return Draft{}, fmt.Errorf("describe the app or import a brief before generating with AI")
 	}
 	draft.Starter = "ai"
+	draft.StarterChoice = "ai"
 	draft.Prompt = fmt.Sprintf(`Generate a working SwiftUI app for iPhone and iPad, targeting iOS 17 or later.
 Return JSON with a single "source" string containing the complete ContentView.swift source.
 Start with import SwiftUI and define struct ContentView: View with a default initializer.
@@ -110,6 +118,7 @@ func CreateGenerated(parent string, draft Draft, source string) (Info, error) {
 	if err != nil {
 		return Info{}, err
 	}
+	validated.SourceProvider, validated.SourceModel = draft.SourceProvider, draft.SourceModel
 	return create(parent, validated, source, true)
 }
 
@@ -131,10 +140,15 @@ func create(parent string, draft Draft, swiftSource string, includeStarter bool)
 	if draft.Brief != "" {
 		files = append(files, struct{ src, dst string }{"APP_BRIEF.md.tmpl", "APP_BRIEF.md"})
 	}
+	files = append(files, struct{ src, dst string }{"", settingsFilename})
 	// Render everything before writing. The destination is exclusively created;
 	// failures preserve any partial project for inspection rather than deleting it.
 	rendered := make([][]byte, len(files))
 	for i, file := range files {
+		if file.dst == settingsFilename {
+			rendered[i] = settingsData(draft)
+			continue
+		}
 		if swiftSource != "" && file.src == "ContentView.swift.tmpl" {
 			rendered[i] = []byte(swiftSource + "\n\nenum Greeting {\n    static func message(for name: String) -> String {\n        \"Hello, \\(name)!\"\n    }\n}\n")
 			continue

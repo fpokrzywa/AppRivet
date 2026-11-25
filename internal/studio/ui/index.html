@@ -90,6 +90,7 @@
           </details>
           <div class="form-footer">
             <button id="submit" type="submit" class="primary">Review prompt</button>
+            <button id="open-current-folder" type="button" class="quiet" hidden>Open project folder</button>
             <p id="message" role="status" aria-live="polite" class="message">Opening your local workspace…</p>
           </div>
         </fieldset>
@@ -110,6 +111,7 @@
             <button id="folder" type="button" class="quiet" disabled>Open Projects Folder</button>
           </div>
           <p id="workspace-path" class="workspace-path"></p>
+          <p id="project-instructions" class="field-help" hidden>Select a project name to reopen it.</p>
           <ul id="projects" aria-label="Generated projects"></ul>
           <p id="empty" class="muted">Projects you create will appear here.</p>
         </section>

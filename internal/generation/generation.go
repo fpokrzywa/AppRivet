@@ -84,6 +84,7 @@ func Create(ctx context.Context, parent string, draft Draft, approval, key strin
 	if !utf8.ValidString(source) || len(source) > 128*1024 || strings.ContainsRune(source, 0) {
 		return project.Info{}, errors.New("the model did not return valid app source")
 	}
+	draft.Draft.SourceProvider, draft.Draft.SourceModel = draft.Provider, draft.Model
 	if draft.Format == "flutter" {
 		if !strings.HasPrefix(source, "import 'package:flutter/material.dart';") || !dartMain.MatchString(source) {
 			return project.Info{}, errors.New("the model did not return a complete Flutter main.dart")

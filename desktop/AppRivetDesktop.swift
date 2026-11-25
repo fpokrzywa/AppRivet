@@ -101,6 +101,11 @@ struct AppRivetDesktop: App {
             let created = try workflow.create(draft: draft, parent: parent)
             guard created.starter == "checklist" else { throw DesktopFailure(message: "The app brief did not select the checklist starter.") }
             let project = try workflow.inspect(URL(fileURLWithPath: created.root, isDirectory: true))
+            let opened = try workflow.open(URL(fileURLWithPath: created.root, isDirectory: true))
+            guard opened.settings.brief == brief, opened.settings.bundleID == "org.example.apprivetdesktop",
+                  opened.settings.starter == "auto" else {
+                throw DesktopFailure(message: "The saved project form did not restore the original settings.")
+            }
             Self.smokeProgress("Discovering an iPhone simulator…")
             guard let simulator = try workflow.simulators().first(where: { $0.name.hasPrefix("iPhone") }) else {
                 throw DesktopFailure(message: "An iPhone simulator is unavailable.")
@@ -162,7 +167,17 @@ private final class DesktopModel: ObservableObject {
     @Published private(set) var buildArtifact: URL?
 
     var busy: Bool { activity != nil }
-    var canCreate: Bool { parent != nil && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var canCreate: Bool {
+        guard let parent else { return false }
+        let projectName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !projectName.isEmpty else { return false }
+        if let project {
+            let root = URL(fileURLWithPath: project.root, isDirectory: true)
+            let sameFolder = root.deletingLastPathComponent().standardizedFileURL == parent.standardizedFileURL
+            if sameFolder && root.lastPathComponent.caseInsensitiveCompare(projectName) == .orderedSame { return false }
+        }
+        return true
+    }
     var isFlutterProject: Bool { project?.kind == "flutter-project" }
     var localTargets: [String] { (project?.platforms ?? []).filter { ["ios", "android", "web", "macos"].contains($0) } }
     var canRun: Bool {
@@ -206,7 +221,27 @@ private final class DesktopModel: ObservableObject {
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        perform("Opening project…", work: { try $0.inspect(url) }, done: selectProject)
+        perform("Opening project…", work: { try $0.open(url) }, done: restoreProject)
+    }
+
+    private func restoreProject(_ opened: DesktopOpened) {
+        let settings = opened.settings
+        name = settings.name
+        brief = settings.brief ?? ""
+        briefMessage = ""
+        bundleID = settings.bundleID ?? ""
+        format = settings.format
+        platforms = Set(settings.platforms)
+        starter = settings.starter
+        if let provider = settings.provider.flatMap(AIProvider.init(rawValue:)),
+           let model = settings.model,
+           model.range(of: #"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\z"#, options: .regularExpression) != nil {
+            selectedProvider = provider
+            profiles[provider]?.model = model
+        }
+        parent = URL(fileURLWithPath: opened.project.root, isDirectory: true).deletingLastPathComponent()
+        selectProject(opened.project)
+        status = "Opened \(settings.name). Use a different project name or save folder to create a new copy."
     }
 
     func reviewProject() {
@@ -384,7 +419,7 @@ private struct DesktopView: View {
                     Text("SwiftUI (native iOS)").tag("swiftui")
                 }
                 .onChange(of: model.format) { _ in
-                    if model.starter != "ai" { model.starter = model.format == "flutter" ? "blank" : "auto" }
+                    if model.format == "flutter" && model.starter != "ai" { model.starter = "blank" }
                 }
                 if model.format == "flutter" {
                     Text("App platforms").font(.headline)
@@ -447,7 +482,8 @@ private struct DesktopView: View {
                     }
                 }
                 HStack {
-                    Button("Review prompt", action: model.reviewProject).disabled(!model.canCreate)
+                    Button(model.project == nil ? "Review prompt" : "Review as new project", action: model.reviewProject)
+                        .disabled(!model.canCreate)
                     Button("Open Project…", action: model.openProject)
                 }
                 if let project = model.project {

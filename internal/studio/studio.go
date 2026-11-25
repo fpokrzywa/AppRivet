@@ -178,6 +178,45 @@ func Handler(config Config) http.Handler {
 	}
 	mux.HandleFunc("POST /api/review", projectRequest)
 	mux.HandleFunc("POST /api/create", projectRequest)
+	projectPath := func(name string) (string, error) {
+		if _, err := project.Review(name, "com.example."+strings.ToLower(name), project.StarterOptions{}); err != nil || checkWorkspace(config.Workspace) != nil {
+			return "", errors.New("Choose a project in your AppRivet Projects folder.")
+		}
+		return filepath.Join(config.Workspace, name), nil
+	}
+	openProject := func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Name string `json:"name"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil || decoder.Decode(new(any)) != io.EOF {
+			writeError(w, http.StatusBadRequest, "Select a project to reopen.")
+			return
+		}
+		path, err := projectPath(req.Name)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if r.URL.Path == "/api/open-project-folder" {
+			info, err := project.Detect(path)
+			if err != nil || (info.Kind != "xcode-project" && info.Kind != "flutter-project") || config.OpenFolder == nil || config.OpenFolder(info.Root) != nil {
+				writeError(w, http.StatusBadRequest, "Could not open this project folder.")
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		opened, err := project.OpenSettings(path)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, opened)
+	}
+	mux.HandleFunc("POST /api/project", openProject)
+	mux.HandleFunc("POST /api/open-project-folder", openProject)
 	mux.HandleFunc("POST /api/build", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Name    string `json:"name"`
@@ -190,12 +229,13 @@ func Handler(config Config) http.Handler {
 			writeError(w, http.StatusBadRequest, "Select a Flutter project and target.")
 			return
 		}
-		if _, err := project.Review(req.Name, "com.example."+strings.ToLower(req.Name), project.StarterOptions{}); err != nil || checkWorkspace(config.Workspace) != nil {
-			writeError(w, http.StatusBadRequest, "Choose a project in your AppRivet Projects folder.")
+		path, err := projectPath(req.Name)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(project.FlutterBuildTimeout + time.Minute))
-		result, err := project.BuildFlutter(r.Context(), filepath.Join(config.Workspace, req.Name), req.Target, req.Trusted)
+		result, err := project.BuildFlutter(r.Context(), path, req.Target, req.Trusted)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return

@@ -1,5 +1,11 @@
 # Verification record
 
+## Shared Flutter projects and prompt review
+
+All six jobs passed at `b9bdc99e02f0ce9a779f00c45af1c4ad38023918`. With Flutter 3.50.1, hosted Linux created the selected scaffolds and built Web and Linux from one shared project. A Windows Chrome test imported a long brief, exercised provider settings and prompt review with mock calls, created a Flutter project for Web and Linux, and built Web through the launcher. The resulting web app ran in Chrome. The hosted Mac package verified prompt review and built and launched a SwiftUI project on an iPhone Simulator. [CI run and platform downloads](https://github.com/fpokrzywa/AppRivet/actions/runs/45622901036#artifacts)
+
+Live provider requests, Flutter Android, Flutter iOS Simulator, Windows desktop, macOS desktop, interactive Linux desktop, and physical-device signing and deployment remain separate validation steps. The host and SDK requirements are in the [frontend guide](DESKTOP.md).
+
 ## Graphical frontend preview
 
 All five jobs passed at `6627dd4f8e52b3539614b078e334de547f33115d`. The packaged macOS app created and reopened the SwiftUI sample, selected an iPhone 16 simulator, built the app, booted the simulator, installed the build and launched `org.example.apprivetdesktop`. CI checked both Mach-O architecture slices. Runtime launch was tested on hosted Apple silicon. Windows and Linux ran the packaged launchers through project creation, inventory and clean shutdown. A local Chrome test also exercised the form, narrow layout, inventory update and quit. Initial Mac runs exposed a `lipo` argument order error and a Simulator command timeout. The final workflow corrected the verifier and uses an independent Mac job with phase diagnostics and bounded startup, install and launch deadlines. [Passing CI run and downloads](https://github.com/fpokrzywa/AppRivet/actions/runs/45553338536#artifacts)

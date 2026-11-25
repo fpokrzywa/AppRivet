@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/fpokrzywa/AppRivet/internal/generation"
+	"github.com/fpokrzywa/AppRivet/internal/project"
 )
 
 func TestStudioCreatesAndListsProject(t *testing.T) {
@@ -38,6 +39,7 @@ func TestStudioCreatesAndListsProject(t *testing.T) {
 		t.Fatal("embedded UI or content restrictions are missing")
 	}
 	request(http.MethodPost, "/api/create", `{"name":"Sample"}`, http.StatusCreated)
+	request(http.MethodPost, "/api/project", `{"name":"../outside"}`, http.StatusBadRequest)
 	root := filepath.Join(workspace, "Sample")
 	projectFile := filepath.Join(root, "Sample.xcodeproj", "project.pbxproj")
 	before, err := os.ReadFile(projectFile)
@@ -127,7 +129,7 @@ func TestStudioReviewsAIRequestBeforeCallingProvider(t *testing.T) {
 			return source, nil
 		},
 	})
-	send := func(path string, data createRequest, want int) *httptest.ResponseRecorder {
+	send := func(path string, data any, want int) *httptest.ResponseRecorder {
 		t.Helper()
 		body, err := json.Marshal(data)
 		if err != nil {
@@ -172,6 +174,15 @@ func TestStudioReviewsAIRequestBeforeCallingProvider(t *testing.T) {
 	res := send("/api/create", input, http.StatusCreated)
 	if strings.Contains(res.Body.String(), key) || !strings.Contains(res.Body.String(), "\"starter\":\"ai\"") {
 		t.Fatal("created project response returned the wrong output")
+	}
+	var reopened project.Opened
+	res = send("/api/project", map[string]string{"name": "LapTimer"}, http.StatusOK)
+	if strings.Contains(res.Body.String(), key) {
+		t.Fatal("the project form exposed the API key")
+	}
+	if err := json.NewDecoder(res.Body).Decode(&reopened); err != nil || reopened.Settings.Brief != brief ||
+		reopened.Settings.Model != input.Model || reopened.Settings.Provider != input.Provider || reopened.Settings.Starter != "ai" {
+		t.Fatal("reopening did not restore AI project settings safely")
 	}
 	root := filepath.Join(workspace, "LapTimer")
 	for file, want := range map[string]string{"LapTimer/ContentView.swift": source, "APP_BRIEF.md": brief} {

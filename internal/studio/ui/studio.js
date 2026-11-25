@@ -27,6 +27,7 @@ const promptText = byID("prompt-text");
 const confirmCreate = byID("confirm-create");
 const editBrief = byID("edit-brief");
 const importStatus = byID("import-status");
+const openCurrentFolder = byID("open-current-folder");
 
 let reviewedRequest;
 let creating = false;
@@ -34,6 +35,8 @@ let activeProvider = "openai";
 let flutterSDK = false;
 let buildSelection;
 let building = false;
+let loadedProject = "";
+let openSequence = 0;
 
 const platformNames = {ios: "iOS", android: "Android", web: "Web", windows: "Windows", macos: "macOS", linux: "Linux"};
 
@@ -102,6 +105,52 @@ function updateFormat() {
   updateBrief();
 }
 
+function updateLoadedProject() {
+  const sameName = nameField.value.trim().toLowerCase() === loadedProject.toLowerCase();
+  submit.disabled = Boolean(loadedProject && sameName);
+  submit.textContent = loadedProject ? "Review as new project" : "Review prompt";
+  openCurrentFolder.hidden = !loadedProject;
+  for (const button of projects.querySelectorAll("[data-project-name]")) {
+    button.setAttribute("aria-current", String(button.dataset.projectName === loadedProject));
+  }
+}
+
+async function reopenProject(name) {
+  const sequence = ++openSequence;
+  show(message, "Reopening " + name + "…");
+  try {
+    const {settings} = await request("/api/project", {name});
+    if (sequence !== openSequence) return;
+    loadedProject = name;
+    nameField.value = settings.name;
+    brief.value = settings.brief || "";
+    byID("bundle").value = settings.bundle_id || "";
+    format.value = settings.format;
+    updateFormat();
+    starter.value = settings.starter;
+    for (const input of form.querySelectorAll('input[name="platform"]')) {
+      input.checked = settings.platforms.includes(input.value);
+    }
+    if (Object.hasOwn(providers, settings.provider) && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(settings.model || "")) {
+      activeProvider = settings.provider;
+      profiles[activeProvider].model = settings.model;
+    }
+    show(importStatus, "");
+    updateBrief();
+    updateLoadedProject();
+    show(message, "Opened " + name + ". Use a different project name to create a new copy.");
+    brief.focus();
+  } catch (error) {
+    if (sequence === openSequence) show(message, error.message, true);
+  }
+}
+
+nameField.addEventListener("input", updateLoadedProject);
+openCurrentFolder.addEventListener("click", async () => {
+  try { await request("/api/open-project-folder", {name: loadedProject}); }
+  catch (error) { show(message, error.message, true); }
+});
+
 async function request(path, body) {
   const headers = {"X-AppRivet-Session": session};
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -122,10 +171,18 @@ async function refresh() {
   updateBrief();
   byID("workspace-path").textContent = state.workspace;
   byID("empty").hidden = state.projects.length !== 0;
+  byID("project-instructions").hidden = state.projects.length === 0;
   const rows = document.createDocumentFragment();
   for (const name of state.projects) {
     const row = document.createElement("li");
-    row.textContent = name;
+    const open = document.createElement("button");
+    open.className = "project-name";
+    open.type = "button";
+    open.dataset.projectName = name;
+    open.textContent = name;
+    open.setAttribute("aria-current", String(name === loadedProject));
+    open.addEventListener("click", () => reopenProject(name));
+    row.append(open);
     const flutter = state.flutter_projects.find(project => project.name === name);
     if (flutter) {
       const targets = document.createElement("p");
@@ -252,7 +309,7 @@ adminButton.addEventListener("click", () => {
   showProviderSettings();
   admin.showModal();
 });
-admin.addEventListener("close", () => { apiKey.value = ""; });
+admin.addEventListener("close", () => { if (!admin.open) apiKey.value = ""; });
 byID("close-admin").addEventListener("click", () => admin.close());
 provider.addEventListener("change", showProviderSettings);
 model.addEventListener("change", updateCustomField);
@@ -313,12 +370,14 @@ for (const button of document.querySelectorAll("[data-example]")) {
     if (format.value !== "flutter" && starter.value !== "ai") starter.value = button.dataset.example;
     show(importStatus, "");
     updateBrief();
+    updateLoadedProject();
     brief.focus();
   });
 }
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
+  if (submit.disabled) return;
   const ai = starter.value === "ai";
   const isFlutter = format.value === "flutter";
   const settings = profiles[activeProvider];
@@ -359,6 +418,7 @@ form.addEventListener("submit", async event => {
 editBrief.addEventListener("click", () => review.close());
 review.addEventListener("cancel", event => { if (creating) event.preventDefault(); });
 review.addEventListener("close", () => {
+  if (review.open) return;
   reviewedRequest = undefined;
   promptText.value = "";
 });
@@ -382,6 +442,8 @@ confirmCreate.addEventListener("click", async () => {
     const result = await request("/api/create", project.provider ? {...project, api_key: profiles[project.provider].key} : project);
     const label = starters[result.starter]?.[0] ?? "SwiftUI";
     review.close();
+    loadedProject = result.suggested_scheme;
+    updateLoadedProject();
     show(message, result.kind === "flutter-project"
       ? "Created " + result.suggested_scheme + " for " + result.platforms.map(platform => platformNames[platform]).join(", ") + "."
       : project.provider ? "Created " + result.suggested_scheme + ". Review the generated SwiftUI in Xcode before building."

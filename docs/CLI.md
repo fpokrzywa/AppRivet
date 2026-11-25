@@ -31,6 +31,8 @@ Use `--format flutter --platforms LIST` with one or more of `ios`, `android`, `w
 
 `inspect --project PATH` accepts a root directory or explicit `.xcodeproj`/`.xcworkspace` directory. One workspace takes precedence over projects. Multiple candidates are an error; select explicitly. A root Package.swift is detected passively if no Xcode container is selected. Marker discovery is not semantic project validation; actual Xcode validation happens during build. Package-to-app conversion is not implemented.
 
+`inspect --form --project PATH --json` returns the settings and brief used to reopen a Flutter or SwiftUI project in the app. New projects record creation choices in `.apprivet.json` and keep the brief in `APP_BRIEF.md`.
+
 `doctor` probes full Xcode, Swift, simctl, devicectl, and the iOS/device simulator SDKs. devicectl is optional for this simulator milestone. It neither installs tools nor accepts Apple licenses. macOS readiness means these tool/SDK probes passed; it does not establish device signing, physical device authorization, installed simulator runtime availability or scheme correctness. Select Xcode through Xcode Settings > Locations; AppRivet deliberately does not inherit DEVELOPER_DIR overrides.
 
 `build` and `test` require macOS and `--trust-project`. Projects may run scripts and Swift plugins with your OS user's access. Use only trusted source on a credential-free Mac account. The flag does not isolate hostile code or authorize any signing action. No shell command strings or arbitrary xcodebuild arguments are accepted. A shared scheme defaults to the container's basename; pass `--scheme NAME` if different. Supported scheme characters are ASCII letters/digits, spaces, dots, underscores and hyphens; first character must be alphanumeric.
