@@ -9,6 +9,11 @@ fi
 repo=$(cd "$(dirname "$0")/.." && pwd)
 cd "$repo"
 destination=${1:-"$repo/dist/macos"}
+mode=${2:-package}
+if [[ $# -gt 2 || ( $mode != package && $mode != --app-only ) ]]; then
+  echo 'Usage: package-macos-app.sh [output-dir] [--app-only]' >&2
+  exit 1
+fi
 mkdir -p "$destination"
 destination=$(cd "$destination" && pwd)
 app="$destination/AppRivet.app"
@@ -66,6 +71,11 @@ chmod 755 "$staged/Contents/MacOS/AppRivetDesktop" "$staged/Contents/MacOS/appri
 codesign --force --sign - "$staged/Contents/MacOS/apprivet"
 codesign --force --sign - "$staged"
 codesign --verify --deep --strict "$staged"
+if [[ $mode == --app-only ]]; then
+  ditto "$staged" "$app"
+  printf 'Prepared app bundle: %s\n' "$app"
+  exit 0
+fi
 ditto -c -k --sequesterRsrc --keepParent "$staged" "$scratch/AppRivet-macOS.zip"
 image_root="$scratch/disk-image"
 mkdir "$image_root"

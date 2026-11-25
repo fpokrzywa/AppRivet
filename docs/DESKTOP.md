@@ -95,7 +95,7 @@ In **Generate with AI**, choose **Plan components before generating code**. AppR
 
 1. Download and open **AppRivet-macOS.dmg**. The app includes Apple silicon and Intel executables. [AppRivet 0.4.9 macOS disk image](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.9/AppRivet-macOS.dmg) and [AppRivet 0.4.9 release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.9).
 2. Drag **AppRivet.app** onto **Applications** in the disk image window. Eject the disk image, then open AppRivet from **Applications**.
-3. Open **AppRivet.app** from Finder. This preview uses an ad hoc signature and has no Apple notarization. If macOS says it couldn’t verify AppRivet is free of malware, click **Done**. If you trust the download, open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway** for AppRivet. Authenticate if prompted and confirm with **Open**. [Apple’s Gatekeeper guidance](https://support.apple.com/en-us/102445)
+3. Open **AppRivet.app** from Finder. Version 0.4.9 and earlier previews use ad hoc signing. If macOS says it couldn’t verify an older preview is free of malware, click **Done**. If you trust the download, open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway** for AppRivet. Authenticate if prompted and confirm with **Open**. [Apple’s Gatekeeper guidance](https://support.apple.com/en-us/102445)
 
 ### Update AppRivet on your Mac
 
@@ -135,7 +135,7 @@ See the build results and platform downloads under **Artifacts** in GitHub Actio
 
 ### Publish a Mac update
 
-1. Increment `CFBundleVersion` and `CFBundleShortVersionString` in `desktop/Info.plist`. Wait for CI to pass and download its `AppRivet-desktop-download` and `AppRivet-Windows-download` artifacts. Keep the Mac ZIP exactly as packaged so that the framework’s symlinks and signatures are preserved.
+1. Increment `CFBundleVersion` and `CFBundleShortVersionString` in `desktop/Info.plist` and merge the release commit to `main`. Wait for CI and download its `AppRivet-Windows-download` artifact. In **Actions → Sign and notarize a Mac release**, choose **Run workflow** on `main`, enter the new version, and uncheck **rehearsal**. Download `AppRivet-macOS-notarized-<version>` from the successful run. Use its DMG and versioned Sparkle ZIP for the public release. Keep the inner ZIP exactly as packaged so that the framework’s symlinks and signatures are preserved. [Mac release workflow](https://github.com/fpokrzywa/AppRivet/actions/workflows/macos-release.yml)
 2. Sign that ZIP with the release seed that matches `SUPublicEDKey`. On macOS, use Sparkle’s `sign_update` with the release key in Keychain. On the Windows release host, read the DPAPI-protected seed from `%LOCALAPPDATA%\AppRivet\Signing\sparkle-seed.dpapi` and pipe it to the signing command from the repository root. Keep the release seed and its backup private. [Sparkle release signing](https://sparkle-project.org/documentation/publishing/)
 
    ```powershell
@@ -148,12 +148,26 @@ See the build results and platform downloads under **Artifacts** in GitHub Actio
    ```
 
 3. Publish the Mac DMG, Mac ZIP and Windows ZIP in GitHub Releases. Verify that the public Mac ZIP matches the archive you signed. Update `updates/appcast.xml` with the public Mac ZIP URL, signature and length, the bundle build number and display version, and the minimum macOS version. In this guide, update the macOS and Windows download labels, release notes label, and their URLs to the same published version. Commit the feed and guide together to `main` after the assets are public. CI checks that the visible versions and link destinations match the feed.
-4. Check for the release from an older installed build. Confirm that the signed download installs and relaunches, and reopen an existing project. The hosted update smoke test exercised the 0.4.8 to 0.4.9 download, replacement and relaunch with an automated approval driver. The standard update dialogs and installed-app behavior on personal Apple silicon and Intel Macs still need live validation. [Hosted update test](https://github.com/fpokrzywa/AppRivet/actions/runs/45665268741)
+4. Test a fresh DMG download with normal Gatekeeper settings. Check for the update from an older installed build, confirm it installs and relaunches, and reopen an existing project. The first transition from an ad hoc release to a Developer ID release needs a live update check. The hosted update smoke test exercised the 0.4.8 to 0.4.9 download, replacement and relaunch with an automated approval driver. [Hosted update test](https://github.com/fpokrzywa/AppRivet/actions/runs/45665268741)
 
 ### Sign and notarize AppRivet for direct Mac downloads
 
-AppRivet's current Mac preview uses ad hoc signing. To distribute future downloads through GitHub without requiring **Open Anyway**, the publisher needs an Apple Developer Program team and its **Developer ID Application** certificate. The certificate's private key belongs in the release Mac's Keychain or a protected signing environment. [Create a Developer ID certificate](https://developer.apple.com/help/account/certificates/create-developer-id-certificates)
+#### One-time Apple account setup
 
-1. On a Mac with Xcode, sign the bundled CLI and Sparkle code before signing the outer app. Use Developer ID, Hardened Runtime, and secure timestamps for the release executables. [Apple notarization requirements](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) and [Sparkle distribution guide](https://sparkle-project.org/documentation/#4-distributing-your-app).
-2. Submit a ZIP of the signed app with `xcrun notarytool`. After Apple accepts it, staple the ticket to `AppRivet.app` before packaging the Sparkle ZIP and the disk image. Sign and notarize the final disk image and staple its ticket too. [Apple's command-line notarization guide](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)
-3. Sign the finished Sparkle ZIP with AppRivet's existing update key. Test both a fresh download under normal Gatekeeper settings and an in-place update from the previous public release before publishing. [Sparkle release signing](https://sparkle-project.org/documentation/publishing/) and [Apple distribution testing](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution).
+1. In the Apple Developer account, copy the **Team ID** from **Membership details**. The Account Holder creates a **Developer ID Application** certificate under **Certificates, Identifiers & Profiles**. Follow Apple's steps to create a certificate signing request on your Mac. After installing the certificate, use **Keychain Access → My Certificates** to export that certificate with its private key as a password-protected `.p12`. [Create a Developer ID certificate](https://developer.apple.com/help/account/certificates/create-developer-id-certificates)
+2. In **App Store Connect → Users and Access → Integrations → App Store Connect API → Team Keys**, have the Account Holder request API access if needed. Generate a dedicated team key for AppRivet notarization with **Developer** access. Download its `.p8` and record the **Key ID** and **Issuer ID**. Apple lets you download the private key once. [App Store Connect team keys](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api) and [Apple's notarytool authentication guide](https://developer.apple.com/documentation/technotes/tn3147-migrating-to-the-latest-notarization-tool).
+
+#### GitHub setup
+
+In **AppRivet → Settings → Environments → macos-release**, add the values below. The environment is restricted to `main`. Put credentials directly in GitHub's environment settings and keep the original files in secure storage. [Repository environment](https://github.com/fpokrzywa/AppRivet/settings/environments) and [GitHub environment secrets](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| Environment variable | `APPLE_TEAM_ID` | Apple Developer Team ID |
+| Environment secret | `APPLE_DEVELOPER_ID_P12_BASE64` | Base64 of the exported `.p12`. On your Mac, `openssl base64 -A -in /path/to/DeveloperID.p12 \| pbcopy` copies it for pasting into GitHub. |
+| Environment secret | `APPLE_DEVELOPER_ID_P12_PASSWORD` | Password chosen when you exported the `.p12` |
+| Environment secret | `APPLE_NOTARY_KEY` | Full text of the `.p8`, including its BEGIN and END lines |
+| Environment secret | `APPLE_NOTARY_KEY_ID` | Key ID from App Store Connect |
+| Environment secret | `APPLE_NOTARY_ISSUER_ID` | Issuer ID from App Store Connect |
+
+The Mac release workflow builds both Mac architectures, signs the app and its bundled helpers, submits the app and DMG to Apple, attaches both accepted tickets, and checks the results with Gatekeeper before uploading artifacts. **Rehearsal** runs the packaging checks without Apple credentials. Publishing the GitHub release and signing its updater ZIP with the existing Sparkle key remain the release steps above. [Apple distribution verification](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution) and [Sparkle release signing](https://sparkle-project.org/documentation/publishing/).

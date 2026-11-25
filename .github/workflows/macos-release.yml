@@ -1,0 +1,109 @@
+name: Sign and notarize a Mac release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: AppRivet version in desktop/Info.plist (for example, 0.4.10)
+        required: true
+        type: string
+      rehearsal:
+        description: Check packaging without using Apple credentials or creating release assets
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-release
+  cancel-in-progress: false
+
+jobs:
+  macos-release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 55
+    environment: macos-release
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Verify the requested release version
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_REHEARSAL: ${{ inputs.rehearsal }}
+        run: |
+          set -euo pipefail
+          version=$(plutil -extract CFBundleShortVersionString raw -o - desktop/Info.plist)
+          build=$(plutil -extract CFBundleVersion raw -o - desktop/Info.plist)
+          if [[ ! $RELEASE_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || $RELEASE_VERSION != "$version" ]]; then
+            echo 'Enter the version already set in desktop/Info.plist.' >&2
+            exit 1
+          fi
+          if [[ $RELEASE_REHEARSAL != true ]]; then
+            published_build=$(xmllint --xpath 'string(/rss/channel/item[1]/*[local-name()="version"])' updates/appcast.xml)
+            published_version=$(xmllint --xpath 'string(/rss/channel/item[1]/*[local-name()="shortVersionString"])' updates/appcast.xml)
+            if [[ ! $build =~ ^[1-9][0-9]*$ || ! $published_build =~ ^[1-9][0-9]*$ || -z $published_version \
+              || $version == "$published_version" || $build -le $published_build ]]; then
+              echo 'Use a new AppRivet version and increment CFBundleVersion above the published build.' >&2
+              exit 1
+            fi
+          fi
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Run tests
+        run: go test -count=1 ./...
+      - name: Build and verify the universal app candidate
+        run: |
+          set -euo pipefail
+          bash scripts/package-macos-app.sh "$RUNNER_TEMP/release-candidate" --app-only
+          APP="$RUNNER_TEMP/release-candidate/AppRivet.app"
+          codesign --verify --deep --strict "$APP"
+          xcrun lipo "$APP/Contents/MacOS/AppRivetDesktop" -verify_arch arm64 x86_64
+          xcrun lipo "$APP/Contents/MacOS/apprivet" -verify_arch arm64 x86_64
+          xcrun lipo "$APP/Contents/Frameworks/Sparkle.framework/Sparkle" -verify_arch arm64 x86_64
+      - name: Verify that missing credentials prevent release packaging
+        if: inputs.rehearsal
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/missing-signing-credentials.log"
+          if bash scripts/notarize-macos-app.sh "$RUNNER_TEMP/release-candidate/AppRivet.app" \
+              "$RUNNER_TEMP/notarized" > "$report" 2>&1; then
+            echo 'Release signing unexpectedly succeeded without Apple credentials.' >&2
+            exit 1
+          fi
+          grep -Fx 'Missing required Apple release credential: APPLE_TEAM_ID' "$report"
+          test ! -e "$RUNNER_TEMP/notarized"
+      - name: Sign, notarize, staple and assess the release
+        if: '!inputs.rehearsal'
+        env:
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          APPLE_DEVELOPER_ID_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: bash scripts/notarize-macos-app.sh "$RUNNER_TEMP/release-candidate/AppRivet.app" "$RUNNER_TEMP/notarized"
+      - name: Smoke test the notarized desktop app
+        if: '!inputs.rehearsal'
+        timeout-minutes: 15
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          ditto -x -k "$RUNNER_TEMP/notarized/AppRivet-macOS-$RELEASE_VERSION.zip" "$RUNNER_TEMP/release-unpacked"
+          mkdir "$RUNNER_TEMP/release-smoke"
+          APPRIVET_FLUTTER_SDK="$RUNNER_TEMP/missing-sdk" \
+            "$RUNNER_TEMP/release-unpacked/AppRivet.app/Contents/MacOS/AppRivetDesktop" --smoke-test "$RUNNER_TEMP/release-smoke"
+      - name: Upload verified Mac release assets
+        if: '!inputs.rehearsal'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: AppRivet-macOS-notarized-${{ inputs.version }}
+          path: |
+            ${{ runner.temp }}/notarized/AppRivet-macOS.dmg
+            ${{ runner.temp }}/notarized/AppRivet-macOS-${{ inputs.version }}.zip
+          if-no-files-found: error
