@@ -32,18 +32,15 @@ private func platformLabel(_ id: String) -> String {
 
 @MainActor
 private enum DesktopBrand {
-    private static let artwork = Bundle.main.url(forResource: "AppRivetBlueprint", withExtension: "png")
+    private static let artwork = Bundle.main.url(forResource: "AppRivetMark", withExtension: "png")
         .flatMap { NSImage(contentsOf: $0) }
 
     @ViewBuilder static var mark: some View {
         if let artwork {
             Image(nsImage: artwork)
                 .resizable()
-                .frame(width: 132, height: 63)
+                .scaledToFit()
                 .frame(width: 46, height: 46)
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 9))
-                .overlay { RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.18)) }
                 .accessibilityHidden(true)
         }
     }
@@ -111,8 +108,8 @@ struct AppRivetDesktop: App {
         guard arguments.dropFirst().first == "--smoke-test" else { return }
         do {
             guard arguments.count == 3 else { throw DesktopFailure(message: "Smoke test requires a parent folder.") }
-            guard Bundle.main.url(forResource: "AppRivetBlueprint", withExtension: "png") != nil else {
-                throw DesktopFailure(message: "The AppRivet blueprint artwork is missing from the package.")
+            guard Bundle.main.url(forResource: "AppRivetMark", withExtension: "png") != nil else {
+                throw DesktopFailure(message: "The AppRivet emblem is missing from the package.")
             }
             let workflow = try DesktopWorkflow.bundled()
             let parent = URL(fileURLWithPath: arguments[2], isDirectory: true)

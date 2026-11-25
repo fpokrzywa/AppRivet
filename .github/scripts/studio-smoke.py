@@ -26,11 +26,14 @@ with tempfile.TemporaryDirectory(prefix="apprivet-studio-") as home:
                 html = page.read()
                 assert b"Describe your app" in html and b"<style>" in html
                 assert b"<script>" in html and b"X-AppRivet-Session" in html
-                assert b'class="brand-mark"' in html and b"<span>AppRivet</span>" in html and b"data:image/png;base64," in html
+                assert b'class="brand-mark"' in html and b"<span>AppRivet</span>" in html and b'src="/apprivet-mark.png"' in html
                 assert b"radial-gradient(ellipse at 8% 0%" in html
-                assert "img-src data:" in page.headers["Content-Security-Policy"]
+                assert "img-src 'self'" in page.headers["Content-Security-Policy"]
                 assert b"Import brief" in html and b"Review prompt" in html and b'aria-labelledby="admin-heading"' in html
                 assert "style-src 'sha256-" in page.headers["Content-Security-Policy"]
+            with request("/apprivet-mark.png") as mark:
+                assert mark.headers["Content-Type"] == "image/png"
+                assert mark.read(26)[25] == 6  # Truecolor PNG with alpha.
             brief = "A checklist I can use to pack for a weekend trip.\n" + "Store the list on the device.\n" * 2000 + "Show my trip plan."
             project = {"name": "BrowserSmoke", "brief": brief}
             with request("/api/review", json.dumps({**project, "provider": "openai", "model": "gpt-6.2-sol"}).encode()) as review:

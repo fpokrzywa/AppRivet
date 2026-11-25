@@ -21,7 +21,7 @@ import (
 	"github.com/fpokrzywa/AppRivet/internal/project"
 )
 
-//go:embed ui/index.html ui/studio.css ui/studio.js ui/apprivet-blueprint.png
+//go:embed ui/index.html ui/studio.css ui/studio.js ui/apprivet-mark.png
 var assets embed.FS
 
 type Config struct {
@@ -70,21 +70,23 @@ func Handler(config Config) http.Handler {
 		return strings.ReplaceAll(strings.ReplaceAll(string(body), "\r\n", "\n"), "\r", "\n")
 	}
 	style, script := asset("studio.css"), asset("studio.js")
-	blueprint, err := assets.ReadFile("ui/apprivet-blueprint.png")
+	artwork, err := assets.ReadFile("ui/apprivet-mark.png")
 	if err != nil {
 		panic(err)
 	}
-	// Embed the header artwork in the packaged HTML document.
-	style = ":root{--brand-artwork:url(data:image/png;base64," + base64.StdEncoding.EncodeToString(blueprint) + ")}\n" + style
 	hash := func(value string) string {
 		digest := sha256.Sum256([]byte(value))
 		return "'sha256-" + base64.StdEncoding.EncodeToString(digest[:]) + "'"
 	}
-	policy := "default-src 'none'; script-src " + hash(script) + "; style-src " + hash(style) + "; img-src data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+	policy := "default-src 'none'; script-src " + hash(script) + "; style-src " + hash(style) + "; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
 	page := strings.NewReplacer("<!-- APP_STYLE -->", "<style>"+style+"</style>", "<!-- APP_SCRIPT -->", "<script>"+script+"</script>").Replace(asset("index.html"))
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = io.WriteString(w, page)
+	})
+	mux.HandleFunc("GET /apprivet-mark.png", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(artwork)
 	})
 	mux.HandleFunc("GET /api/state", func(w http.ResponseWriter, _ *http.Request) {
 		inventory := state{Workspace: config.Workspace, Projects: []string{}, FlutterSDK: project.FlutterAvailable(), FlutterProjects: []flutterProject{}}

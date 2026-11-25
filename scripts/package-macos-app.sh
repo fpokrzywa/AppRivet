@@ -33,7 +33,7 @@ done
 staged="$scratch/AppRivet.app"
 mkdir -p "$staged/Contents/MacOS" "$staged/Contents/Resources"
 cp desktop/Info.plist "$staged/Contents/Info.plist"
-cp internal/studio/ui/apprivet-blueprint.png "$staged/Contents/Resources/AppRivetBlueprint.png"
+cp internal/studio/ui/apprivet-mark.png "$staged/Contents/Resources/AppRivetMark.png"
 plutil -lint "$staged/Contents/Info.plist"
 xcrun lipo -create "$scratch/desktop-arm64" "$scratch/desktop-x86_64" -output "$staged/Contents/MacOS/AppRivetDesktop"
 xcrun lipo -create "$scratch/cli-arm64" "$scratch/cli-x86_64" -output "$staged/Contents/MacOS/apprivet"
