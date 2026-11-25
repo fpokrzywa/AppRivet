@@ -137,9 +137,37 @@ func TestPlanBudgetsReachProvider(t *testing.T) {
 				}
 				return &http.Response{StatusCode: http.StatusTooManyRequests, Body: io.NopCloser(strings.NewReader(""))}, nil
 			})}
-			if _, err := requestSourceWithBudget(t.Context(), client, provider, "test-model", "test-key", "brief", summaryTokens); err == nil {
+			if _, err := requestSourceWithBudget(t.Context(), client, provider, "test-model", "test-key", "brief", summaryTokens, true); err == nil {
 				t.Fatal("expected a rate limit from the mock provider")
 			}
 		})
+	}
+}
+
+func TestClaudePlanningLowersEffortWithoutChangingCodeRequests(t *testing.T) {
+	for _, model := range []string{"claude-opus-5-5", "claude-fable-5-2", "custom-model"} {
+		for _, planning := range []bool{true, false} {
+			client := &http.Client{Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
+				var payload struct {
+					Output struct {
+						Effort string
+						Format json.RawMessage
+					} `json:"output_config"`
+					MaxTokens int `json:"max_tokens"`
+				}
+				if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+					t.Fatal(err)
+				}
+				want := ""
+				if planning && model != "custom-model" {
+					want = "low"
+				}
+				if payload.Output.Effort != want || payload.MaxTokens != planTokens || len(payload.Output.Format) == 0 {
+					t.Fatalf("wrong effort, budget or output format for %s, planning=%t", model, planning)
+				}
+				return &http.Response{StatusCode: http.StatusTooManyRequests, Body: io.NopCloser(strings.NewReader(""))}, nil
+			})}
+			_, _ = requestSourceWithBudget(t.Context(), client, "anthropic", model, "fake-test-key", "brief", planTokens, planning)
+		}
 	}
 }

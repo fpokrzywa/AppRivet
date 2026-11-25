@@ -855,10 +855,14 @@ for (const button of document.querySelectorAll("[data-example]")) {
 function displayStagedReview(draft) {
   const plan = draft.plan;
   reviewHeading.textContent = plan ? "Review component plan" : "Review planning prompts";
-  byID("review-budget").textContent = draft.request_count.toLocaleString()
+  byID("review-budget").textContent = (plan ? "" : "Up to ") + draft.request_count.toLocaleString()
     + (draft.request_count === 1 ? " request, up to " : " requests, up to ")
     + draft.max_output_tokens.toLocaleString() + " output tokens in this step.";
   byID("review-synthesis").hidden = !draft.uses_synthesis;
+  const retry = byID("review-plan-retry");
+  retry.hidden = !draft.plan_retry_output_tokens;
+  retry.textContent = retry.hidden ? "" : "If the planner reaches its output limit, AppRivet retries the same prompt once with up to "
+    + draft.plan_retry_output_tokens.toLocaleString() + " output tokens. The retry is included above.";
   byID("review-plan").hidden = !plan;
   byID("review-architecture").textContent = plan?.architecture ?? "";
   byID("review-components").replaceChildren(...(plan?.components ?? []).map(component => {

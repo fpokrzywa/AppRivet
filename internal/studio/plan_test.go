@@ -16,11 +16,11 @@ func TestStudioPlansThenGeneratesWithOneCodeApproval(t *testing.T) {
 	calls := 0
 	handler := Handler(Config{
 		Host: "127.0.0.1:1234", Session: "test-session", Workspace: filepath.Join(t.TempDir(), "projects"),
-		GenerateBudgeted: func(_ context.Context, _, _, _, prompt string, budget int) (string, error) {
+		GenerateBudgeted: func(_ context.Context, _, _, _ string, step generation.PlanPrompt) (string, error) {
 			calls++
 			switch calls {
 			case 1:
-				if budget != 4500 {
+				if step.MaxOutputTokens != 8000 || step.File != "" {
 					t.Fatal("planning budget was not applied")
 				}
 				return `{"architecture":"ContentView uses WatchView.","components":[{"title":"Main","scope":"Display WatchView."},{"title":"Watch","scope":"Define WatchView."}]}`, nil
@@ -50,6 +50,9 @@ func TestStudioPlansThenGeneratesWithOneCodeApproval(t *testing.T) {
 	var review generation.PlanReview
 	if res := post("review", 200); json.Unmarshal(res.Body.Bytes(), &review) != nil || len(review.Prompts) != 1 || calls != 0 {
 		t.Fatal("local review made an unexpected provider call")
+	}
+	if review.PlanRetryOutputTokens != 16000 || review.RequestCount != 2 || review.MaxOutputTokens != 24000 {
+		t.Fatal("local review did not include the optional planning retry")
 	}
 	input.Approval, input.APIKey = review.Approval, "fake-key-for-test"
 	if res := post("draft", 200); json.Unmarshal(res.Body.Bytes(), &review) != nil || len(review.Prompts) != 2 || calls != 1 {

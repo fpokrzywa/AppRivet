@@ -90,12 +90,14 @@ struct DesktopPlanReview: Decodable, Sendable {
     let requestCount: Int
     let maxOutputTokens: Int
     let usesSynthesis: Bool?
+    let planRetryOutputTokens: Int?
 
     enum CodingKeys: String, CodingKey {
         case approval, plan, prompts
         case requestCount = "request_count"
         case maxOutputTokens = "max_output_tokens"
         case usesSynthesis = "uses_synthesis"
+        case planRetryOutputTokens = "plan_retry_output_tokens"
     }
 }
 

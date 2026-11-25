@@ -301,7 +301,8 @@ struct AppRivetDesktop: App {
                                                  format: "swiftui", platforms: ["ios"], provider: "anthropic", model: "claude-opus-5-5")
             let planReview = try workflow.reviewPlan(planRequest)
             guard planReview.usesSynthesis == true, planReview.approval.count == 64,
-                  planReview.prompts.count > 1, planReview.requestCount == planReview.prompts.count + 1,
+                  planReview.planRetryOutputTokens == 16000,
+                  planReview.prompts.count > 1, planReview.requestCount == planReview.prompts.count + 2,
                   planReview.maxOutputTokens > planReview.prompts.reduce(0, { $0 + $1.maxOutputTokens }),
                   planReview.prompts.allSatisfy({ !$0.prompt.isEmpty }) else {
                 throw DesktopFailure(message: "The local planning review did not include the expected extraction prompts and synthesis allowance.")
@@ -1321,14 +1322,19 @@ private struct DesktopPlanSheet: View {
                 .font(.title2.bold())
             Text("\(target) \(session.request.model) will receive these requests through your API account.")
                 .foregroundStyle(.secondary)
-            Text("\(review.requestCount) \(review.requestCount == 1 ? "request" : "requests"), up to \(review.maxOutputTokens) output tokens total.")
+            Text("\(generating ? "" : "Up to ")\(review.requestCount) \(review.requestCount == 1 ? "request" : "requests"), up to \(review.maxOutputTokens) output tokens total.")
             if !generating {
                 Text("After planning, you can review the exact code requests before approving them together.")
                     .foregroundStyle(.secondary)
             }
+            if let retryTokens = review.planRetryOutputTokens {
+                Text("If the planner reaches its output limit, AppRivet retries the same prompt once with up to \(retryTokens) output tokens. The retry is included above.")
+                    .foregroundStyle(.secondary)
+            }
             if review.usesSynthesis == true {
-                let synthesisCount = review.requestCount - review.prompts.count
-                let synthesisTokens = review.maxOutputTokens - review.prompts.reduce(0) { $0 + $1.maxOutputTokens }
+                let synthesisCount = review.requestCount - review.prompts.count - (review.planRetryOutputTokens == nil ? 0 : 1)
+                let synthesisTokens = review.maxOutputTokens - (review.planRetryOutputTokens ?? 0)
+                    - review.prompts.reduce(0) { $0 + $1.maxOutputTokens }
                 let requests = synthesisCount == 1 ? "1 follow-up request" : "\(synthesisCount) follow-up requests"
                 Text("The plan uses \(requests) to combine the extracted requirements. Exact input depends on the extraction results. Up to \(synthesisTokens) output tokens for these requests are included in the total.")
                     .foregroundStyle(.secondary)

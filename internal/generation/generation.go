@@ -115,10 +115,10 @@ func Generate(ctx context.Context, provider, model, key, prompt string) (string,
 }
 
 func requestSource(ctx context.Context, httpClient *http.Client, provider, model, key, prompt string) (string, error) {
-	return requestSourceWithBudget(ctx, httpClient, provider, model, key, prompt, 0)
+	return requestSourceWithBudget(ctx, httpClient, provider, model, key, prompt, 0, false)
 }
 
-func requestSourceWithBudget(ctx context.Context, httpClient *http.Client, provider, model, key, prompt string, override int) (string, error) {
+func requestSourceWithBudget(ctx context.Context, httpClient *http.Client, provider, model, key, prompt string, override int, planning bool) (string, error) {
 	schema := map[string]any{
 		"type": "object", "properties": map[string]any{"source": map[string]string{"type": "string"}},
 		"required": []string{"source"}, "additionalProperties": false,
@@ -141,8 +141,12 @@ func requestSourceWithBudget(ctx context.Context, httpClient *http.Client, provi
 		}
 	case "anthropic":
 		endpoint, label = "https://api.anthropic.com/v1/messages", "Anthropic"
+		outputConfig := map[string]any{"format": map[string]any{"type": "json_schema", "schema": schema}}
 		if model == "claude-opus-5-5" || model == "claude-fable-5-2" {
 			budget = 20000
+			if planning {
+				outputConfig["effort"] = "low"
+			}
 		}
 		if override > 0 {
 			budget = override
@@ -150,7 +154,7 @@ func requestSourceWithBudget(ctx context.Context, httpClient *http.Client, provi
 		payload = map[string]any{
 			"model": model, "max_tokens": budget,
 			"messages":      []map[string]string{{"role": "user", "content": prompt}},
-			"output_config": map[string]any{"format": map[string]any{"type": "json_schema", "schema": schema}},
+			"output_config": outputConfig,
 		}
 	default:
 		return "", errors.New("unsupported AI provider")
@@ -194,6 +198,12 @@ func requestSourceWithBudget(ctx context.Context, httpClient *http.Client, provi
 	return decodeSource(resp.Body, provider)
 }
 
+type outputLimitError struct{ provider string }
+
+func (e outputLimitError) Error() string {
+	return e.provider + " reached its output limit before finishing the code. Request fewer features in the first version or choose another model"
+}
+
 func decodeSource(body io.Reader, provider string) (string, error) {
 	type part struct{ Type, Text string }
 	var result struct {
@@ -218,7 +228,7 @@ func decodeSource(body io.Reader, provider string) (string, error) {
 		if result.Status != "completed" {
 			switch result.Incomplete.Reason {
 			case "max_output_tokens":
-				return "", errors.New("OpenAI reached its output limit before finishing the code. Request fewer features in the first version or choose another model")
+				return "", outputLimitError{provider: "OpenAI"}
 			case "content_filter":
 				return "", errors.New("OpenAI stopped generation because of its content filter. Review the requested features before trying again")
 			default:
@@ -237,7 +247,7 @@ func decodeSource(body io.Reader, provider string) (string, error) {
 		case "refusal":
 			return "", errors.New("Anthropic declined to generate source for this prompt")
 		case "max_tokens":
-			return "", errors.New("Anthropic reached its output limit before finishing the code. Request fewer features in the first version or choose another model")
+			return "", outputLimitError{provider: "Anthropic"}
 		case "model_context_window_exceeded":
 			return "", errors.New("Anthropic reached the model's context limit. Reduce the prompt size or choose a model with more context")
 		default:

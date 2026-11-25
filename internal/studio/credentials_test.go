@@ -117,18 +117,18 @@ func TestStudioUsesSavedCredentialOnlyForApprovedCalls(t *testing.T) {
 			}
 			return "import SwiftUI\nstruct ContentView: View { var body: some View { Text(\"Watch\") } }", nil
 		},
-		GenerateBudgeted: func(_ context.Context, _, _, key, prompt string, budget int) (string, error) {
+		GenerateBudgeted: func(_ context.Context, _, _, key string, step generation.PlanPrompt) (string, error) {
 			calls++
 			if key != wantKey {
 				t.Fatal("staged generation received the wrong credential")
 			}
-			if budget == 4500 {
+			if step.File == "" {
 				if planLeaksKey {
 					return `{"architecture":"A provider accidentally returned ` + key + `.","components":[{"title":"Main","scope":"Display WatchView."},{"title":"Watch","scope":"Define WatchView."}]}`, nil
 				}
 				return `{"architecture":"ContentView uses WatchView.","components":[{"title":"Main","scope":"Display WatchView."},{"title":"Watch","scope":"Define WatchView."}]}`, nil
 			}
-			if strings.Contains(prompt, "AppRivetPart01.swift") && strings.Contains(prompt, "Component: Watch") {
+			if step.File == "AppRivetPart01.swift" && strings.Contains(step.Prompt, "Component: Watch") {
 				return "import SwiftUI\nstruct WatchView: View { var body: some View { Text(\"Watch\") } }", nil
 			}
 			return "import SwiftUI\nstruct ContentView: View { var body: some View { WatchView() } }", nil

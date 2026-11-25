@@ -87,7 +87,7 @@ The automated provider tests use mock HTTP responses. Live generation requires a
 
 **Plan components before generating code** is selected by default. For briefs over 4 KiB of UTF-8 text, AppRivet requires component planning to keep the requests bounded.
 
-1. Review the planning prompts and request budget, then choose **Send to plan**. AppRivet splits very long briefs at text boundaries and synthesizes the extracted requirements into a plan. It saves the original brief in full.
+1. Review the planning prompts and request budget, then choose **Send to plan**. AppRivet splits very long briefs at text boundaries and synthesizes the extracted requirements into a plan. It saves the original brief in full. If the plan reaches the provider’s output limit, AppRivet can retry the same planning prompt once. The displayed budget includes both attempts.
 2. Check the component responsibilities and shared interfaces against your brief. Review the exact code prompt, destination file and output-token cap for each component. Approve once to send all of the displayed code prompts. Input sizes are shown in UTF-8 bytes, and output caps are upper limits for each request.
 3. Review the generated files and build the app. If a component fails, AppRivet names it and leaves the project uncreated. You can revise the brief or request a plan with smaller components.
 

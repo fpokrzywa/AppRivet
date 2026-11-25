@@ -12,6 +12,50 @@ import (
 
 const watchPlanJSON = `{"architecture":"ContentView renders the WatchMovement view.", "components":[{"title":"Workbench","scope":"Display the WatchMovement view."},{"title":"Movement","scope":"Define a WatchMovement SwiftUI view."}]}`
 
+func TestPlanRetriesAnthropicOutputLimit(t *testing.T) {
+	input := PlanRequest{Name: "Watchmaker", Brief: "Teach the player to build a working watch.",
+		Provider: "anthropic", Model: "claude-opus-5-5", APIKey: "fake-key-for-test"}
+	review, err := ReviewPlanning(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.Approval = review.Approval
+	var budgets []int
+	result, err := DraftComponents(t.Context(), input, func(_ context.Context, _, _, _ string, step PlanPrompt) (string, error) {
+		budgets = append(budgets, step.MaxOutputTokens)
+		if step.Prompt != review.Prompts[0].Prompt || step.File != "" {
+			t.Fatal("the retry changed the approved prompt")
+		}
+		if len(budgets) == 1 {
+			return decodeSource(strings.NewReader(`{"stop_reason":"max_tokens"}`), "anthropic")
+		}
+		return watchPlanJSON, nil
+	})
+	if err != nil || result.Plan == nil || !slices.Equal(budgets, []int{planTokens, planRetryTokens}) ||
+		review.RequestCount != len(budgets) || review.PlanRetryOutputTokens != budgets[1] || review.MaxOutputTokens != budgets[0]+budgets[1] {
+		t.Fatalf("expected a complete plan after one higher-budget retry, got %v with %v", err, budgets)
+	}
+	for _, tc := range []struct {
+		name  string
+		err   error
+		calls int
+	}{
+		{"output limit", outputLimitError{provider: "Anthropic"}, 2},
+		{"provider failure", errors.New("invalid credentials"), 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			_, err := DraftComponents(t.Context(), input, func(context.Context, string, string, string, PlanPrompt) (string, error) {
+				calls++
+				return "", tc.err
+			})
+			if err == nil || calls != tc.calls || (tc.calls == 2 && !strings.Contains(err.Error(), "while drafting the component plan")) {
+				t.Fatalf("unexpected retry count or error: %d, %v", calls, err)
+			}
+		})
+	}
+}
+
 func TestComponentPlanBindsEveryCodeRequest(t *testing.T) {
 	input := PlanRequest{Name: "Watchmaker", Format: "swiftui", Brief: "Teach assembly of a mechanical watch.",
 		Provider: "anthropic", Model: "claude-opus-5-5", APIKey: "fake-key-for-test"}
@@ -20,9 +64,8 @@ func TestComponentPlanBindsEveryCodeRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	parent := t.TempDir()
-	planner := func(_ context.Context, provider, model, key, prompt string, budget int) (string, error) {
-		if provider != input.Provider || model != input.Model || key != input.APIKey ||
-			prompt != preparation.Prompts[0].Prompt || budget != preparation.Prompts[0].MaxOutputTokens {
+	planner := func(_ context.Context, provider, model, key string, step PlanPrompt) (string, error) {
+		if provider != input.Provider || model != input.Model || key != input.APIKey || step != preparation.Prompts[0] {
 			t.Fatal("sent a planning request that was absent from the review")
 		}
 		return watchPlanJSON, nil
@@ -37,10 +80,9 @@ func TestComponentPlanBindsEveryCodeRequest(t *testing.T) {
 		t.Fatal("planning approval was reused or the reviewed budget is wrong")
 	}
 	var sent []PlanPrompt
-	providerCall := func(_ context.Context, _, _, _, prompt string, budget int) (string, error) {
+	providerCall := func(_ context.Context, _, _, _ string, step PlanPrompt) (string, error) {
 		i := len(sent)
-		sent = append(sent, PlanPrompt{Title: review.Prompts[i].Title, File: review.Prompts[i].File,
-			Prompt: prompt, MaxOutputTokens: budget})
+		sent = append(sent, step)
 		if i == 0 {
 			return "import SwiftUI\nstruct ContentView: View { var body: some View { WatchMovement() } }", nil
 		}
@@ -76,7 +118,7 @@ func TestComponentPlanBindsEveryCodeRequest(t *testing.T) {
 		}
 	}
 	parent = t.TempDir()
-	_, err = CreatePlanned(t.Context(), parent, input, func(context.Context, string, string, string, string, int) (string, error) {
+	_, err = CreatePlanned(t.Context(), parent, input, func(context.Context, string, string, string, PlanPrompt) (string, error) {
 		return returnedStarter, nil
 	})
 	if err == nil || !strings.Contains(err.Error(), "offline starter") {
@@ -100,16 +142,19 @@ func TestLongBriefPlanningBoundsInputAndAccountsForEveryCall(t *testing.T) {
 		t.Fatalf("invalid planning review: %v", err)
 	}
 	calls, tokens := 0, 0
-	generator := func(_ context.Context, _, _, _, prompt string, budget int) (string, error) {
-		if len(prompt) > briefChunkBytes+1800 {
-			t.Fatalf("oversized request: %d bytes", len(prompt))
+	generator := func(_ context.Context, _, _, _ string, step PlanPrompt) (string, error) {
+		if len(step.Prompt) > briefChunkBytes+1800 {
+			t.Fatalf("oversized request: %d bytes", len(step.Prompt))
 		}
-		if calls < len(preparation.Prompts) && prompt != preparation.Prompts[calls].Prompt {
+		if calls < len(preparation.Prompts) && step != preparation.Prompts[calls] {
 			t.Fatal("sent unreviewed input from the original brief")
 		}
 		calls++
-		tokens += budget
-		if budget == planTokens {
+		tokens += step.MaxOutputTokens
+		if step.MaxOutputTokens == planTokens {
+			return "", outputLimitError{provider: "Anthropic"}
+		}
+		if step.MaxOutputTokens == planRetryTokens {
 			return watchPlanJSON, nil
 		}
 		return "Keep the assembly order and timepiece measurements.", nil
@@ -133,7 +178,7 @@ func TestComponentFailureLeavesNoProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	input.Approval = preparation.Approval
-	review, err := DraftComponents(t.Context(), input, func(context.Context, string, string, string, string, int) (string, error) {
+	review, err := DraftComponents(t.Context(), input, func(context.Context, string, string, string, PlanPrompt) (string, error) {
 		return watchPlanJSON, nil
 	})
 	if err != nil {
@@ -142,7 +187,7 @@ func TestComponentFailureLeavesNoProject(t *testing.T) {
 	input.Plan, input.Approval = review.Plan, review.Approval
 	parent := t.TempDir()
 	count := 0
-	_, err = CreatePlanned(t.Context(), parent, input, func(context.Context, string, string, string, string, int) (string, error) {
+	_, err = CreatePlanned(t.Context(), parent, input, func(context.Context, string, string, string, PlanPrompt) (string, error) {
 		count++
 		if count == 1 {
 			return "import SwiftUI\nstruct ContentView: View { var body: some View { WatchMovement() } }", nil
