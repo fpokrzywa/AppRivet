@@ -46,7 +46,11 @@ func privateFixture(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return root
+	private := filepath.Join(root, "releases")
+	if err := os.Mkdir(private, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return private
 }
 
 func zipFixture(t *testing.T, path string, names ...string) {
