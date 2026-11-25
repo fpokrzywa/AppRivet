@@ -8,8 +8,8 @@ The Windows and Linux launchers target x86-64 desktop machines. They open AppRiv
 
 ### Install on Windows
 
-1. Open the [AppRivet CI run](https://github.com/fpokrzywa/AppRivet/actions/workflows/ci.yml) and download **AppRivet-Windows-download**. Sign in to GitHub if prompted.
-2. Right-click the downloaded ZIP and select **Extract All**. If the extracted folder contains **AppRivet-Windows.zip**, extract that file too.
+1. Download **AppRivet-Windows.zip**. [Windows download](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.7/AppRivet-Windows.zip)
+2. Right-click the downloaded ZIP and select **Extract All**.
 3. Double-click **AppRivet.exe**. The browser opens your local workspace.
 
 ### Install on Linux
@@ -66,8 +66,8 @@ If the provider reaches its output limit, simplify what the first version must d
 
 ### Install AppRivet
 
-1. Download **AppRivet-macOS.zip** from GitHub Releases. The download works without signing in. [Verified Mac download](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.6/AppRivet-macOS.zip) · [Release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.6)
-2. Extract **AppRivet-macOS.zip** and move **AppRivet.app** to Applications. The archive includes Apple silicon and Intel executables.
+1. Download and open **AppRivet-macOS.dmg**. The app includes Apple silicon and Intel executables. [Mac disk image](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.7/AppRivet-macOS.dmg) · [Release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.7)
+2. Drag **AppRivet.app** onto **Applications** in the disk image window. Eject the disk image, then open AppRivet from **Applications**.
 3. Open **AppRivet.app** from Finder. This preview uses an ad hoc signature and has no Apple notarization. If macOS says it couldn’t verify AppRivet is free of malware, click **Done**. If you trust the download, open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway** for AppRivet. Authenticate if prompted and confirm with **Open**. [Apple’s Gatekeeper guidance](https://support.apple.com/en-us/102445)
 
 ### Update AppRivet on your Mac
@@ -106,7 +106,7 @@ See the build results and platform downloads under **Artifacts** in GitHub Actio
 
 ### Publish a Mac update
 
-1. Increment `CFBundleVersion` and `CFBundleShortVersionString` in `desktop/Info.plist`. Wait for CI to pass on that commit and download its `AppRivet-desktop-download` artifact. Keep the ZIP exactly as packaged so that the framework’s symlinks and signatures are preserved.
+1. Increment `CFBundleVersion` and `CFBundleShortVersionString` in `desktop/Info.plist`. Wait for CI to pass and download its `AppRivet-desktop-download` and `AppRivet-Windows-download` artifacts. Keep the Mac ZIP exactly as packaged so that the framework’s symlinks and signatures are preserved.
 2. Sign that ZIP with the release seed that matches `SUPublicEDKey`. On macOS, use Sparkle’s `sign_update` with the release key in Keychain. On the Windows release host, read the DPAPI-protected seed from `%LOCALAPPDATA%\AppRivet\Signing\sparkle-seed.dpapi` and pipe it to the signing command from the repository root. Keep the release seed and its backup private. [Sparkle release signing](https://sparkle-project.org/documentation/publishing/)
 
    ```powershell
@@ -118,5 +118,5 @@ See the build results and platform downloads under **Artifacts** in GitHub Actio
    Remove-Variable seed
    ```
 
-3. Publish the ZIP in GitHub Releases. Verify that the public download matches the archive you signed. Update `updates/appcast.xml` with the public ZIP URL, signature and length, the bundle build number and display version, and the minimum macOS version. Commit the feed to `main` after the asset is public.
+3. Publish the Mac DMG, Mac ZIP and Windows ZIP in GitHub Releases. Verify that the public Mac ZIP matches the archive you signed. Update `updates/appcast.xml` with the public Mac ZIP URL, signature and length, the bundle build number and display version, and the minimum macOS version. Commit the feed to `main` after the assets are public.
 4. Check for the release from an older installed build. Confirm that the signed download installs and relaunches, and reopen an existing project. CI verifies the packaged updater starts and tests an iOS Simulator build. In-place updates on real Macs, including Apple silicon and Intel, still need live validation.

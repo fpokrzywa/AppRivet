@@ -1,5 +1,9 @@
 # Verification record
 
+## Mac disk image, Windows download, and toolchain detection
+
+All six jobs passed at `63d4ac7690a5bc50f64b47ba5177b8fbcc44b53e`. Hosted macOS mounted the DMG, checked the Applications shortcut, copied the app out, and verified the copied bundle signature. The Mac smoke test also checked SwiftUI availability with Flutter absent. The packaged Windows launcher passed a Chrome check with a real Flutter SDK and with the SDK missing. The public DMG and both ZIP downloads matched their CI artifacts. Interactive Finder installation and in-place updating on a personal Mac still need live validation. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45649344236) [Desktop release](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.7)
+
 ## Mac icon, project reopening, and build previews
 
 All six jobs passed at `9c9399126f6bb92657f5c36648e853c85e50610f`. The packaged app reopened Flutter from `ios/Runner.xcodeproj` and restored the name, brief, platforms, creation method, provider and model into a fresh desktop form. The Mac smoke test served the Web build and launched a SwiftUI checklist in Simulator. Chrome separately loaded a Flutter Web build through the same preview server. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45645873257)
