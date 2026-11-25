@@ -49,19 +49,27 @@ The automated provider tests use mock HTTP responses. Live generation requires a
 
 ## macOS
 
-1. Open a successful [AppRivet CI run](https://github.com/fpokrzywa/AppRivet/actions/workflows/ci.yml) and download **AppRivet-desktop-download** under **Artifacts**. Sign in to GitHub if prompted.
-2. Extract the download, then extract **AppRivet-macOS.zip** inside it. Move **AppRivet.app** to Applications or another folder you use for apps. The archive includes Apple silicon and Intel executables.
-3. Install full Xcode and open it once to finish setup. In **Xcode → Settings → Components**, install an iOS runtime compatible with the generated app’s iOS 17 minimum. Select the full Xcode installation under **Settings → Locations → Command Line Tools**. Exact runtime availability depends on your Xcode release. [Xcode system requirements](https://developer.apple.com/xcode/system-requirements/) · [Installing components](https://developer.apple.com/documentation/xcode/downloading-and-installing-additional-xcode-components)
-4. Open **AppRivet.app**. The CI download uses an ad hoc signature and has no Apple notarization. If macOS blocks it as an unverified developer and you trust the download, macOS provides an **Open Anyway** option under **System Settings → Privacy & Security** after you try to open it. [Apple’s Gatekeeper guidance](https://support.apple.com/en-us/102445)
+### Install AppRivet
+
+1. Sign in to GitHub and download **AppRivet-desktop-download**. If the verified download has expired, open a recent successful CI run and select the artifact of the same name under **Artifacts**. [Verified Mac download](https://github.com/fpokrzywa/AppRivet/actions/runs/45627004772/artifacts/15029801331) · [AppRivet CI runs](https://github.com/fpokrzywa/AppRivet/actions/workflows/ci.yml)
+2. Extract the download, then extract **AppRivet-macOS.zip** inside it. Move **AppRivet.app** to Applications. The archive includes Apple silicon and Intel executables.
+3. Open **AppRivet.app** from Finder. This preview uses an ad hoc signature and has no Apple notarization. If macOS blocks it as an unverified developer and you trust the download, try opening it once, then use **Open Anyway** under **System Settings → Privacy & Security**. [Apple’s Gatekeeper guidance](https://support.apple.com/en-us/102445)
+
+### Set up the iOS Simulator
+
+Install full Xcode and open it once to finish setup. In **Xcode → Settings → Components**, install an iOS Simulator runtime compatible with the generated app’s iOS 17 minimum. Under **Settings → Locations → Command Line Tools**, select your Xcode installation. Runtime availability depends on your Xcode release. [Get Xcode](https://developer.apple.com/xcode/) · [Xcode system requirements](https://developer.apple.com/xcode/system-requirements/) · [Apple’s Simulator setup guide](https://developer.apple.com/documentation/xcode/downloading-and-installing-additional-xcode-components)
 
 ### Create and run an app on the Mac
 
-1. Write an idea under **Describe your app** or use **Import brief**. Enter an app name such as `MyFirstApp`, pick a save folder, and leave **Bundle ID** blank for the default. Choose a creation method, click **Review prompt** and confirm. AppRivet creates a new subfolder. Use **Your projects** to reopen a previous project.
-2. Choose an available iPhone or iPad simulator. If the list is empty after first setup, check the runtime in Xcode and click **Refresh** in AppRivet.
-3. Review the source and confirm that you trust the project to build and run, then click **Build & Run**. AppRivet builds the shared scheme matching the generated project name, boots the selected simulator if needed, installs the iOS Simulator product and launches the app. The first boot can take a few minutes.
-4. Use **Open in Xcode** to edit the app. If build or launch fails, read the status message and expand **Build details** for command output.
+1. Write your idea under **Describe your app** or use **Import brief**. Enter an app name such as `MyFirstApp` and choose a save folder.
+2. Choose **SwiftUI (native iOS)** for an iPhone or iPad app. Choose **Flutter (shared code)** for multiple platforms and check the targets you want. Creating a Flutter project requires the Flutter SDK. [Flutter setup](https://docs.flutter.dev/install/manual)
+3. To generate code from your description, open **Admin**, choose OpenAI or Anthropic and a model, and enter your provider API key. Then select **Generate with AI**, click **Review prompt**, and choose **Send & create project**. To try an iOS Simulator build without an API key, choose a SwiftUI starter instead. [AI setup and key handling](#generate-with-ai)
+4. To run an iOS project, review the generated source, select an available iPhone or iPad simulator, confirm that you trust the project to build and run, and click **Build & Run**. If no simulator appears, check the runtime in Xcode and click **Refresh** in AppRivet. If building or launching fails, expand **Build details** for the command output.
+5. Use **Your projects** to reopen a project. Use **Open in Xcode** to edit a SwiftUI project or **Open project folder** to access the generated Flutter code.
 
-Build scripts run with the access of your macOS user account. Build output is kept in the CLI’s temporary DerivedData directories. Physical-device signing, install and launch remain separate milestones.
+CI used the packaged Mac app to build and launch a SwiftUI checklist on a hosted iPhone Simulator. Provider requests passed tests with mock responses. A live AI generation run with an actual provider key still needs verification. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45627004772)
+
+Build scripts run with the access of your macOS user account. SwiftUI build output is kept in the CLI’s temporary DerivedData directories. Physical-device signing, install and launch remain separate milestones.
 
 ## Build and verify from source
 

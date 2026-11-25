@@ -2,6 +2,8 @@
 
 AppRivet creates Flutter apps for selected mobile, web and desktop platforms from a shared Dart codebase. It also supports native SwiftUI projects, iOS Simulator builds and tests, and read-only Apple device discovery. Flutter projects build with the official SDK and the tools for each selected platform. iOS builds and live discovery use Xcode on a Mac.
 
+**[Install AppRivet on your MacBook](docs/DESKTOP.md#macos)** to download the app, generate a project from a brief, and run it in the iOS Simulator.
+
 Status: Milestone 2 device discovery is implemented with synthetic-fixture and offline tests. The repository owner made AppRivet public on 2026-11-22, removing the prior CI billing admission blocker. See [project status](docs/STATUS.md) for current live Mac evidence and remaining physical-device validation. This is an early engineering preview, not a production signing service.
 
 ## Principles
