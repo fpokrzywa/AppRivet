@@ -30,7 +30,8 @@ func TestStudioCreatesAndListsProject(t *testing.T) {
 		return res
 	}
 	page := request(http.MethodGet, "/", "", http.StatusOK)
-	if !strings.Contains(page.Body.String(), "Create App") || page.Header().Get("Content-Security-Policy") == "" {
+	if !strings.Contains(page.Body.String(), "Describe your app") || !strings.Contains(page.Body.String(), "<style>") ||
+		!strings.Contains(page.Body.String(), "<script>") || !strings.Contains(page.Header().Get("Content-Security-Policy"), "style-src 'sha256-") {
 		t.Fatal("embedded UI or content restrictions are missing")
 	}
 	request(http.MethodPost, "/api/create", `{"name":"Sample"}`, http.StatusCreated)
@@ -81,5 +82,27 @@ func TestStudioRejectsOtherOriginsAndSessions(t *testing.T) {
 	}
 	if _, err := os.Stat(workspace); !os.IsNotExist(err) {
 		t.Fatalf("rejected requests changed the filesystem: %v", err)
+	}
+}
+
+func TestStudioBuildsChecklistStarterFromBrief(t *testing.T) {
+	workspace := filepath.Join(t.TempDir(), "projects")
+	h := Handler(Config{Host: "127.0.0.1:1234", Session: "local-test-session", Workspace: workspace})
+	brief := `A packing checklist for weekend trips. Keep the list when I reopen the app.`
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:1234/api/create", strings.NewReader(`{"name":"TripPack","starter":"auto","brief":"`+brief+`"}`))
+	req.Header.Set("X-AppRivet-Session", "local-test-session")
+	res := httptest.NewRecorder()
+	h.ServeHTTP(res, req)
+	if res.Code != http.StatusCreated || !strings.Contains(res.Body.String(), `"starter":"checklist"`) {
+		t.Fatalf("brief did not select a checklist: %d %s", res.Code, res.Body)
+	}
+	root := filepath.Join(workspace, "TripPack")
+	source, err := os.ReadFile(filepath.Join(root, "TripPack", "ContentView.swift"))
+	if err != nil || !strings.Contains(string(source), "struct ChecklistItem") || !strings.Contains(string(source), "@AppStorage") {
+		t.Fatalf("starter does not implement a saved checklist: %v", err)
+	}
+	saved, err := os.ReadFile(filepath.Join(root, "APP_BRIEF.md"))
+	if err != nil || !strings.Contains(string(saved), brief) {
+		t.Fatalf("project did not save the brief: %v", err)
 	}
 }

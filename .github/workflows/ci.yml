@@ -153,6 +153,13 @@ jobs:
         run: |
           ./apprivet init SwiftUI --bundle-id org.example.modulecollision
           ./apprivet build --project SwiftUI --trust-project --timeout 10m
+      - name: Build the notes and counter starters
+        working-directory: ${{ runner.temp }}
+        run: |
+          ./apprivet init FieldNotes --brief 'Keep a note while I travel.'
+          ./apprivet build --project FieldNotes --trust-project --timeout 10m
+          ./apprivet init RepCounter --brief 'A counter to track reps.'
+          ./apprivet build --project RepCounter --trust-project --timeout 10m
 
   macos-frontend:
     runs-on: macos-15

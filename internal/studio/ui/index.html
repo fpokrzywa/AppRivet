@@ -4,40 +4,89 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AppRivet</title>
-  <link rel="stylesheet" href="/studio.css">
-  <script src="/studio.js" defer></script>
+  <!-- APP_STYLE -->
 </head>
 <body>
   <header class="topbar">
-    <div class="topbar-content"><span class="wordmark">AppRivet</span><button id="quit" type="button" class="quiet">Quit AppRivet</button></div>
-  </header>
-  <main>
-    <h1>SwiftUI projects</h1>
-    <div class="workspace">
-      <section class="panel" aria-labelledby="create-heading">
-        <h2 id="create-heading">Create an app</h2>
-        <form id="create">
-          <label for="name">App name</label>
-          <input id="name" name="name" value="MyFirstApp" required maxlength="50" pattern="[A-Za-z][A-Za-z0-9]{0,49}" aria-describedby="name-help" spellcheck="false">
-          <p class="hint" id="name-help">Start with a letter. Use letters and numbers.</p>
-          <label for="bundle">Bundle ID <span class="muted">(optional)</span></label>
-          <input id="bundle" name="bundle" placeholder="com.example.myfirstapp" maxlength="255" spellcheck="false">
-          <button id="submit" class="primary" type="submit">Create App</button>
-        </form>
-        <p id="message" role="status" aria-live="polite" class="message"></p>
-      </section>
-      <section class="panel projects" aria-labelledby="projects-heading">
-        <h2 id="projects-heading">Your projects</h2>
-        <p class="path" id="workspace-path" aria-label="Workspace path"></p>
-        <button id="folder" type="button" class="quiet">Open Projects Folder</button>
-        <ul id="projects" aria-label="Generated projects"></ul>
-        <p id="empty" class="muted">Your generated apps will appear here.</p>
-      </section>
+    <div class="shell topbar-inner">
+      <span class="wordmark">AppRivet</span>
+      <nav class="top-actions" aria-label="Workspace"><button id="go-projects" type="button" class="quiet">Your projects</button><button id="quit" type="button" class="quiet" disabled>Quit</button></nav>
     </div>
-    <aside aria-labelledby="simulator-heading" class="simulator-note">
-      <h2 id="simulator-heading">Build and run on a Mac</h2>
-      <p>Open the project in the AppRivet Mac app. It uses Xcode to build and launch your app in an iOS Simulator.</p>
-    </aside>
+  </header>
+  <main class="shell">
+    <section class="intro" aria-labelledby="create-heading">
+      <h1 id="create-heading">What app do you<br class="wide-break"> want to build?</h1>
+      <p>Start with an idea. Get an editable SwiftUI project you can open in Xcode.</p>
+    </section>
+    <noscript><p class="notice">Enable JavaScript and reopen AppRivet to create a project.</p></noscript>
+    <div class="workspace">
+      <form id="create" class="composer">
+        <fieldset id="create-fields" disabled>
+          <div class="brief-field">
+            <div class="label-row"><label for="brief">Describe your app</label><span id="brief-count" class="count" aria-hidden="true">0 / 2,000</span></div>
+            <p class="field-help" id="brief-help">What should it do, and what should it remember?</p>
+            <textarea id="brief" name="brief" maxlength="2000" rows="5" aria-describedby="brief-help" placeholder="A packing checklist for weekend trips. I want to add items, check them off, and keep the list when I reopen the app."></textarea>
+            <div class="examples" aria-label="Example app ideas">
+              <span>Try an example</span>
+              <button type="button" data-example="checklist">Packing checklist</button>
+              <button type="button" data-example="notes">Field notes</button>
+              <button type="button" data-example="counter">Rep counter</button>
+            </div>
+          </div>
+          <div class="project-fields">
+            <div>
+              <label for="name">Project name</label>
+              <input id="name" name="name" placeholder="MyFirstApp" required maxlength="50" pattern="[A-Za-z][A-Za-z0-9]{0,49}" aria-describedby="name-help" spellcheck="false">
+              <p class="field-help" id="name-help">Start with a letter. Use letters and numbers.</p>
+            </div>
+            <div>
+              <label for="starter">Starter</label>
+              <select id="starter" name="starter">
+                <option value="auto">Automatic from brief</option>
+                <option value="checklist">Checklist</option>
+                <option value="notes">Notes</option>
+                <option value="counter">Counter</option>
+                <option value="blank">Blank</option>
+              </select>
+            </div>
+          </div>
+          <details class="advanced">
+            <summary>Bundle ID</summary>
+            <label for="bundle">Custom bundle ID <span class="muted">(optional)</span></label>
+            <input id="bundle" name="bundle" placeholder="com.example.myfirstapp" maxlength="255" spellcheck="false">
+          </details>
+          <div class="form-footer">
+            <button id="submit" type="submit" class="primary">Create SwiftUI Starter</button>
+            <p id="message" role="status" aria-live="polite" class="message">Opening your local workspace…</p>
+          </div>
+        </fieldset>
+      </form>
+      <aside class="sidebar" aria-label="Starter and project information">
+        <section class="starter-panel panel" aria-labelledby="starter-heading">
+          <h2 id="starter-heading">Your starter</h2>
+          <p id="starter-title" class="starter-name">Automatic from brief</p>
+          <p id="starter-copy" class="starter-copy">Match a checklist, saved note or counter. Other ideas start with a blank SwiftUI project and the brief.</p>
+          <div class="starter-files">
+            <div><strong>Xcode project</strong><span>Editable SwiftUI source</span></div>
+            <div><strong>APP_BRIEF.md</strong><span>Included when you write a description</span></div>
+          </div>
+        </section>
+        <section class="projects panel" aria-labelledby="projects-heading">
+          <div class="projects-header">
+            <h2 id="projects-heading" tabindex="-1">Your projects</h2>
+            <button id="folder" type="button" class="quiet" disabled>Open Projects Folder</button>
+          </div>
+          <p id="workspace-path" class="workspace-path"></p>
+          <ul id="projects" aria-label="Generated projects"></ul>
+          <p id="empty" class="muted">Projects you create will appear here.</p>
+        </section>
+        <section class="next-step" aria-labelledby="run-heading">
+          <h2 id="run-heading">Run in Simulator</h2>
+          <p>On your Mac, open the project in AppRivet and choose <strong>Build &amp; Run</strong>.</p>
+        </section>
+      </aside>
+    </div>
   </main>
+  <!-- APP_SCRIPT -->
 </body>
 </html>

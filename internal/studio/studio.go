@@ -3,8 +3,10 @@
 package studio
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -35,23 +37,31 @@ type state struct {
 type createRequest struct {
 	Name     string `json:"name"`
 	BundleID string `json:"bundle_id"`
+	Brief    string `json:"brief"`
+	Starter  string `json:"starter"`
 }
 
 func Handler(config Config) http.Handler {
 	mux := http.NewServeMux()
-	asset := func(pattern, name, contentType string) {
+	asset := func(name string) string {
 		body, err := assets.ReadFile("ui/" + name)
 		if err != nil {
 			panic(err) // The compiler embeds the exact files named above.
 		}
-		mux.HandleFunc("GET "+pattern, func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", contentType)
-			_, _ = w.Write(body)
-		})
+		// Browsers normalize line endings before computing inline CSP digests.
+		return strings.ReplaceAll(strings.ReplaceAll(string(body), "\r\n", "\n"), "\r", "\n")
 	}
-	asset("/{$}", "index.html", "text/html; charset=utf-8")
-	asset("/studio.css", "studio.css", "text/css; charset=utf-8")
-	asset("/studio.js", "studio.js", "text/javascript; charset=utf-8")
+	style, script := asset("studio.css"), asset("studio.js")
+	hash := func(value string) string {
+		digest := sha256.Sum256([]byte(value))
+		return "'sha256-" + base64.StdEncoding.EncodeToString(digest[:]) + "'"
+	}
+	policy := "default-src 'none'; script-src " + hash(script) + "; style-src " + hash(style) + "; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+	page := strings.NewReplacer("<!-- APP_STYLE -->", "<style>"+style+"</style>", "<!-- APP_SCRIPT -->", "<script>"+script+"</script>").Replace(asset("index.html"))
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, page)
+	})
 	mux.HandleFunc("GET /api/state", func(w http.ResponseWriter, _ *http.Request) {
 		projects := []string{}
 		if err := checkWorkspace(config.Workspace); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -76,10 +86,10 @@ func Handler(config Config) http.Handler {
 	})
 	mux.HandleFunc("POST /api/create", func(w http.ResponseWriter, r *http.Request) {
 		var req createRequest
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32768))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&req); err != nil || decoder.Decode(new(any)) != io.EOF {
-			writeError(w, http.StatusBadRequest, "Enter an app name and optional bundle ID.")
+			writeError(w, http.StatusBadRequest, "Enter an app name, brief and starter using the form.")
 			return
 		}
 		req.Name = strings.TrimSpace(req.Name)
@@ -91,7 +101,7 @@ func Handler(config Config) http.Handler {
 			writeError(w, http.StatusInternalServerError, "Could not create your AppRivet Projects folder.")
 			return
 		}
-		info, err := project.Create(config.Workspace, req.Name, req.BundleID)
+		info, err := project.CreateWithOptions(config.Workspace, req.Name, req.BundleID, project.StarterOptions{Brief: req.Brief, Starter: req.Starter})
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -115,7 +125,7 @@ func Handler(config Config) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
+		w.Header().Set("Content-Security-Policy", policy)
 		if r.Host != config.Host {
 			http.Error(w, "Use the local AppRivet window.", http.StatusForbidden)
 			return

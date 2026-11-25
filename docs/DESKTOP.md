@@ -9,7 +9,9 @@ Open the [AppRivet CI run](https://github.com/fpokrzywa/AppRivet/actions/workflo
 - **Windows**. Extract **AppRivet-Windows-download** and double-click **AppRivet.exe**. It opens your default browser without opening a Terminal window.
 - **Linux**. Extract **AppRivet-Linux-download**, then extract **AppRivet-linux.tar.gz**. Open the **AppRivet** executable from your file manager. Use the file’s permissions dialog to allow execution if the file manager asks. The launcher uses `xdg-open` and requires a graphical desktop and a default browser.
 
-Click **Create App**. The browser launcher saves a new project in **AppRivet Projects** in your home folder. **Open Projects Folder** reveals your projects so you can move the whole generated folder to a Mac. Use **Quit AppRivet** to stop the launcher when you finish. The browser interface listens only on loopback. Simulator builds and launches use the AppRivet Mac app with Xcode.
+Enter an idea under **Describe your app**, or load a sample using **Try an example**. Enter a project name and click **Create SwiftUI Starter**. The browser launcher saves the new project in **AppRivet Projects** in your home folder. **Open Projects Folder** reveals the workspace so you can move the whole generated folder to a Mac. Use **Quit** to stop the launcher when you finish. The browser interface listens only on loopback. Simulator builds and launches use the AppRivet Mac app with Xcode.
+
+With **Automatic from brief**, AppRivet looks for checklist, notes, or counter terms. It creates a blank SwiftUI starter when there is no single match. The **Starter** picker lets you override that choice. The checklist saves items and completion, the notes starter saves a single editable note, and the counter saves its tally. AppRivet saves your full description in `APP_BRIEF.md`. Custom features require editing the SwiftUI source.
 
 ## macOS
 
@@ -20,7 +22,7 @@ Click **Create App**. The browser launcher saves a new project in **AppRivet Pro
 
 ### Create and run an app on the Mac
 
-1. Enter an app name such as `MyFirstApp`. Leave **Bundle ID** blank to use the default. Pick a save folder, then click **Create App**. AppRivet creates a new subfolder and refuses to overwrite an existing project. Use **Open Project…** to reopen a previous project.
+1. Enter an idea under **Describe your app** and an app name such as `MyFirstApp`. Leave **Bundle ID** blank to use the default. Pick a save folder, then click **Create SwiftUI Starter**. AppRivet creates a new subfolder and refuses to overwrite an existing project. Use **Open Project…** to reopen a previous project.
 2. Choose an available iPhone or iPad simulator. If the list is empty after first setup, check the runtime in Xcode and click **Refresh** in AppRivet.
 3. Confirm that you trust the project to run build scripts, then click **Build & Run**. AppRivet builds the shared scheme matching the generated project name, boots the selected simulator if needed, installs the iOS Simulator product and launches the app. The first boot can take a few minutes.
 4. Use **Open in Xcode** to edit the app. If build or launch fails, read the status message and expand **Build details** for command output.

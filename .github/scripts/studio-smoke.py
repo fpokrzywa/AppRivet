@@ -23,13 +23,18 @@ with tempfile.TemporaryDirectory(prefix="apprivet-studio-") as home:
                 return urllib.request.urlopen(urllib.request.Request(base + path, data=body, headers=headers), timeout=15)
 
             with request("/") as page:
-                assert b"Create App" in page.read()
-            with request("/studio.js") as script:
-                assert b"X-AppRivet-Session" in script.read()
-            with request("/api/create", json.dumps({"name": "BrowserSmoke"}).encode()) as created:
-                assert created.status == 201 and json.load(created)["suggested_scheme"] == "BrowserSmoke"
+                html = page.read()
+                assert b"Describe your app" in html and b"<style>" in html
+                assert b"<script>" in html and b"X-AppRivet-Session" in html
+                assert "style-src 'sha256-" in page.headers["Content-Security-Policy"]
+            brief = "A checklist I can use to pack for a weekend trip."
+            with request("/api/create", json.dumps({"name": "BrowserSmoke", "brief": brief}).encode()) as created:
+                data = json.load(created)
+                assert created.status == 201 and data["suggested_scheme"] == "BrowserSmoke"
+                assert data["starter"] == "checklist"
             work = Path(home, "AppRivet Projects", "BrowserSmoke")
             assert (work / "BrowserSmoke.xcodeproj" / "project.pbxproj").is_file()
+            assert brief in (work / "APP_BRIEF.md").read_text(encoding="utf8")
             with request("/api/state") as state:
                 assert json.load(state)["projects"] == ["BrowserSmoke"]
             with request("/api/quit", b"") as stopped:

@@ -5,6 +5,8 @@
 - Add a native AppRivet window for creating or opening a generated SwiftUI project and building, installing and launching it on a selected iOS Simulator.
 - Package the bundled CLI and desktop app for Apple silicon and Intel. The hosted macOS workflow runs the packaged create, build and launch path before uploading the app archive.
 - Add local browser launchers and downloadable artifacts for Windows and Linux. Create SwiftUI projects and reveal the workspace from a graphical form.
+- Put **Describe your app** at the center of the redesigned browser workspace and add an app brief to the native Mac form. Create a functional checklist, notes app, counter, or blank SwiftUI project and save the description alongside the source.
+- Package the local browser workspace with its styles and scripts embedded in the same page.
 
 ## Unreleased: native Linux journal writeback testing
 

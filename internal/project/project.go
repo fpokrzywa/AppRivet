@@ -18,10 +18,11 @@ import (
 var templates embed.FS
 
 type Info struct {
-	Kind   string `json:"kind"`
-	Path   string `json:"path"`
-	Root   string `json:"root"`
-	Scheme string `json:"suggested_scheme,omitempty"`
+	Kind    string `json:"kind"`
+	Path    string `json:"path"`
+	Root    string `json:"root"`
+	Scheme  string `json:"suggested_scheme,omitempty"`
+	Starter string `json:"starter,omitempty"`
 }
 
 var namePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]{0,49}$`)
@@ -29,6 +30,10 @@ var bundlePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z][A-Za-z
 var reserved = regexp.MustCompile(`(?i)^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$`)
 
 func Create(parent, name, bundleID string) (Info, error) {
+	return CreateWithOptions(parent, name, bundleID, StarterOptions{})
+}
+
+func CreateWithOptions(parent, name, bundleID string, options StarterOptions) (Info, error) {
 	if !namePattern.MatchString(name) || reserved.MatchString(name) {
 		return Info{}, fmt.Errorf("project name must be 1-50 ASCII letters/digits, start with a letter, and not be a reserved Windows name")
 	}
@@ -40,11 +45,15 @@ func Create(parent, name, bundleID string) (Info, error) {
 			return Info{}, fmt.Errorf("bundle ID labels must be at most 63 characters and cannot end with a hyphen")
 		}
 	}
+	starter, brief, err := resolveStarter(options)
+	if err != nil {
+		return Info{}, err
+	}
 	root, err := filepath.Abs(filepath.Join(parent, name))
 	if err != nil {
 		return Info{}, err
 	}
-	data := struct{ Name, BundleID string }{name, bundleID}
+	data := struct{ Name, BundleID, Starter, Brief string }{name, bundleID, starter, brief}
 	files := []struct{ src, dst string }{
 		{"App.swift.tmpl", name + "/App.swift"},
 		{"ContentView.swift.tmpl", name + "/ContentView.swift"},
@@ -53,6 +62,9 @@ func Create(parent, name, bundleID string) (Info, error) {
 		{"scheme.xml.tmpl", name + ".xcodeproj/xcshareddata/xcschemes/" + name + ".xcscheme"},
 		{"gitignore.tmpl", ".gitignore"},
 		{"README.md.tmpl", "README.md"},
+	}
+	if brief != "" {
+		files = append(files, struct{ src, dst string }{"APP_BRIEF.md.tmpl", "APP_BRIEF.md"})
 	}
 	// Render everything before writing. The destination is exclusively created;
 	// failures preserve any partial project for inspection rather than deleting it.
@@ -93,7 +105,11 @@ func Create(parent, name, bundleID string) (Info, error) {
 			return Info{}, closeErr
 		}
 	}
-	return Info{Kind: "xcode-project", Path: filepath.Join(root, name+".xcodeproj"), Root: root, Scheme: name}, nil
+	info := Info{Kind: "xcode-project", Path: filepath.Join(root, name+".xcodeproj"), Root: root, Scheme: name}
+	if options.Starter != "" || brief != "" {
+		info.Starter = starter
+	}
+	return info, nil
 }
 
 func Detect(path string) (Info, error) {

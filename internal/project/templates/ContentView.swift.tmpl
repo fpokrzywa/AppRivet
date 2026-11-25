@@ -1,4 +1,7 @@
 import SwiftUI
+{{- if eq .Starter "checklist" }}
+import Foundation
+{{- end }}
 
 enum Greeting {
     static func message(for name: String) -> String {
@@ -7,6 +10,87 @@ enum Greeting {
 }
 
 struct ContentView: View {
+{{- if ne .Starter "blank" }}
+    {{if eq .Starter "checklist"}}
+    @AppStorage("checklist") private var savedItems = "[]"
+    @State private var newItem = ""
+
+    private var items: [ChecklistItem] {
+        (try? JSONDecoder().decode([ChecklistItem].self, from: Data(savedItems.utf8))) ?? []
+    }
+    {{else if eq .Starter "notes"}}
+    @AppStorage("note") private var note = ""
+    {{else if eq .Starter "counter"}}
+    @AppStorage("count") private var count = 0
+    {{end}}
+
+    var body: some View {
+        NavigationStack {
+            List {
+                {{if eq .Starter "checklist"}}
+                Section("Checklist") {
+                    HStack {
+                        TextField("New item", text: $newItem)
+                            .onSubmit(addItem)
+                        Button("Add", action: addItem)
+                            .buttonStyle(.borderless)
+                            .disabled(newItem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                    ForEach(items) { item in
+                        Button {
+                            changeItems { list in
+                                if let index = list.firstIndex(where: { $0.id == item.id }) {
+                                    list[index].completed.toggle()
+                                }
+                            }
+                        } label: {
+                            Label(item.title, systemImage: item.completed ? "checkmark.circle.fill" : "circle")
+                                .strikethrough(item.completed)
+                        }
+                        .accessibilityValue(item.completed ? "Complete" : "Incomplete")
+                    }
+                    .onDelete { offsets in changeItems { $0.remove(atOffsets: offsets) } }
+                }
+                {{else if eq .Starter "notes"}}
+                Section("My note") {
+                    TextEditor(text: $note)
+                        .frame(minHeight: 240)
+                        .accessibilityLabel("My note")
+                }
+                {{else if eq .Starter "counter"}}
+                Section("Count") {
+                    Text(count.formatted())
+                        .font(.system(size: 52, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .accessibilityLabel("Count: \(count)")
+                    Button("Add one") { if count < Int.max { count += 1 } }
+                    Button("Subtract one") { if count > 0 { count -= 1 } }
+                        .disabled(count == 0)
+                    Button("Reset") { count = 0 }
+                        .disabled(count == 0)
+                }
+                {{end}}
+            }
+            .navigationTitle("{{.Name}}")
+        }
+    }
+    {{if eq .Starter "checklist"}}
+    private func addItem() {
+        let title = newItem.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+        changeItems { $0.append(ChecklistItem(title: title)) }
+        newItem = ""
+    }
+
+    private func changeItems(_ change: (inout [ChecklistItem]) -> Void) {
+        var list = items
+        change(&list)
+        if let data = try? JSONEncoder().encode(list) {
+            savedItems = String(decoding: data, as: UTF8.self)
+        }
+    }
+    {{end}}
+{{- else }}
     var body: some View {
         VStack(spacing: 16) {
             Text(Greeting.message(for: "AppRivet"))
@@ -15,4 +99,12 @@ struct ContentView: View {
         }
         .padding()
     }
+{{- end }}
 }
+{{ if eq .Starter "checklist" }}
+private struct ChecklistItem: Identifiable, Codable {
+    var id = UUID()
+    var title: String
+    var completed = false
+}
+{{ end }}

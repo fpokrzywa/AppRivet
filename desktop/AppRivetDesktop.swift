@@ -12,7 +12,9 @@ struct AppRivetDesktop: App {
             let workflow = try DesktopWorkflow.bundled()
             let parent = URL(fileURLWithPath: arguments[2], isDirectory: true)
             Self.smokeProgress("Creating the SwiftUI test project…")
-            let created = try workflow.create(name: "DesktopSmoke", bundleID: "org.example.apprivetdesktop", parent: parent)
+            let created = try workflow.create(name: "DesktopSmoke", bundleID: "org.example.apprivetdesktop", parent: parent,
+                                              brief: "A checklist for a weekend trip.", starter: "auto")
+            guard created.starter == "checklist" else { throw DesktopFailure(message: "The app brief did not select the checklist starter.") }
             let project = try workflow.inspect(URL(fileURLWithPath: created.root, isDirectory: true))
             Self.smokeProgress("Discovering an iPhone simulator…")
             guard let simulator = try workflow.simulators().first(where: { $0.name.hasPrefix("iPhone") }) else {
@@ -41,13 +43,15 @@ struct AppRivetDesktop: App {
         Window("AppRivet", id: "main") {
             DesktopView()
         }
-        .defaultSize(width: 680, height: 600)
+        .defaultSize(width: 680, height: 740)
     }
 }
 
 @MainActor
 private final class DesktopModel: ObservableObject {
     @Published var name = "MyFirstApp"
+    @Published var brief = ""
+    @Published var starter = "auto"
     @Published var bundleID = ""
     @Published var parent: URL?
     @Published var selectedSimulator: String?
@@ -87,13 +91,19 @@ private final class DesktopModel: ObservableObject {
         guard let parent else { return }
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let bundleID = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
-        perform("Creating \(name)…", work: { try $0.create(name: name, bundleID: bundleID, parent: parent) }, done: selectProject)
+        let brief = self.brief
+        let starter = self.starter
+        perform("Creating \(name)…", work: { try $0.create(name: name, bundleID: bundleID, parent: parent, brief: brief, starter: starter) }, done: selectProject)
     }
 
     private func selectProject(_ project: DesktopProject) {
         self.project = project
         trusted = false
-        status = "\(project.suggestedScheme) is ready to build."
+        if let starter = project.starter {
+            status = "\(project.suggestedScheme) was created with the \(starter) starter."
+        } else {
+            status = "\(project.suggestedScheme) is ready to build."
+        }
     }
 
     func refreshSimulators() {
@@ -155,9 +165,9 @@ private struct DesktopView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("AppRivet").font(.largeTitle.weight(.semibold))
+                    Text("What app do you want to build?").font(.largeTitle.weight(.semibold))
                         .accessibilityAddTraits(.isHeader)
-                    Text("Create a SwiftUI app and run it in the iOS Simulator.")
+                    Text("Create a SwiftUI starter, then run it in the iOS Simulator.")
                         .foregroundStyle(.secondary)
                 }
                 projectSection.disabled(model.busy)
@@ -180,7 +190,26 @@ private struct DesktopView: View {
     private var projectSection: some View {
         GroupBox("Project") {
             VStack(alignment: .leading, spacing: 12) {
+                Text("Describe your app").font(.headline)
+                TextEditor(text: $model.brief)
+                    .font(.body)
+                    .frame(minHeight: 84)
+                    .border(Color.secondary.opacity(0.25))
+                    .accessibilityLabel("Describe your app")
+                Text("For example: A checklist for packing on weekend trips.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                    GridRow {
+                        Text("Starter")
+                        Picker("Starter", selection: $model.starter) {
+                            Text("Automatic from brief").tag("auto")
+                            Text("Checklist").tag("checklist")
+                            Text("Notes").tag("notes")
+                            Text("Counter").tag("counter")
+                            Text("Blank").tag("blank")
+                        }
+                        .labelsHidden()
+                    }
                     GridRow {
                         Text("App name")
                         TextField("MyFirstApp", text: $model.name).labelsHidden().accessibilityLabel("App name")
@@ -200,7 +229,7 @@ private struct DesktopView: View {
                     }
                 }
                 HStack {
-                    Button("Create App", action: model.createProject).disabled(!model.canCreate)
+                    Button("Create SwiftUI Starter", action: model.createProject).disabled(!model.canCreate)
                     Button("Open Project…", action: model.openProject)
                 }
                 if let project = model.project {

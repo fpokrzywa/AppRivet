@@ -12,9 +12,10 @@ struct DesktopProject: Decodable, Sendable {
     let path: String
     let root: String
     let suggestedScheme: String
+    let starter: String?
 
     enum CodingKeys: String, CodingKey {
-        case kind, path, root
+        case kind, path, root, starter
         case suggestedScheme = "suggested_scheme"
     }
 }
@@ -76,11 +77,11 @@ struct DesktopWorkflow: Sendable {
         return Self(cli: cli)
     }
 
-    func create(name: String, bundleID: String, parent: URL) throws -> DesktopProject {
+    func create(name: String, bundleID: String, parent: URL, brief: String, starter: String) throws -> DesktopProject {
         guard name.range(of: #"^[A-Za-z][A-Za-z0-9]{0,49}\z"#, options: .regularExpression) != nil else {
             throw DesktopFailure(message: "Start the project name with a letter and use up to 50 letters and numbers.")
         }
-        return try invoke(["init", "--bundle-id=\(bundleID)", name], directory: parent)
+        return try invoke(["init", "--bundle-id=\(bundleID)", "--brief=\(brief)", "--starter=\(starter)", name], directory: parent)
     }
 
     func inspect(_ url: URL) throws -> DesktopProject {

@@ -5,6 +5,7 @@ Implemented: doctor, init, inspect, build, test, devices, snapshot create/inspec
 ```sh
 apprivet doctor
 apprivet init MyFirstApp --bundle-id com.example.myfirstapp
+apprivet init TripPack --brief 'A packing checklist for weekend trips.' --starter auto
 apprivet inspect --project MyFirstApp
 apprivet build --project MyFirstApp --trust-project
 xcrun simctl list devices available
@@ -19,6 +20,8 @@ apprivet worker check --policy policy.json --request request.json --principal de
 ```
 
 `init` works offline on all three platforms. Names are 1-50 ASCII letters/digits, start with a letter, and cannot be a reserved Windows filename. Bundle IDs default to `com.example.<lowercase-name>` and must be changed to an appropriate unique ID before device signing. Creation refuses existing destinations and does not initialize Git, install dependencies or sign in to Apple. A write failure can leave a partial new project; inspect it before removing it. Existing directories are never merged or overwritten.
+
+Use `--brief TEXT` to save up to 2,000 characters in `APP_BRIEF.md`. The default `--starter auto` matches checklist, notes, or counter terms, and falls back to a blank starter for other or ambiguous ideas. Select `checklist`, `notes`, `counter`, or `blank` explicitly to override the match. AppRivet uses built-in templates and does not generate custom features from the brief.
 
 `inspect --project PATH` accepts a root directory or explicit `.xcodeproj`/`.xcworkspace` directory. One workspace takes precedence over projects. Multiple candidates are an error; select explicitly. A root Package.swift is detected passively if no Xcode container is selected. Marker discovery is not semantic project validation; actual Xcode validation happens during build. Package-to-app conversion is not implemented.
 

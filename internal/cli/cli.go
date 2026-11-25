@@ -42,7 +42,7 @@ const help = `AppRivet - independent iOS development toolkit
 
 Usage:
   apprivet doctor [--json]
-  apprivet init NAME [--bundle-id com.example.app] [--json]
+  apprivet init NAME [--bundle-id com.example.app] [--brief TEXT] [--starter TYPE] [--json]
   apprivet inspect [--project PATH] [--json]
   apprivet build [--project PATH] [--scheme NAME] --trust-project [--json]
   apprivet test [--project PATH] [--scheme NAME] --simulator UUID --trust-project [--json]
@@ -130,6 +130,7 @@ func (a App) Run(ctx context.Context, args []string) int {
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	projectPath, scheme, bundle, simulator := ".", "", "", ""
+	var starterOptions project.StarterOptions
 	trust := false
 	simulators := false
 	fromJSON := ""
@@ -141,6 +142,8 @@ func (a App) Run(ctx context.Context, args []string) int {
 		fs.DurationVar(&timeout, "timeout", devices.DefaultTimeout, "discovery deadline, maximum 5m")
 	case "init":
 		fs.StringVar(&bundle, "bundle-id", "", "reverse-DNS bundle identifier")
+		fs.StringVar(&starterOptions.Brief, "brief", "", "app idea to save with the project")
+		fs.StringVar(&starterOptions.Starter, "starter", "", "auto, blank, checklist, notes or counter")
 		// The documented init NAME --options form also works with Go's flag parser.
 		if len(filtered) > 0 && !strings.HasPrefix(filtered[0], "-") {
 			filtered = append(append([]string{}, filtered[1:]...), filtered[0])
@@ -219,7 +222,7 @@ func (a App) Run(ctx context.Context, args []string) int {
 		if bundle == "" {
 			bundle = "com.example." + strings.ToLower(name)
 		}
-		info, err := project.Create(a.Dir, name, bundle)
+		info, err := project.CreateWithOptions(a.Dir, name, bundle, starterOptions)
 		if err != nil {
 			return fail("project_creation_failed", err.Error(), 4)
 		}
