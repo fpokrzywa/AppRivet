@@ -2,6 +2,8 @@
 
 Use the Windows or Linux launcher in your browser, or open **AppRivet.app** from Finder on macOS. Choose Flutter for one shared project across mobile, web, and desktop, or SwiftUI for native iOS. The Mac app includes the AppRivet command-line tool and integrates with Xcode’s iOS Simulator.
 
+The bottom-right corner shows the installed AppRivet version.
+
 ## Windows and Linux
 
 The Windows and Linux launchers target x86-64 desktop machines. They open AppRivet in your default browser.

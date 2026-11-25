@@ -97,14 +97,18 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/frontend"
           DEST="$RUNNER_TEMP/frontend"
+          PYTHON=python3
+          if [ "$RUNNER_OS" = Windows ]; then PYTHON=python; fi
+          VERSION=$("$PYTHON" -c 'import plistlib; print(plistlib.loads(open("desktop/Info.plist", "rb").read())["CFBundleShortVersionString"], end="")')
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           if [ "$RUNNER_OS" = Windows ]; then
-            go build -trimpath -ldflags=-H=windowsgui -o "$DEST/AppRivet.exe" ./cmd/apprivet-studio
-            python .github/scripts/studio-smoke.py "$DEST/AppRivet.exe"
+            go build -trimpath -ldflags="-H=windowsgui -X main.version=$VERSION" -o "$DEST/AppRivet.exe" ./cmd/apprivet-studio
+            python .github/scripts/studio-smoke.py "$DEST/AppRivet.exe" "$VERSION"
             python -m zipfile -c "$DEST/AppRivet-Windows.zip" "$DEST/AppRivet.exe"
             python -m zipfile -t "$DEST/AppRivet-Windows.zip"
           else
-            go build -trimpath -o "$DEST/AppRivet" ./cmd/apprivet-studio
-            python3 .github/scripts/studio-smoke.py "$DEST/AppRivet"
+            go build -trimpath -ldflags="-X main.version=$VERSION" -o "$DEST/AppRivet" ./cmd/apprivet-studio
+            python3 .github/scripts/studio-smoke.py "$DEST/AppRivet" "$VERSION"
             tar -czf "$DEST/AppRivet-linux.tar.gz" -C "$DEST" AppRivet
           fi
       - name: Upload the portable frontend download

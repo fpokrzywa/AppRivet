@@ -20,6 +20,8 @@ import (
 	"github.com/fpokrzywa/AppRivet/internal/studio"
 )
 
+var version string // Set from the desktop release version when packaging.
+
 func main() {
 	if err := run(); err != nil {
 		reportError(err.Error())
@@ -49,7 +51,7 @@ func run() error {
 	var once sync.Once
 	server := &http.Server{
 		Handler: studio.Handler(studio.Config{
-			Host: host, Session: session, Workspace: filepath.Join(home, "AppRivet Projects"),
+			Host: host, Session: session, Workspace: filepath.Join(home, "AppRivet Projects"), Version: version,
 			OpenFolder: func(path string) error { return open(path, false) },
 			Quit:       func() { once.Do(func() { close(quit) }) },
 			Generate:   generation.Generate, GenerateBudgeted: generation.GenerateBudgeted,

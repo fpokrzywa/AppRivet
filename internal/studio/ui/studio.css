@@ -13,6 +13,8 @@
 body {
   min-height: 100vh;
   margin: 0;
+  display: flex;
+  flex-direction: column;
   background:
     radial-gradient(ellipse at 8% 0%, #1d4748 0%, transparent 48%),
     radial-gradient(ellipse at 88% 30%, #26394a 0%, transparent 54%),
@@ -35,6 +37,17 @@ body {
 }
 .top-actions { display: flex; align-items: center; gap: 8px; font-size: .84rem; }
 main { padding-block: 36px 45px; }
+.app-version {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  padding: 6px 16px;
+  background: var(--panel);
+  color: var(--muted);
+  text-align: right;
+  font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+}
 .intro { margin-bottom: 25px; }
 h1 { margin: 0; font-size: clamp(2.6rem, 6vw, 4.6rem); letter-spacing: -.067em; line-height: .99; font-weight: 755; }
 .intro p { color: var(--muted); margin: 13px 0 0; font-size: 1.015rem; }

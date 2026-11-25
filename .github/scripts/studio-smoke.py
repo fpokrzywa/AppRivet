@@ -10,6 +10,7 @@ import urllib.request
 
 
 executable = Path(sys.argv[1]).resolve()
+version_label = "Version " + sys.argv[2] if len(sys.argv) > 2 else "Development build"
 with tempfile.TemporaryDirectory(prefix="apprivet-studio-") as home:
     sdk = Path(home, "flutter-test-sdk")
     env = dict(os.environ, HOME=home, USERPROFILE=home, APPRIVET_FLUTTER_SDK=str(sdk))
@@ -35,6 +36,7 @@ with tempfile.TemporaryDirectory(prefix="apprivet-studio-") as home:
                 assert capability["project_formats"] == ["flutter"] and capability["flutter_sdk"]
             with request("/") as page:
                 html = page.read()
+                assert f'<footer class="app-version">{version_label}</footer>'.encode() in html
                 assert b"Describe your app" in html and b"<style>" in html
                 assert b"<script>" in html and b"X-AppRivet-Session" in html
                 assert b'class="brand-mark"' in html and b"<span>AppRivet</span>" in html and b'src="/apprivet-mark-light.png"' in html

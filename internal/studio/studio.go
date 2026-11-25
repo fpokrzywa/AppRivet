@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"html"
 	"io"
 	"net/http"
 	"os"
@@ -30,6 +31,7 @@ type Config struct {
 	Host             string
 	Session          string
 	Workspace        string
+	Version          string
 	OpenFolder       func(string) error
 	Quit             func()
 	Generate         generation.SourceGenerator
@@ -83,7 +85,15 @@ func Handler(config Config) http.Handler {
 		return "'sha256-" + base64.StdEncoding.EncodeToString(digest[:]) + "'"
 	}
 	policy := "default-src 'none'; script-src " + hash(script) + "; style-src " + hash(style) + "; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
-	page := strings.NewReplacer("<!-- APP_STYLE -->", "<style>"+style+"</style>", "<!-- APP_SCRIPT -->", "<script>"+script+"</script>").Replace(asset("index.html"))
+	versionLabel := "Development build"
+	if config.Version != "" {
+		versionLabel = "Version " + config.Version
+	}
+	page := strings.NewReplacer(
+		"<!-- APP_STYLE -->", "<style>"+style+"</style>",
+		"<!-- APP_SCRIPT -->", "<script>"+script+"</script>",
+		"<!-- APP_VERSION -->", html.EscapeString(versionLabel),
+	).Replace(asset("index.html"))
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = io.WriteString(w, page)

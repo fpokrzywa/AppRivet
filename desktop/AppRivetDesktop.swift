@@ -839,6 +839,7 @@ private struct DesktopView: View {
 
     @ObservedObject var updateCheck: UpdateCheckState
     let checkForUpdates: () -> Void
+    private let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     @StateObject private var model = DesktopModel()
     @State private var showDetails = false
     @State private var loaded = false
@@ -889,6 +890,16 @@ private struct DesktopView: View {
             .padding(24)
             .frame(maxWidth: 740)
             .frame(maxWidth: .infinity)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Text(version.map { "Version \($0)" } ?? "Development build")
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 7)
+                .background(.bar)
         }
         .background { DesktopBrand.backdrop(model.appearance) }
         .preferredColorScheme(model.appearance.scheme)
