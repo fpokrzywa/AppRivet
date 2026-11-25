@@ -48,7 +48,7 @@ Usage:
   apprivet init NAME [--bundle-id com.example.app] [--brief TEXT | --brief-stdin] [--starter TYPE] [--review] [--json]
   apprivet init NAME (--brief TEXT | --brief-stdin) --provider PROVIDER --model MODEL (--review | --approve HASH) [--json]
   apprivet init NAME --format flutter --platforms ios,android,web,windows,macos,linux [--review] [--json]
-  apprivet plan (review|draft|create) --json  Read the component-generation request from stdin
+  apprivet plan (review|draft|advance|create) --json  Read the component-generation request from stdin
   apprivet publish (settings|save-settings|connection|build|history) --json
   apprivet flutter-build --project PATH --target PLATFORM --trust-project [--json]
   apprivet flutter-preview --project PATH --trust-project
@@ -135,7 +135,7 @@ func (a App) Run(ctx context.Context, args []string) int {
 	}
 	if command == "plan" {
 		if a.In == nil || len(filtered) != 1 || !jsonMode {
-			return fail("invalid_arguments", "use apprivet plan review, draft or create with --json and a JSON request on stdin", 2)
+			return fail("invalid_arguments", "use apprivet plan review, draft, advance or create with --json and a JSON request on stdin", 2)
 		}
 		var request generation.PlanRequest
 		decoder := json.NewDecoder(a.In)
@@ -147,15 +147,18 @@ func (a App) Run(ctx context.Context, args []string) int {
 		ctx, cancel := planContext(ctx)
 		defer cancel()
 		var err error
+		drafts := generation.DraftStore{}
 		switch filtered[0] {
 		case "review":
-			response.Data, err = generation.ReviewPlanning(request)
+			response.Data, err = drafts.Review(a.Dir, request)
 		case "draft":
 			response.Data, err = generation.DraftComponents(ctx, request, generation.GenerateBudgeted)
 		case "create":
 			response.Data, err = generation.CreatePlanned(ctx, a.Dir, request, generation.GenerateBudgeted)
+		case "advance":
+			response.Data, err = drafts.Advance(ctx, a.Dir, request, generation.GenerateBudgeted)
 		default:
-			return fail("invalid_arguments", "choose a plan action: review, draft or create", 2)
+			return fail("invalid_arguments", "choose a plan action: review, draft, advance or create", 2)
 		}
 		if err != nil {
 			response.Data = nil

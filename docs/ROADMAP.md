@@ -9,6 +9,7 @@
 | M5: agent integration | Stabilize JSON contract; optional MCP with explicit human approval channel | Planned; CLI JSON starts in M1 |
 | M6: distribution | Supported-version matrix, private release rehearsal, signed/checksummed binaries, installation docs; approve licensing before public release | Planned |
 | Desktop preview | Graphical SwiftUI project creation on Windows, Linux and macOS, plus simulator build and launch on the Mac | Implemented for generated projects. See [frontend setup](DESKTOP.md) |
+| Conversational app builder | Start from an idea or brief, clarify product decisions in context, review one staged plan, and resume generation after a failed component | Staged review and resumable SwiftUI and Flutter generation are implemented and await a desktop release. Database, backend and API generation remain future project capabilities. |
 | Later | Broader project adapters and hosted providers | Unscheduled |
 
 For each milestone: record outcome and acceptance criteria, implement the smallest usable slice, run tests, identify failures and unverified assumptions, update STATUS/CHANGELOG, then commit. Never conflate adapter tests, hosted simulator validation and physical device evidence.

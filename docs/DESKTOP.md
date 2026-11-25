@@ -88,8 +88,10 @@ The automated provider tests use mock HTTP responses. Live generation requires a
 **Plan components before generating code** is selected by default. For briefs over 4 KiB of UTF-8 text, AppRivet requires component planning to keep the requests bounded.
 
 1. Review the planning prompts and request budget, then choose **Send to plan**. AppRivet splits very long briefs at text boundaries and synthesizes the extracted requirements into a plan. It saves the original brief in full. If the plan reaches the provider’s output limit, AppRivet can retry the same planning prompt once. The displayed budget includes both attempts.
-2. Check the component responsibilities and shared interfaces against your brief. Review the exact code prompt, destination file and output-token cap for each component. Approve once to send all of the displayed code prompts. Input sizes are shown in UTF-8 bytes, and output caps are upper limits for each request.
-3. Review the generated files and build the app. If a component fails, AppRivet names it and leaves the project uncreated. You can revise the brief or request a plan with smaller components.
+2. **Review build stages** shows which components belong to each stage and the planner's questions or open requirements. Use **Clarify or change the plan** to answer a question or adjust the plan while retaining the original brief. **Review revised plan request** shows the revised request and budget before you send it. Review the exact code prompts, destination files and output limits under **Exact prompts**.
+3. Choose **Approve plan & generate** once. AppRivet sends the component requests in order and saves each validated source file in your local draft. The total budget includes a possible higher-budget retry for each component. The dialog shows which components are saved and which one is next.
+4. If a component stops, choose **Resume generation** to continue from that component. Review the remaining budget before continuing. To resume after closing AppRivet, use the same brief, project name, format, targets, provider and model. On Mac, choose the same save folder. **Review planning requests** reopens the previously approved draft with its clarifications. AppRivet keeps draft source in local user data and leaves the project folder uncreated during generation.
+5. Once the final component is saved, AppRivet assembles the project. Review the source and use the project's build controls. The staged review covers the supported SwiftUI and Flutter project formats.
 
 ## macOS
 

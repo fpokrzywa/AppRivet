@@ -16,6 +16,7 @@ func TestStudioPlansThenGeneratesWithOneCodeApproval(t *testing.T) {
 	calls := 0
 	handler := Handler(Config{
 		Host: "127.0.0.1:1234", Session: "test-session", Workspace: filepath.Join(t.TempDir(), "projects"),
+		Drafts: generation.DraftStore{Directory: filepath.Join(t.TempDir(), "drafts")},
 		GenerateBudgeted: func(_ context.Context, _, _, _ string, step generation.PlanPrompt) (string, error) {
 			calls++
 			switch calls {
@@ -58,14 +59,27 @@ func TestStudioPlansThenGeneratesWithOneCodeApproval(t *testing.T) {
 	if res := post("draft", 200); json.Unmarshal(res.Body.Bytes(), &review) != nil || len(review.Prompts) != 2 || calls != 1 {
 		t.Fatal("planning did not return the code prompts and a new approval")
 	}
+	if review.ComponentRetryOutputTokens != 16000 || review.RequestCount != 4 || review.MaxOutputTokens != 48000 {
+		t.Fatal("code review did not include the optional retry for each component")
+	}
 	input.Plan = review.Plan
-	post("create", 400)
+	post("advance", 400)
 	if calls != 1 {
 		t.Fatal("planning approval authorized code generation")
 	}
 	input.Approval = review.Approval
-	post("create", 201)
-	if calls != 3 {
-		t.Fatal("code generation did not make exactly one request per approved component")
+	for completed := 1; completed <= 2; completed++ {
+		var progress generation.GenerationProgress
+		res := post("advance", 200)
+		if err := json.Unmarshal(res.Body.Bytes(), &progress); err != nil || progress.Completed != completed || progress.Project != nil {
+			t.Fatalf("unexpected generation progress %+v: %v", progress, err)
+		}
+		if calls != 1+completed {
+			t.Fatal("advance did not send exactly one component under the original code approval")
+		}
+	}
+	var finished generation.GenerationProgress
+	if res := post("advance", 200); json.Unmarshal(res.Body.Bytes(), &finished) != nil || finished.Project == nil || calls != 3 {
+		t.Fatal("assembly did not reuse the completed components")
 	}
 }

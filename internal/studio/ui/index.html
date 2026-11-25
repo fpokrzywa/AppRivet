@@ -268,15 +268,30 @@
     <div id="staged-review" hidden>
       <p id="review-budget"></p>
       <p id="review-synthesis" class="field-help" hidden>AppRivet sends the extracted summaries to the same provider for plan synthesis. Those requests are included in the budget above. Their exact prompt text depends on the summaries returned.</p>
-      <p id="review-plan-retry" class="field-help" hidden></p>
+      <p id="review-output-retry" class="field-help" hidden></p>
       <div class="review-content">
         <section id="review-plan" aria-labelledby="review-plan-heading" hidden>
-          <h3 id="review-plan-heading">Architecture</h3>
+          <h3 id="review-plan-heading">Build stages</h3>
           <p id="review-architecture"></p>
           <ul id="review-components"></ul>
+          <section id="review-clarifications" hidden>
+            <h3>Your clarifications</h3>
+            <ul id="review-clarification-list"></ul>
+          </section>
+          <section id="review-open-items" hidden>
+            <h3>Questions and open requirements</h3>
+            <ul id="review-open-list"></ul>
+          </section>
+          <div id="review-refinement">
+            <label for="plan-note">Clarify or change the plan</label>
+            <textarea id="plan-note" rows="2" maxlength="1024" placeholder="Tell AppRivet what to add, change, or decide."></textarea>
+            <button type="button" id="revise-plan" class="quiet">Review revised plan request</button>
+          </div>
         </section>
-        <h3 id="review-prompts-heading" hidden>Code prompts</h3>
-        <div id="review-prompts"></div>
+        <details open id="review-prompt-details">
+          <summary>Exact prompts</summary>
+          <div id="review-prompts"></div>
+        </details>
       </div>
     </div>
     <p id="review-status" class="message" role="status"></p>

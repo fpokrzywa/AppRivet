@@ -36,6 +36,7 @@ type Config struct {
 	Quit             func()
 	Generate         generation.SourceGenerator
 	GenerateBudgeted generation.BudgetedGenerator
+	Drafts           generation.DraftStore
 	Vault            credentials.Vault
 	PublishStore     *storeconnect.Store
 }
@@ -228,30 +229,35 @@ func Handler(config Config) http.Handler {
 			return
 		}
 		switch r.URL.Path {
-		case "/api/plan/review", "/api/plan/draft":
+		case "/api/plan/review":
+			review, err := config.Drafts.Review(config.Workspace, req)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, review)
+		case "/api/plan/draft":
 			review, err := generation.ReviewPlanning(req)
 			if err != nil {
 				writeError(w, http.StatusBadRequest, err.Error())
 				return
 			}
-			if r.URL.Path == "/api/plan/draft" {
-				if !approveComponentCall(w, req.Approval, review.Approval) {
-					return
-				}
-				key, ok := generationKey(w, config.Vault, req.Provider, req.APIKey)
-				if !ok {
-					return
-				}
-				req.APIKey = key
-				_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(time.Duration(review.RequestCount)*generation.RequestTimeout + time.Minute))
-				review, err = generation.DraftComponents(r.Context(), req, config.GenerateBudgeted)
-				if err != nil {
-					writeGenerationError(w, err, key)
-					return
-				}
+			if !approveComponentCall(w, req.Approval, review.Approval) {
+				return
+			}
+			key, ok := generationKey(w, config.Vault, req.Provider, req.APIKey)
+			if !ok {
+				return
+			}
+			req.APIKey = key
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(time.Duration(review.RequestCount)*generation.RequestTimeout + time.Minute))
+			review, err = generation.DraftComponents(r.Context(), req, config.GenerateBudgeted)
+			if err != nil {
+				writeGenerationError(w, err, key)
+				return
 			}
 			writeJSON(w, http.StatusOK, review)
-		case "/api/plan/create":
+		case "/api/plan/create", "/api/plan/advance":
 			if req.Plan == nil {
 				writeError(w, http.StatusBadRequest, "Review and approve a component plan first.")
 				return
@@ -273,12 +279,25 @@ func Handler(config Config) http.Handler {
 				writeError(w, http.StatusInternalServerError, "Could not create your AppRivet Projects folder.")
 				return
 			}
-			timeout := time.Duration(review.RequestCount)*generation.RequestTimeout + time.Minute
+			requests := review.RequestCount
+			if r.URL.Path == "/api/plan/advance" {
+				requests = 2
+			}
+			timeout := time.Duration(requests)*generation.RequestTimeout + time.Minute
 			if req.Format == "flutter" {
 				timeout += 5 * time.Minute
 			}
 			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(timeout))
-			info, err := generation.CreatePlanned(r.Context(), config.Workspace, req, config.GenerateBudgeted)
+			if r.URL.Path == "/api/plan/advance" {
+				progress, err := config.Drafts.Advance(r.Context(), config.Workspace, req, config.GenerateBudgeted)
+				if err != nil {
+					writeGenerationError(w, err, key)
+					return
+				}
+				writeJSON(w, http.StatusOK, progress)
+				return
+			}
+			info, err := config.Drafts.Create(r.Context(), config.Workspace, req, config.GenerateBudgeted)
 			if err != nil {
 				writeGenerationError(w, err, key)
 				return
@@ -289,6 +308,7 @@ func Handler(config Config) http.Handler {
 	mux.HandleFunc("POST /api/plan/review", planRequest)
 	mux.HandleFunc("POST /api/plan/draft", planRequest)
 	mux.HandleFunc("POST /api/plan/create", planRequest)
+	mux.HandleFunc("POST /api/plan/advance", planRequest)
 	projectPath := func(name string) (string, error) {
 		if _, err := project.Review(name, "com.example."+strings.ToLower(name), project.StarterOptions{}); err != nil || checkWorkspace(config.Workspace) != nil {
 			return "", errors.New("Choose a project in your AppRivet Projects folder.")

@@ -1,5 +1,13 @@
 # Verification record
 
+## Staged review and resumable generation
+
+Chrome exercised the real review dialog and local API with a fixture provider. It showed named stages and an open question, carried the user's clarification into a revised plan, and sent code under one plan approval. A failure in the second component left the first component saved. Reopening the review recovered the approved plan and its progress. Resuming called the failed component again and assembled the finished project without regenerating the first component. Tests also check approval changes, stage counts, credential exclusion and duplicate concurrent requests. Focused tests passed on Windows, Linux and macOS. Hosted macOS packaged both architecture slices. A live provider run and a visual check of the native dialog on an installed Mac still need validation. [Focused staged generation checks](https://github.com/fpokrzywa/AppRivet/actions/runs/45716086564)
+
+## Retry a truncated code component
+
+An Anthropic `max_tokens` fixture reproduced the workbench component failure with the 8,000-token initial budget. The regression verifies a single 16,000-token retry of the exact component prompt, continuation using the completed components, and refusal to publish a partial project if the retry also truncates. The browser review shows the maximum request count and token budget before approval. The focused Mac job passed the affected Go tests and packaged both architecture slices. The watchmaker brief still needs a live Anthropic run on an installed build with this change. [Focused Mac check](https://github.com/fpokrzywa/AppRivet/actions/runs/45713559550)
+
 ## Scrolling for long app briefs
 
 Chrome imported a 624,040-character Markdown brief at desktop and narrow widths. The full brief was editable, the editor stayed the same size, and the text scrolled within the editor. All six 0.4.13 CI jobs passed. Apple accepted the signed Mac app and disk image, the notarized app passed its Simulator smoke test, and all public downloads matched the staged packages by SHA-256. The native editor still needs a visual check with a long brief on a personal Mac. [Passing CI](https://github.com/fpokrzywa/AppRivet/actions/runs/45708771775) and [notarized release check](https://github.com/fpokrzywa/AppRivet/actions/runs/45708786712).

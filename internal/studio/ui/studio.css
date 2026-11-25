@@ -194,6 +194,10 @@ button:disabled { opacity: .57; cursor: default; }
 #review-components { margin: 0; padding-left: 1.35em; }
 #review-components li + li { margin-top: 7px; }
 #review-components p { color: var(--muted); margin: 2px 0 0; white-space: pre-wrap; }
+#review-components summary, #review-prompt-details > summary { font-weight: 660; cursor: pointer; }
+#review-components details ul { margin-top: 6px; }
+#review-clarifications, #review-open-items, #review-refinement { margin-top: 14px; }
+#plan-note { min-height: 64px; max-height: 8rem; margin-bottom: 8px; }
 #review-prompts details { padding: 9px 0; border-top: 1px solid var(--line); }
 #review-prompts summary { font-weight: 660; cursor: pointer; }
 #review-prompts summary span {

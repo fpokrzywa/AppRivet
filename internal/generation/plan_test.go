@@ -64,6 +64,7 @@ func TestComponentPlanBindsEveryCodeRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	parent := t.TempDir()
+	store := DraftStore{Directory: filepath.Join(t.TempDir(), "drafts")}
 	planner := func(_ context.Context, provider, model, key string, step PlanPrompt) (string, error) {
 		if provider != input.Provider || model != input.Model || key != input.APIKey || step != preparation.Prompts[0] {
 			t.Fatal("sent a planning request that was absent from the review")
@@ -76,7 +77,8 @@ func TestComponentPlanBindsEveryCodeRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	input.Plan = review.Plan
-	if review.Approval == input.Approval || review.RequestCount != 2 || review.MaxOutputTokens != 2*componentTokens {
+	if review.Approval == input.Approval || review.RequestCount != 4 ||
+		review.MaxOutputTokens != 48000 || review.ComponentRetryOutputTokens != 16000 {
 		t.Fatal("planning approval was reused or the reviewed budget is wrong")
 	}
 	var sent []PlanPrompt
@@ -88,13 +90,13 @@ func TestComponentPlanBindsEveryCodeRequest(t *testing.T) {
 		}
 		return "import SwiftUI\nstruct WatchMovement: View { var body: some View { Text(\"Movement\") } }", nil
 	}
-	if _, err := CreatePlanned(t.Context(), parent, input, providerCall); err == nil || len(sent) != 0 {
+	if _, err := store.Create(t.Context(), parent, input, providerCall); err == nil || len(sent) != 0 {
 		t.Fatal("the planning approval incorrectly authorized code generation")
 	}
 	input.Approval = review.Approval
 	changed := input
 	changed.Brief += " Add a second watch."
-	if _, err := CreatePlanned(t.Context(), parent, changed, providerCall); err == nil || len(sent) != 0 {
+	if _, err := store.Create(t.Context(), parent, changed, providerCall); err == nil || len(sent) != 0 {
 		t.Fatal("a changed brief reused the approval")
 	}
 	tampered := *input.Plan
@@ -102,10 +104,10 @@ func TestComponentPlanBindsEveryCodeRequest(t *testing.T) {
 	tampered.Components[1].Scope = "Different implementation"
 	changed = input
 	changed.Plan = &tampered
-	if _, err := CreatePlanned(t.Context(), parent, changed, providerCall); err == nil || len(sent) != 0 {
+	if _, err := store.Create(t.Context(), parent, changed, providerCall); err == nil || len(sent) != 0 {
 		t.Fatal("a changed component reused the approval")
 	}
-	info, err := CreatePlanned(t.Context(), parent, input, providerCall)
+	info, err := store.Create(t.Context(), parent, input, providerCall)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +120,7 @@ func TestComponentPlanBindsEveryCodeRequest(t *testing.T) {
 		}
 	}
 	parent = t.TempDir()
-	_, err = CreatePlanned(t.Context(), parent, input, func(context.Context, string, string, string, PlanPrompt) (string, error) {
+	_, err = store.Create(t.Context(), parent, input, func(context.Context, string, string, string, PlanPrompt) (string, error) {
 		return returnedStarter, nil
 	})
 	if err == nil || !strings.Contains(err.Error(), "offline starter") {
@@ -186,8 +188,9 @@ func TestComponentFailureLeavesNoProject(t *testing.T) {
 	}
 	input.Plan, input.Approval = review.Plan, review.Approval
 	parent := t.TempDir()
+	store := DraftStore{Directory: filepath.Join(t.TempDir(), "drafts")}
 	count := 0
-	_, err = CreatePlanned(t.Context(), parent, input, func(context.Context, string, string, string, PlanPrompt) (string, error) {
+	_, err = store.Create(t.Context(), parent, input, func(context.Context, string, string, string, PlanPrompt) (string, error) {
 		count++
 		if count == 1 {
 			return "import SwiftUI\nstruct ContentView: View { var body: some View { WatchMovement() } }", nil
@@ -199,5 +202,61 @@ func TestComponentFailureLeavesNoProject(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(parent, input.Name)); !os.IsNotExist(err) {
 		t.Fatal("an incomplete plan created a project")
+	}
+}
+
+func TestPlannedGenerationRetriesOnlyTruncatedComponent(t *testing.T) {
+	for _, exhausted := range []bool{false, true} {
+		name := "recovers"
+		if exhausted {
+			name = "stops after one retry"
+		}
+		t.Run(name, func(t *testing.T) {
+			input := PlanRequest{Name: "Watchmaker", Brief: "Teach assembly of a mechanical watch.",
+				Provider: "anthropic", Model: "claude-opus-5-5", APIKey: "fake-key-for-test",
+				Plan: &ComponentPlan{Architecture: "ContentView shows the workbench and the assembled watch.",
+					Components: []Component{{"Main", "Show both views."}, {"Workbench", "Implement the workbench and tool tray."}, {"Watch", "Display the assembled watch."}}}}
+			review, err := ReviewComponents(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			input.Approval = review.Approval
+			retry := review.Prompts[1]
+			retry.MaxOutputTokens = 16000
+			want := []PlanPrompt{review.Prompts[0], review.Prompts[1], retry}
+			if !exhausted {
+				want = append(want, review.Prompts[2])
+			}
+			parent := t.TempDir()
+			store := DraftStore{Directory: filepath.Join(t.TempDir(), "drafts")}
+			var sent []PlanPrompt
+			_, err = store.Create(t.Context(), parent, input, func(_ context.Context, _, _, _ string, step PlanPrompt) (string, error) {
+				sent = append(sent, step)
+				switch step.Title {
+				case "Main":
+					return "import SwiftUI\nstruct ContentView: View { var body: some View { Workbench() } }", nil
+				case "Workbench":
+					if step.MaxOutputTokens == 8000 || exhausted {
+						return decodeSource(strings.NewReader(`{"stop_reason":"max_tokens","content":[{"type":"text","text":"partial"}]}`), "anthropic")
+					}
+					return "import SwiftUI\nstruct Workbench: View { var body: some View { WatchView() } }", nil
+				default:
+					return "import SwiftUI\nstruct WatchView: View { var body: some View { Text(\"Watch\") } }", nil
+				}
+			})
+			if !slices.Equal(sent, want) {
+				t.Fatalf("sent %d calls, wanted %d with only the workbench retried: %v", len(sent), len(want), err)
+			}
+			if exhausted {
+				if err == nil || !strings.Contains(err.Error(), "component 2 of 3 (Workbench)") || !strings.Contains(err.Error(), "after one retry") {
+					t.Fatalf("expected an error identifying the component, got %v", err)
+				}
+				if _, err := os.Stat(filepath.Join(parent, input.Name)); !os.IsNotExist(err) {
+					t.Fatal("repeated truncation published an incomplete project")
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

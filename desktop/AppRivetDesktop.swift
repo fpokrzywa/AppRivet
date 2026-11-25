@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Darwin
 import Security
 import Sparkle
@@ -253,8 +254,39 @@ private func importBrief(_ url: URL) throws -> String {
 private final class UpdateCheckState: ObservableObject {
     @Published var canCheck = false
 
-    init(_ updater: SPUUpdater) {
+    private let updater: SPUUpdater
+    private var hourlyCheck: Timer?
+    private var clockChanges: AnyCancellable?
+
+    init(_ updater: SPUUpdater, scheduleHourlyChecks: Bool) {
+        self.updater = updater
         updater.publisher(for: \.canCheckForUpdates).assign(to: &$canCheck)
+        guard scheduleHourlyChecks else { return }
+
+        clockChanges = NotificationCenter.default.publisher(for: .NSSystemClockDidChange)
+            .merge(with: NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange))
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.scheduleNextHour() }
+        scheduleNextHour()
+    }
+
+    deinit { hourlyCheck?.invalidate() }
+
+    private func scheduleNextHour() {
+        hourlyCheck?.invalidate()
+        guard let nextHour = Calendar.autoupdatingCurrent.nextDate(after: Date(),
+                matching: DateComponents(minute: 0, second: 0), matchingPolicy: .strict) else { return }
+        let timer = Timer(fire: nextHour, interval: 0, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.scheduleNextHour()
+                if self.updater.automaticallyChecksForUpdates, !self.updater.sessionInProgress {
+                    self.updater.checkForUpdatesInBackground()
+                }
+            }
+        }
+        hourlyCheck = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 }
 
@@ -268,7 +300,7 @@ struct AppRivetDesktop: App {
         let smokeTest = arguments.dropFirst().first == "--smoke-test"
         let controller = SPUStandardUpdaterController(startingUpdater: !smokeTest, updaterDelegate: nil, userDriverDelegate: nil)
         updaterController = controller
-        _updateCheck = StateObject(wrappedValue: UpdateCheckState(controller.updater))
+        _updateCheck = StateObject(wrappedValue: UpdateCheckState(controller.updater, scheduleHourlyChecks: !smokeTest))
         guard smokeTest else { return }
         do {
             guard arguments.count == 3 else { throw DesktopFailure(message: "Smoke test requires a parent folder.") }
@@ -418,6 +450,8 @@ private struct DesktopPlanSession: Identifiable, Sendable {
     let request: DesktopPlanRequest
     let parent: URL
     var review: DesktopPlanReview
+    var completed = 0
+    var started = false
 }
 
 @MainActor
@@ -612,8 +646,9 @@ private final class DesktopModel: ObservableObject {
         if usesStagedGeneration {
             let request = DesktopPlanRequest(name: name, bundleID: bundleID, brief: brief, format: format,
                                              platforms: platforms, provider: provider.rawValue, model: model)
-            perform("Preparing planning prompts locally…", work: { try $0.reviewPlan(request) }) {
-                self.planSession = DesktopPlanSession(request: request, parent: parent, review: $0)
+            perform("Preparing planning prompts locally…", work: { try $0.reviewPlan(request, parent: parent) }) {
+                self.planSession = DesktopPlanSession(request: request, parent: parent, review: $0,
+                                                      completed: $0.completed ?? 0, started: $0.resuming == true)
             }
             return
         }
@@ -654,14 +689,50 @@ private final class DesktopModel: ObservableObject {
         }) { self.planSession?.review = $0 }
     }
 
+    func revisePlan(_ session: DesktopPlanSession, clarification: String) {
+        guard !session.started, !clarification.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        var revised = session.request
+        revised.clarifications = (session.review.clarifications ?? []) + [clarification]
+        let request = revised
+        perform("Preparing the revised planning request…", work: { try $0.reviewPlan(request, parent: session.parent) }) {
+            self.planSession = DesktopPlanSession(request: request, parent: session.parent, review: $0,
+                                                  completed: $0.completed ?? 0, started: $0.resuming == true)
+        }
+    }
+
     func createProject(_ session: DesktopPlanSession) {
-        guard session.review.plan != nil, projectFormats.contains(session.request.format),
+        guard !busy, session.review.plan != nil, projectFormats.contains(session.request.format),
               let key = key(for: session.request.provider) else { return }
-        perform("Waiting for the model to generate the approved source files…", work: {
-            try $0.createFromPlan(session.request, review: session.review, parent: session.parent, apiKey: key)
-        }) { project in
-            self.planSession = nil
-            self.selectProject(project)
+        planSession?.started = true
+        activity = "Resuming the approved plan…"
+        errorMessage = nil
+        log = ""
+        Task {
+            defer { activity = nil }
+            do {
+                let prompts = session.review.prompts
+                var completed = session.completed
+                for _ in 0...prompts.count {
+                    activity = completed < prompts.count ? "Generating \(prompts[completed].title)…" : "Assembling the project…"
+                    let result = try await Task.detached(priority: .userInitiated) {
+                        try DesktopWorkflow.bundled().advancePlan(session.request, review: session.review, parent: session.parent, apiKey: key)
+                    }.value
+                    if let project = result.project {
+                        planSession = nil
+                        selectProject(project)
+                        return
+                    }
+                    guard result.completed > completed, result.completed <= prompts.count else {
+                        throw DesktopFailure(message: "AppRivet returned invalid generation progress. Reopen the review to continue.")
+                    }
+                    completed = result.completed
+                    planSession?.completed = completed
+                }
+                throw DesktopFailure(message: "The draft is saved. Resume generation to continue.")
+            } catch {
+                errorMessage = error.localizedDescription
+                log = (error as? DesktopFailure)?.details ?? ""
+            }
         }
     }
 
@@ -1305,11 +1376,14 @@ private struct StorePublishPane: View {
 @MainActor
 private struct DesktopPlanSheet: View {
     @ObservedObject var model: DesktopModel
+    @State private var clarification = ""
+    @State private var showPrompts = false
 
     var body: some View {
         if let session = model.planSession {
             reviewSheet(session)
                 .interactiveDismissDisabled(model.busy)
+                .onChange(of: session.id) { _ in clarification = "" }
         }
     }
 
@@ -1319,17 +1393,21 @@ private struct DesktopPlanSheet: View {
         let target = AIProvider(rawValue: session.request.provider)?.label ?? session.request.provider
         let generating = review.plan != nil
         return VStack(alignment: .leading, spacing: 12) {
-            Text(generating ? "Review component code requests" : "Review planning requests")
+            Text(generating ? "Review build stages" : "Review planning requests")
                 .font(.title2.bold())
             Text("\(target) \(session.request.model) will receive these requests through your API account.")
                 .foregroundStyle(.secondary)
-            Text("\(generating ? "" : "Up to ")\(review.requestCount) \(review.requestCount == 1 ? "request" : "requests"), up to \(review.maxOutputTokens) output tokens total.")
+            budgetText(session)
             if !generating {
                 Text("After planning, you can review the exact code requests before approving them together.")
                     .foregroundStyle(.secondary)
             }
             if let retryTokens = review.planRetryOutputTokens {
                 Text("If the planner reaches its output limit, AppRivet retries the same prompt once with up to \(retryTokens) output tokens. The retry is included above.")
+                    .foregroundStyle(.secondary)
+            }
+            if let retryTokens = review.componentRetryOutputTokens {
+                Text("If a component reaches its output limit, AppRivet retries that component once with up to \(retryTokens) output tokens. Possible retries are included above.")
                     .foregroundStyle(.secondary)
             }
             if review.usesSynthesis == true {
@@ -1344,21 +1422,30 @@ private struct DesktopPlanSheet: View {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     if let plan = review.plan {
                         Text(verbatim: plan.architecture).textSelection(.enabled)
-                    }
-                    ForEach(Array(review.prompts.enumerated()), id: \.offset) { _, prompt in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(verbatim: prompt.title).font(.headline)
-                            if let file = prompt.file {
-                                Text(verbatim: file).font(.system(.subheadline, design: .monospaced))
-                                    .textSelection(.enabled)
+                        stageList(session, plan: plan)
+                        if let notes = review.clarifications, !notes.isEmpty {
+                            Text("Your clarifications").font(.headline)
+                            ForEach(Array(notes.enumerated()), id: \.offset) { _, note in
+                                Text(verbatim: note).textSelection(.enabled)
                             }
-                            Text("\(prompt.prompt.utf8.count) UTF-8 input bytes, up to \(prompt.maxOutputTokens) output tokens")
-                                .font(.caption).foregroundStyle(.secondary)
-                            Text(verbatim: prompt.prompt)
-                                .font(.system(.body, design: .monospaced))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        if let items = plan.openItems, !items.isEmpty {
+                            Text("Questions and open requirements").font(.headline)
+                            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                                Text(verbatim: item).textSelection(.enabled)
+                            }
+                        }
+                        if !session.started {
+                            TextField("Clarify or change the plan", text: $clarification, axis: .vertical)
+                                .textFieldStyle(.roundedBorder)
+                                .lineLimit(2...4)
+                                .disabled(model.busy)
+                            Button("Review revised plan request") { model.revisePlan(session, clarification: clarification) }
+                                .disabled(model.busy || clarification.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                        DisclosureGroup("Exact prompts", isExpanded: $showPrompts) { promptList(review.prompts) }
+                    } else {
+                        promptList(review.prompts)
                     }
                 }
                 .padding(10)
@@ -1379,7 +1466,7 @@ private struct DesktopPlanSheet: View {
                 Button("Back to brief") { model.planSession = nil }
                     .disabled(model.busy)
                 Spacer()
-                Button(generating ? "Approve all code requests & create" : "Send to plan") {
+                Button(generating ? (session.started ? "Resume generation" : "Approve plan & generate") : "Send to plan") {
                     if generating { model.createProject(session) } else { model.sendPlanningRequests(session) }
                 }
                 .buttonStyle(.borderedProminent)
@@ -1388,6 +1475,57 @@ private struct DesktopPlanSheet: View {
         }
         .padding(22)
         .frame(width: 640)
+    }
+
+    private func budgetText(_ session: DesktopPlanSession) -> Text {
+        let review = session.review
+        let remaining = review.prompts.dropFirst(session.completed)
+        let requests = session.started ? remaining.count * 2 : review.requestCount
+        let tokens = session.started ? remaining.reduce(0) { $0 + $1.maxOutputTokens + (review.componentRetryOutputTokens ?? 0) }
+            : review.maxOutputTokens
+        if requests == 0 { return Text("All components saved. Ready to assemble the project.") }
+        return Text("Up to \(requests) \(requests == 1 ? "request" : "requests"), up to \(tokens) output tokens total.")
+    }
+
+    private func stageList(_ session: DesktopPlanSession, plan: DesktopPlanReview.Plan) -> some View {
+        let stages = session.review.stages ?? []
+        return ForEach(Array(stages.enumerated()), id: \.offset) { index, stage in
+            let start = stages.prefix(index).reduce(0) { $0 + $1.count }
+            let components = plan.components.dropFirst(start).prefix(stage.count)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(verbatim: stage.title).font(.headline)
+                ForEach(Array(components.enumerated()), id: \.offset) { offset, component in
+                    let componentIndex = start + offset
+                    let status = componentIndex < session.completed ? "Saved"
+                        : componentIndex == session.completed && session.started ? "Next" : "Queued"
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(verbatim: component.title).fontWeight(.medium)
+                            Text(status).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Text(verbatim: component.scope).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func promptList(_ prompts: [DesktopPlanReview.Prompt]) -> some View {
+        ForEach(Array(prompts.enumerated()), id: \.offset) { _, prompt in
+            VStack(alignment: .leading, spacing: 6) {
+                Text(verbatim: prompt.title).font(.headline)
+                if let file = prompt.file {
+                    Text(verbatim: file).font(.system(.subheadline, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+                Text("\(prompt.prompt.utf8.count) UTF-8 input bytes, up to \(prompt.maxOutputTokens) output tokens")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text(verbatim: prompt.prompt)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
     }
 }
 

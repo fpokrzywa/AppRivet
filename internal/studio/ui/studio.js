@@ -854,27 +854,51 @@ for (const button of document.querySelectorAll("[data-example]")) {
 
 function displayStagedReview(draft) {
   const plan = draft.plan;
-  reviewHeading.textContent = plan ? "Review component plan" : "Review planning prompts";
-  byID("review-budget").textContent = (plan ? "" : "Up to ") + draft.request_count.toLocaleString()
-    + (draft.request_count === 1 ? " request, up to " : " requests, up to ")
-    + draft.max_output_tokens.toLocaleString() + " output tokens in this step.";
+  reviewHeading.textContent = plan ? "Review build stages" : "Review planning prompts";
   byID("review-synthesis").hidden = !draft.uses_synthesis;
-  const retry = byID("review-plan-retry");
-  retry.hidden = !draft.plan_retry_output_tokens;
-  retry.textContent = retry.hidden ? "" : "If the planner reaches its output limit, AppRivet retries the same prompt once with up to "
-    + draft.plan_retry_output_tokens.toLocaleString() + " output tokens. The retry is included above.";
+  const retry = byID("review-output-retry");
+  retry.hidden = !draft.plan_retry_output_tokens && !draft.component_retry_output_tokens;
+  if (draft.component_retry_output_tokens) {
+    retry.textContent = "If a component reaches its output limit, AppRivet retries that component once with up to "
+      + draft.component_retry_output_tokens.toLocaleString() + " output tokens. Possible retries are included above.";
+  } else {
+    retry.textContent = retry.hidden ? "" : "If the planner reaches its output limit, AppRivet retries the same prompt once with up to "
+      + draft.plan_retry_output_tokens.toLocaleString() + " output tokens. The retry is included above.";
+  }
   byID("review-plan").hidden = !plan;
   byID("review-architecture").textContent = plan?.architecture ?? "";
-  byID("review-components").replaceChildren(...(plan?.components ?? []).map(component => {
+  let first = 0;
+  byID("review-components").replaceChildren(...(draft.stages ?? []).map(stage => {
     const item = document.createElement("li");
-    const title = document.createElement("strong");
-    title.textContent = component.title;
-    const scope = document.createElement("p");
-    scope.textContent = component.scope;
-    item.append(title, scope);
+    const group = document.createElement("details");
+    group.open = true;
+    const title = document.createElement("summary");
+    title.textContent = stage.title;
+    const list = document.createElement("ul");
+    plan.components.slice(first, first + stage.count).forEach(component => {
+      const row = document.createElement("li");
+      const name = document.createElement("strong");
+      name.textContent = component.title;
+      const state = document.createElement("span");
+      state.className = "field-help";
+      state.dataset.component = String(first++);
+      const scope = document.createElement("p");
+      scope.textContent = component.scope;
+      row.append(name, state, scope);
+      list.append(row);
+    });
+    group.append(title, list);
+    item.append(group);
     return item;
   }));
-  byID("review-prompts-heading").hidden = !plan;
+  const clarifications = draft.clarifications ?? [];
+  byID("review-clarifications").hidden = clarifications.length === 0;
+  showReviewList("review-clarification-list", clarifications);
+  const openItems = plan?.open_items ?? [];
+  byID("review-open-items").hidden = openItems.length === 0;
+  showReviewList("review-open-list", openItems);
+  byID("plan-note").value = "";
+  byID("review-prompt-details").open = !plan;
   reviewPrompts.replaceChildren(...draft.prompts.map((entry, index) => {
     const details = document.createElement("details");
     details.open = index === 0;
@@ -890,8 +914,63 @@ function displayStagedReview(draft) {
     details.append(summary, prompt);
     return details;
   }));
-  confirmCreate.textContent = plan ? "Approve plan & generate" : "Send to plan";
+  showStageProgress(draft);
 }
+
+function showReviewList(id, entries) {
+  byID(id).replaceChildren(...entries.map(text => {
+    const item = document.createElement("li");
+    item.textContent = text;
+    return item;
+  }));
+}
+
+function showStageProgress(draft) {
+  const completed = draft.completed ?? 0;
+  const remaining = draft.plan ? draft.prompts.slice(completed) : [];
+  const requests = draft.resuming ? remaining.length * 2 : draft.request_count;
+  const tokens = draft.resuming ? remaining.reduce((total, entry) => total + entry.max_output_tokens
+    + (draft.component_retry_output_tokens ?? 0), 0) : draft.max_output_tokens;
+  byID("review-budget").textContent = requests === 0 ? "All components saved. Ready to assemble the project."
+    : "Up to " + requests.toLocaleString() + (requests === 1 ? " request, up to " : " requests, up to ")
+      + tokens.toLocaleString() + " output tokens in this step.";
+  for (const status of byID("review-components").querySelectorAll("[data-component]")) {
+    const index = Number(status.dataset.component);
+    status.textContent = index < completed ? " · Saved" : index === completed && draft.resuming ? " · Next" : " · Queued";
+  }
+  byID("review-refinement").hidden = !draft.plan || Boolean(draft.resuming);
+  confirmCreate.textContent = draft.plan ? (draft.resuming ? "Resume generation" : "Approve plan & generate") : "Send to plan";
+}
+
+function stagedRequest(project, draft) {
+  return {
+    project: {...project, approval: draft.approval, plan: draft.plan, clarifications: draft.clarifications},
+    stage: draft.plan ? "generation" : "planning",
+    draft,
+  };
+}
+
+byID("revise-plan").addEventListener("click", async () => {
+  if (!reviewedRequest || reviewedRequest.stage !== "generation" || reviewedRequest.draft.resuming || creating) return;
+  const note = byID("plan-note").value.trim();
+  if (!note) { byID("plan-note").focus(); return; }
+  creating = true;
+  confirmCreate.disabled = editBrief.disabled = byID("revise-plan").disabled = true;
+  try {
+    const {project} = reviewedRequest;
+    const revised = {...project, plan: undefined, approval: undefined, clarifications: [...(project.clarifications ?? []), note]};
+    const draft = await request("/api/plan/review", revised);
+    reviewedRequest = stagedRequest(revised, draft);
+    displayStagedReview(draft);
+    show(reviewStatus, "Review the request to revise the plan using your clarification.");
+    reviewHeading.focus();
+  } catch (error) {
+    show(reviewStatus, error.message, true);
+  } finally {
+    creating = false;
+    confirmCreate.disabled = editBrief.disabled = byID("revise-plan").disabled = false;
+  }
+});
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
@@ -912,9 +991,9 @@ form.addEventListener("submit", async event => {
   show(message, "Validating the brief and project settings…");
   try {
     const draft = await request(staged ? "/api/plan/review" : "/api/review", project);
-    reviewedRequest = {
+    reviewedRequest = staged ? stagedRequest(project, draft) : {
       project: ai ? {...project, approval: draft.approval} : project,
-      stage: staged ? "planning" : "single",
+      stage: "single",
     };
     byID("staged-review").hidden = !staged;
     byID("single-prompt").hidden = copyPrompt.hidden = staged;
@@ -969,7 +1048,7 @@ copyPrompt.addEventListener("click", async () => {
 });
 confirmCreate.addEventListener("click", async () => {
   if (!reviewedRequest || creating || confirmCreate.disabled) return;
-  const {project, stage} = reviewedRequest;
+  const {project, stage, draft} = reviewedRequest;
   const key = project.provider ? profiles[project.provider].key : "";
   const approvedRequest = key ? {...project, api_key: key} : project;
   creating = true;
@@ -978,16 +1057,34 @@ confirmCreate.addEventListener("click", async () => {
     : project.provider ? "Waiting for the model to generate the source…" : "Creating your project…");
   try {
     if (stage === "planning") {
-      const draft = await request("/api/plan/draft", approvedRequest);
-      displayStagedReview(draft);
-      reviewedRequest = {project: {...project, approval: draft.approval, plan: draft.plan}, stage: "generation"};
+      const planReview = await request("/api/plan/draft", approvedRequest);
+      displayStagedReview(planReview);
+      reviewedRequest = stagedRequest(project, planReview);
       show(reviewStatus, "");
       review.scrollTop = 0;
       reviewContent.scrollTop = 0;
       reviewHeading.focus();
       return;
     }
-    const result = await request(stage === "generation" ? "/api/plan/create" : "/api/create", approvedRequest);
+    let result;
+    if (stage === "generation") {
+      draft.resuming = true;
+      showStageProgress(draft);
+      for (let attempts = 0; attempts <= draft.prompts.length; attempts++) {
+        const next = draft.prompts[draft.completed ?? 0];
+        show(reviewStatus, next ? "Generating " + next.title + "…" : "Assembling the project…");
+        const progress = await request("/api/plan/advance", approvedRequest);
+        if (progress.project) { result = progress.project; break; }
+        if (progress.completed <= (draft.completed ?? 0) || progress.completed > draft.prompts.length) {
+          throw new Error("AppRivet returned invalid generation progress. Reopen the review to continue.");
+        }
+        draft.completed = progress.completed;
+        showStageProgress(draft);
+      }
+      if (!result) throw new Error("The draft is saved. Resume generation to continue.");
+    } else {
+      result = await request("/api/create", approvedRequest);
+    }
     review.close();
     loadedProject = result.suggested_scheme;
     loadedStarter = result.starter;

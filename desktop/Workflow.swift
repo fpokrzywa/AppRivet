@@ -54,14 +54,20 @@ struct DesktopPlanRequest: Encodable, Sendable {
     let model: String
     var approval: String? = nil
     var plan: DesktopPlanReview.Plan? = nil
+    var clarifications: [String]? = nil
 
     enum CodingKeys: String, CodingKey {
-        case name, brief, format, platforms, provider, model, approval, plan
+        case name, brief, format, platforms, provider, model, approval, plan, clarifications
         case bundleID = "bundle_id"
     }
 }
 
 struct DesktopPlanReview: Decodable, Sendable {
+    struct Stage: Codable, Sendable {
+        let title: String
+        let count: Int
+    }
+
     struct Prompt: Decodable, Sendable {
         let title: String
         let file: String?
@@ -82,6 +88,13 @@ struct DesktopPlanReview: Decodable, Sendable {
 
         let architecture: String
         let components: [Component]
+        let stages: [Stage]?
+        let openItems: [String]?
+
+        enum CodingKeys: String, CodingKey {
+            case architecture, components, stages
+            case openItems = "open_items"
+        }
     }
 
     let approval: String
@@ -91,14 +104,25 @@ struct DesktopPlanReview: Decodable, Sendable {
     let maxOutputTokens: Int
     let usesSynthesis: Bool?
     let planRetryOutputTokens: Int?
+    let componentRetryOutputTokens: Int?
+    let stages: [Stage]?
+    let clarifications: [String]?
+    let resuming: Bool?
+    let completed: Int?
 
     enum CodingKeys: String, CodingKey {
-        case approval, plan, prompts
+        case approval, plan, prompts, stages, clarifications, resuming, completed
         case requestCount = "request_count"
         case maxOutputTokens = "max_output_tokens"
         case usesSynthesis = "uses_synthesis"
         case planRetryOutputTokens = "plan_retry_output_tokens"
+        case componentRetryOutputTokens = "component_retry_output_tokens"
     }
+}
+
+struct DesktopGenerationProgress: Decodable, Sendable {
+    let completed: Int
+    let project: DesktopProject?
 }
 
 struct DesktopOpened: Decodable, Sendable {
@@ -267,8 +291,8 @@ struct DesktopWorkflow: Sendable {
                           apiKey: apiKey, input: Data(draft.brief.utf8))
     }
 
-    func reviewPlan(_ request: DesktopPlanRequest) throws -> DesktopPlanReview {
-        try invoke(["plan", "review"], input: JSONEncoder().encode(request), fullOutput: true)
+    func reviewPlan(_ request: DesktopPlanRequest, parent: URL? = nil) throws -> DesktopPlanReview {
+        try invoke(["plan", "review"], directory: parent, input: JSONEncoder().encode(request), fullOutput: true)
     }
 
     func draftPlan(_ request: DesktopPlanRequest, review: DesktopPlanReview, apiKey: String) throws -> DesktopPlanReview {
@@ -282,12 +306,13 @@ struct DesktopWorkflow: Sendable {
         return result
     }
 
-    func createFromPlan(_ request: DesktopPlanRequest, review: DesktopPlanReview, parent: URL, apiKey: String) throws -> DesktopProject {
+    func advancePlan(_ request: DesktopPlanRequest, review: DesktopPlanReview, parent: URL, apiKey: String) throws -> DesktopGenerationProgress {
         var input = request
         input.approval = review.approval
         input.plan = review.plan
-        let timeout = review.requestCount * 360 + (request.format == "flutter" ? 330 : 30)
-        return try invoke(["plan", "create"], directory: parent, timeout: timeout,
+        input.clarifications = review.clarifications
+        let timeout = 720 + (request.format == "flutter" ? 330 : 30)
+        return try invoke(["plan", "advance"], directory: parent, timeout: timeout,
                           apiKey: apiKey, input: JSONEncoder().encode(input))
     }
 
