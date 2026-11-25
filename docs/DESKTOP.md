@@ -53,7 +53,7 @@ If the provider reaches its output limit, simplify what the first version must d
 
 ### Install AppRivet
 
-1. Download **AppRivet-macOS.zip** from GitHub Releases. The download works without signing in. [Verified Mac download](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.4/AppRivet-macOS.zip) · [Release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.4)
+1. Download **AppRivet-macOS.zip** from GitHub Releases. The download works without signing in. [Verified Mac download](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.5/AppRivet-macOS.zip) · [Release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.5)
 2. Extract **AppRivet-macOS.zip** and move **AppRivet.app** to Applications. The archive includes Apple silicon and Intel executables.
 3. Open **AppRivet.app** from Finder. This preview uses an ad hoc signature and has no Apple notarization. If macOS says it couldn’t verify AppRivet is free of malware, click **Done**. If you trust the download, open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway** for AppRivet. Authenticate if prompted and confirm with **Open**. [Apple’s Gatekeeper guidance](https://support.apple.com/en-us/102445)
 
@@ -75,7 +75,7 @@ Install full Xcode and open it once to finish setup. In **Xcode → Settings →
 4. To run an iOS project, review the generated source, select an available iPhone or iPad simulator, confirm that you trust the project to build and run, and click **Build & Run**. If no simulator appears, check the runtime in Xcode and click **Refresh** in AppRivet. If building or launching fails, expand **Build details** for the command output.
 5. Use **Your projects** to reopen a project. Use **Open in Xcode** to edit a SwiftUI project or **Open project folder** to access the generated Flutter code.
 
-CI used the packaged Mac app to build and launch a SwiftUI checklist on a hosted iPhone Simulator. Provider requests passed tests with mock responses. A live AI generation run with an actual provider key still needs verification. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45627004772)
+CI started the updater and used the packaged Mac app to build and launch a SwiftUI checklist on a hosted iPhone Simulator. Provider requests passed tests with mock responses. A live AI generation run with an actual provider key still needs verification. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45636471412)
 
 Build scripts run with the access of your macOS user account. SwiftUI build output is kept in the CLI’s temporary DerivedData directories. Physical-device signing, install and launch remain separate milestones.
 

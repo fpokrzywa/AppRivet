@@ -1,5 +1,11 @@
 # Verification record
 
+## Mac updates and AI generation limits
+
+All six jobs passed at `7b6c1f328984019b8ecbd314854f89031233c143`. Hosted macOS verified the archived AppRivet bundle and its Apple silicon and Intel slices, initialized Sparkle, and created, reopened, built, installed and launched a SwiftUI checklist in the iOS Simulator. The public 0.4.5 ZIP matched the CI artifact byte for byte. Its update signature verified against the public key in the bundle. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45636471412) [Public Mac release](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.5)
+
+Tests with mock providers verify the larger output budgets, rejection of partial source, and separate messages for output limits, context limits, and provider filtering or refusal. A live generation request and an in-place update and relaunch to a later release from Applications still need validation. Intel Mac execution also needs a live check. [Mac update guide](DESKTOP.md#update-apprivet-on-your-mac)
+
 ## Saved project forms and appearance
 
 All six CI jobs passed at `a176919ca4f13ab2fe5f4b42fb511863b2612821`. Chrome exercised the downloaded Windows launcher in both appearances and verified that the header chose the matching transparent PNG. The browser also imported a long Markdown brief, reviewed a mocked AI request, reopened SwiftUI and Flutter projects, restored the checked platforms, and built a Flutter web app. A project generated before form metadata was added reopened from its original brief and target folders.
