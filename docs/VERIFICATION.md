@@ -1,5 +1,11 @@
 # Verification record
 
+## Store builds and connection setup
+
+All six jobs passed at `8f73e19741797992cf66c90060790a04755ced84`. Release fixtures verified the Xcode archive and App Store export arguments, isolated release storage, rejection of untrusted builds, and the Android verifier’s acceptance of a pinned upload signer. The Java fixture rejected unsigned, debug-signed, tampered and mismatched AABs. Mock HTTPS responses verified signed Apple and Google requests and kept credential values out of the returned status and settings file. The packaged Mac app read publishing settings and history and launched a test app in Simulator. [CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45661501468) · [Desktop release](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.9)
+
+The first signed App Store IPA and Gradle release AAB with configured signing assets still need live validation. So do App Store Connect account access and Google Play permissions for an actual app and testing track. The current **Publish** workflow prepares signed files for console upload.
+
 ## Component generation and provider credentials
 
 All six jobs passed at `642d7a6f9a7a94f24243f74e25e5657eb5559fdd`. The packaged Mac app reviewed a split brief locally and launched the SwiftUI sample in Simulator. Mock provider tests checked exact component prompts, input chunking, output caps, approval invalidation, and refusal of partial source and credential material. A generated Flutter project with multiple parts passed analysis with informational diagnostics allowed. Chrome exercised the browser approval and key import flows against fixtures. The public Mac installer, updater ZIP and Windows launcher matched the CI packages. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45651280730) [Desktop release](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.8)
