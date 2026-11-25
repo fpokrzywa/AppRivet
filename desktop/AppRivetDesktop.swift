@@ -31,7 +31,7 @@ private func platformLabel(_ id: String) -> String {
 }
 
 @MainActor
-private enum DesktopBlueprint {
+private enum DesktopBrand {
     private static let artwork = Bundle.main.url(forResource: "AppRivetBlueprint", withExtension: "png")
         .flatMap { NSImage(contentsOf: $0) }
 
@@ -44,42 +44,18 @@ private enum DesktopBlueprint {
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 9))
                 .overlay { RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.18)) }
-                .accessibilityLabel("AppRivet")
-        } else {
-            Text("AppRivet").font(.headline)
+                .accessibilityHidden(true)
         }
     }
 
     static var backdrop: some View {
         GeometryReader { geometry in
             ZStack {
-                Color(red: 0.06, green: 0.15, blue: 0.16)
-                if let artwork {
-                    Image(nsImage: artwork)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: max(geometry.size.width * 4.2, 2080))
-                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
-                        .clipped()
-                        .opacity(0.52)
-                }
-                LinearGradient(colors: [.clear, Color(red: 0.05, green: 0.11, blue: 0.13).opacity(0.8)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                Canvas { context, size in
-                    let spacings: [CGFloat] = [27, 108]
-                    for spacing in spacings {
-                        var grid = Path()
-                        for x in stride(from: 0.0, to: size.width, by: spacing) {
-                            grid.move(to: CGPoint(x: x, y: 0))
-                            grid.addLine(to: CGPoint(x: x, y: size.height))
-                        }
-                        for y in stride(from: 0.0, to: size.height, by: spacing) {
-                            grid.move(to: CGPoint(x: 0, y: y))
-                            grid.addLine(to: CGPoint(x: size.width, y: y))
-                        }
-                        context.stroke(grid, with: .color(.mint.opacity(spacing == 108 ? 0.10 : 0.05)), lineWidth: 1)
-                    }
-                }
+                Color(red: 0.063, green: 0.094, blue: 0.122)
+                RadialGradient(colors: [Color(red: 0.114, green: 0.278, blue: 0.282), .clear],
+                               center: UnitPoint(x: 0.08, y: 0), startRadius: 0, endRadius: geometry.size.width * 0.65)
+                RadialGradient(colors: [Color(red: 0.149, green: 0.224, blue: 0.29), .clear],
+                               center: UnitPoint(x: 0.88, y: 0.30), startRadius: 0, endRadius: geometry.size.width * 0.54)
             }
         }
         .allowsHitTesting(false)
@@ -428,7 +404,10 @@ private struct DesktopView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
-                    DesktopBlueprint.mark
+                    HStack(spacing: 10) {
+                        DesktopBrand.mark
+                        Text("AppRivet").font(.title3.weight(.semibold))
+                    }
                     Spacer()
                     Button("Your projects", action: model.openProject).disabled(model.busy)
                     Button("Admin") { showAdmin = true }.disabled(model.busy)
@@ -448,7 +427,7 @@ private struct DesktopView: View {
             .frame(maxWidth: 740)
             .frame(maxWidth: .infinity)
         }
-        .background { DesktopBlueprint.backdrop }
+        .background { DesktopBrand.backdrop }
         .preferredColorScheme(.dark)
         .frame(minWidth: 540, minHeight: 510)
         .sheet(isPresented: $showAdmin) { AdminSheet(model: model) }

@@ -2,7 +2,7 @@
   color-scheme: dark;
   font-family: "Aptos", "Segoe UI", "Avenir Next", system-ui, sans-serif;
   color: #f0f6f5;
-  background: #102326;
+  background: #10181f;
   --muted: #b1c5c7;
   --line: #456063;
   --focus: #9cf4d5;
@@ -13,25 +13,19 @@
 body {
   min-height: 100vh;
   margin: 0;
-  background-color: #102326;
-  background-image:
-    linear-gradient(90deg, #80c3b119 1px, transparent 1px),
-    linear-gradient(#80c3b119 1px, transparent 1px),
-    linear-gradient(90deg, #80c3b10a 1px, transparent 1px),
-    linear-gradient(#80c3b10a 1px, transparent 1px),
-    linear-gradient(155deg, #122a2c6e, #102a2ba6 52%, #0d1c22ee),
-    var(--blueprint);
-  background-size: 108px 108px, 108px 108px, 27px 27px, 27px 27px, cover, max(420vw, 2080px) auto;
-  background-position: 0 0, 0 0, 0 0, 0 0, center, left 49%;
-  background-attachment: fixed;
+  background:
+    radial-gradient(ellipse at 8% 0%, #1d4748 0%, transparent 48%),
+    radial-gradient(ellipse at 88% 30%, #26394a 0%, transparent 54%),
+    #10181f;
 }
 .shell { width: min(1136px, calc(100% - 72px)); margin-inline: auto; }
 .topbar {
-  background: #102629e6;
-  border-bottom: 1px solid #5a8a8173;
+  background: #13232ad9;
+  border-bottom: 1px solid #42615f80;
   backdrop-filter: blur(16px);
 }
 .topbar-inner { min-height: 65px; display: flex; justify-content: space-between; align-items: center; gap: 18px; }
+.brand { display: flex; align-items: center; gap: 11px; font-size: 1.29rem; font-weight: 760; letter-spacing: -.045em; }
 .brand-mark {
   display: block;
   flex: 0 0 48px;
@@ -39,7 +33,7 @@ body {
   height: 48px;
   border-radius: 10px;
   border: 1px solid #638b8175;
-  background: #163436 var(--blueprint) 48% 50% / 132px auto no-repeat;
+  background: #163436 var(--brand-artwork) 48% 50% / 132px auto no-repeat;
   box-shadow: inset 0 0 12px #15323840, 0 3px 12px #06151770;
 }
 .top-actions { display: flex; align-items: center; gap: 8px; font-size: .84rem; }
@@ -50,7 +44,7 @@ h1 { margin: 0; font-size: clamp(2.6rem, 6vw, 4.6rem); letter-spacing: -.067em; 
 p { line-height: 1.5; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 .composer, .panel {
-  background: linear-gradient(150deg, #263e40e0, #18292fe8);
+  background: linear-gradient(150deg, #284049c9, #1a2732e8);
   border: 1px solid var(--line);
   border-radius: 19px;
   box-shadow: 0 15px 35px #0b11183d, inset 0 1px #cbeeed13;
@@ -182,7 +176,9 @@ button:disabled { opacity: .57; cursor: default; }
   .topbar-inner { gap: 7px; }
 }
 @media (max-width: 365px) {
+  .brand { gap: 6px; font-size: 1rem; }
+  .brand-mark { flex-basis: 34px; width: 34px; height: 34px; background-size: 94px auto; }
   .top-actions { gap: 4px; }
-  .top-actions button { padding-inline: 7px; }
+  .top-actions button { padding-inline: 5px; }
   .dialog-fields { grid-template-columns: minmax(0, 1fr); }
 }

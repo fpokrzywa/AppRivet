@@ -74,8 +74,8 @@ func Handler(config Config) http.Handler {
 	if err != nil {
 		panic(err)
 	}
-	// Both crops share the original artwork in the packaged HTML document.
-	style = ":root{--blueprint:url(data:image/png;base64," + base64.StdEncoding.EncodeToString(blueprint) + ")}\n" + style
+	// Embed the header artwork in the packaged HTML document.
+	style = ":root{--brand-artwork:url(data:image/png;base64," + base64.StdEncoding.EncodeToString(blueprint) + ")}\n" + style
 	hash := func(value string) string {
 		digest := sha256.Sum256([]byte(value))
 		return "'sha256-" + base64.StdEncoding.EncodeToString(digest[:]) + "'"
