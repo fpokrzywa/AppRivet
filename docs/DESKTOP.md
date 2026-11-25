@@ -8,7 +8,7 @@ The Windows and Linux launchers target x86-64 desktop machines. They open AppRiv
 
 ### Install on Windows
 
-1. Download **AppRivet-Windows.zip**. [AppRivet 0.4.9 Windows ZIP](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.9/AppRivet-Windows.zip)
+1. Download **AppRivet-Windows.zip**. [AppRivet 0.4.10 Windows ZIP](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.10/AppRivet-Windows.zip)
 2. Right-click the downloaded ZIP and select **Extract All**.
 3. Double-click **AppRivet.exe**. The browser opens your local workspace.
 
@@ -93,7 +93,7 @@ In **Generate with AI**, choose **Plan components before generating code**. AppR
 
 ### Install AppRivet
 
-1. Download and open **AppRivet-macOS.dmg**. The app includes Apple silicon and Intel executables. [AppRivet 0.4.9 macOS disk image](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.9/AppRivet-macOS.dmg) and [AppRivet 0.4.9 release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.9).
+1. Download and open **AppRivet-macOS.dmg**. Version 0.4.10 is signed with Developer ID and notarized by Apple. The app includes Apple silicon and Intel executables. [AppRivet 0.4.10 macOS disk image](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.10/AppRivet-macOS.dmg) and [AppRivet 0.4.10 release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.10).
 2. Drag **AppRivet.app** onto **Applications** in the disk image window. Eject the disk image, then open AppRivet from **Applications**.
 3. Open **AppRivet.app** from Finder. Version 0.4.9 and earlier previews use ad hoc signing. If macOS says it couldn’t verify an older preview is free of malware, click **Done**. If you trust the download, open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway** for AppRivet. Authenticate if prompted and confirm with **Open**. [Apple’s Gatekeeper guidance](https://support.apple.com/en-us/102445)
 

@@ -2,6 +2,8 @@
 
 ## Developer ID signing and notarization
 
+Apple accepted the 0.4.10 app and disk image. The hosted Mac validated both stapled tickets, Gatekeeper identified both packages as notarized Developer ID software, and the notarized desktop app built, installed and launched a SwiftUI sample in the iOS Simulator. The three public release assets matched the staged CI packages by SHA-256. A fresh Finder install and the in-place update from 0.4.9 on a personal Mac still need validation. [Passing live signing run](https://github.com/fpokrzywa/AppRivet/actions/runs/45689754094) and [AppRivet 0.4.10 release](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.10).
+
 The hosted signing rehearsal built the universal 0.4.9 release candidate, verified its bundle signature and architecture slices, and confirmed that missing Apple credentials prevent the workflow from creating release assets. Mocked Apple tools also exercised successful packaging and refusals after a rejected app, rejected disk image, failed submission, or failed Gatekeeper assessment. The first run with real Apple credentials must still verify Developer ID signing, Apple's acceptance and stapled tickets, and the notarized app's Simulator smoke test. A clean Finder install and a Sparkle update from the ad hoc preview still need live checks. [Passing signing rehearsal](https://github.com/fpokrzywa/AppRivet/actions/runs/45670415614)
 
 ## Mac update installation and relaunch
