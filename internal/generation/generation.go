@@ -78,9 +78,15 @@ func Create(ctx context.Context, parent string, draft Draft, approval, key strin
 	if draft.Format == "flutter" && !project.FlutterAvailable() {
 		return project.Info{}, errors.New("install the Flutter SDK before generating a Flutter project")
 	}
+	if strings.Contains(draft.Prompt, key) {
+		return project.Info{}, errors.New("remove the provider API key from the brief before sending")
+	}
 	source, err := generate(ctx, draft.Provider, draft.Model, key, draft.Prompt)
 	if err != nil {
 		return project.Info{}, err
+	}
+	if strings.Contains(source, key) {
+		return project.Info{}, errors.New("the provider returned credential material in the generated source")
 	}
 	source = strings.TrimSpace(source)
 	if !utf8.ValidString(source) || len(source) > 128*1024 || strings.ContainsRune(source, 0) {

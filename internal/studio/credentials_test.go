@@ -104,6 +104,7 @@ func TestStudioCredentialEndpointsReportProviderIDsOnly(t *testing.T) {
 func TestStudioUsesSavedCredentialOnlyForApprovedCalls(t *testing.T) {
 	vault := &fixtureVault{keys: map[string]string{"anthropic": fixtureKey}}
 	wantKey := fixtureKey
+	var planLeaksKey bool
 	var calls int
 	h := Handler(Config{Host: "127.0.0.1:1234", Session: "test-session", Workspace: filepath.Join(t.TempDir(), "projects"), Vault: vault,
 		Generate: func(_ context.Context, _, _, key, _ string) (string, error) {
@@ -122,6 +123,9 @@ func TestStudioUsesSavedCredentialOnlyForApprovedCalls(t *testing.T) {
 				t.Fatal("staged generation received the wrong credential")
 			}
 			if budget == 4500 {
+				if planLeaksKey {
+					return `{"architecture":"A provider accidentally returned ` + key + `.","components":[{"title":"Main","scope":"Display WatchView."},{"title":"Watch","scope":"Define WatchView."}]}`, nil
+				}
 				return `{"architecture":"ContentView uses WatchView.","components":[{"title":"Main","scope":"Display WatchView."},{"title":"Watch","scope":"Define WatchView."}]}`, nil
 			}
 			if strings.Contains(prompt, "AppRivetPart01.swift") && strings.Contains(prompt, "Component: Watch") {
@@ -172,4 +176,9 @@ func TestStudioUsesSavedCredentialOnlyForApprovedCalls(t *testing.T) {
 	if response := post("/api/create", req, 400); strings.Contains(response.Body.String(), wantKey) || vault.gets != 3 || calls != 5 {
 		t.Fatal("the explicit key did not take precedence or leaked in an error")
 	}
+	wantKey, planLeaksKey = fixtureKey, true
+	stage.Plan = nil
+	decode(post("/api/plan/review", stage, 200), &review)
+	stage.Approval = review.Approval
+	post("/api/plan/draft", stage, 400)
 }

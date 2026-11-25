@@ -189,6 +189,11 @@ func authorizePlanCall(approval string, review PlanReview, key string, generate 
 	if generate == nil {
 		return "", errors.New("component generation is unavailable")
 	}
+	for _, step := range review.Prompts {
+		if strings.Contains(step.Prompt, key) {
+			return "", errors.New("remove the provider API key from the brief or plan before sending")
+		}
+	}
 	return key, nil
 }
 
@@ -211,6 +216,9 @@ func DraftComponents(ctx context.Context, input PlanRequest, generate BudgetedGe
 		source, err := generate(ctx, draft.Provider, draft.Model, key, step.Prompt, step.MaxOutputTokens)
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", step.Title, err)
+		}
+		if strings.Contains(source, key) {
+			return "", errors.New("the provider returned credential material while drafting the plan")
 		}
 		return strings.TrimSpace(source), nil
 	}
@@ -258,7 +266,16 @@ func DraftComponents(ctx context.Context, input PlanRequest, generate BudgetedGe
 	if decoder.Decode(&plan) != nil || decoder.Decode(new(any)) != io.EOF {
 		return PlanReview{}, errors.New("the model returned an unreadable component plan")
 	}
-	return reviewComponents(draft, &plan)
+	result, err := reviewComponents(draft, &plan)
+	if err != nil {
+		return PlanReview{}, err
+	}
+	for _, step := range result.Prompts {
+		if strings.Contains(step.Prompt, key) {
+			return PlanReview{}, errors.New("the provider returned credential material in the component plan")
+		}
+	}
+	return result, nil
 }
 
 func validPlanText(text string, maxBytes int) bool {
@@ -341,6 +358,9 @@ func CreatePlanned(ctx context.Context, parent string, input PlanRequest, genera
 		source, err := generate(ctx, draft.Provider, draft.Model, key, step.Prompt, step.MaxOutputTokens)
 		if err != nil {
 			return project.Info{}, fmt.Errorf("component %d of %d (%s): %w", i+1, review.RequestCount, step.Title, err)
+		}
+		if strings.Contains(source, key) {
+			return project.Info{}, fmt.Errorf("component %d of %d returned credential material", i+1, review.RequestCount)
 		}
 		source = strings.TrimSpace(source)
 		if !validPlanText(source, 128*1024) || !validComponentSource(draft.Format, i, source, review.Prompts) {
