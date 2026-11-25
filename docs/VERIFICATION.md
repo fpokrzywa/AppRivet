@@ -1,5 +1,9 @@
 # Verification record
 
+## AppRivet 0.4.14 release
+
+All six CI jobs passed on the 0.4.14 release commit. Apple accepted the Mac app and disk image, and the notarized app passed its Simulator smoke test. The public downloads matched the staged packages by SHA-256, and the updater archive verified against AppRivet's public update key. The native review dialog and a live provider run with the watchmaker brief remain personal Mac checks. [Release CI](https://github.com/fpokrzywa/AppRivet/actions/runs/45718521873) and [notarized release check](https://github.com/fpokrzywa/AppRivet/actions/runs/45718543017).
+
 ## Staged review and resumable generation
 
 Chrome exercised the real review dialog and local API with a fixture provider. It showed named stages and an open question, carried the user's clarification into a revised plan, and sent code under one plan approval. A failure in the second component left the first component saved. Reopening the review recovered the approved plan and its progress. Resuming called the failed component again and assembled the finished project without regenerating the first component. Tests also check approval changes, stage counts, credential exclusion and duplicate concurrent requests. Focused tests passed on Windows, Linux and macOS. Hosted macOS packaged both architecture slices. A live provider run and a visual check of the native dialog on an installed Mac still need validation. [Focused staged generation checks](https://github.com/fpokrzywa/AppRivet/actions/runs/45716086564)
