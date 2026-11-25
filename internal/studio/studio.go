@@ -20,6 +20,7 @@ import (
 	"github.com/fpokrzywa/AppRivet/internal/credentials"
 	"github.com/fpokrzywa/AppRivet/internal/generation"
 	"github.com/fpokrzywa/AppRivet/internal/project"
+	"github.com/fpokrzywa/AppRivet/internal/storeconnect"
 )
 
 //go:embed ui/index.html ui/studio.css ui/studio.js ui/apprivet-mark-light.png ui/apprivet-mark-dark.png
@@ -34,6 +35,7 @@ type Config struct {
 	Generate         generation.SourceGenerator
 	GenerateBudgeted generation.BudgetedGenerator
 	Vault            credentials.Vault
+	PublishStore     *storeconnect.Store
 }
 
 type state struct {
@@ -283,6 +285,7 @@ func Handler(config Config) http.Handler {
 		}
 		return filepath.Join(config.Workspace, name), nil
 	}
+	registerPublishHandlers(mux, config, projectPath)
 	openProject := func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Name string `json:"name"`

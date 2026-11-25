@@ -47,6 +47,20 @@ Generated app modules are named `AppRivet_<ProjectName>` to avoid Swift keyword 
 
 `devices` performs read-only local discovery on a Mac. Default: CoreDevice inventory through devicectl, including remembered or disconnected records. `--simulators` selects simctl instead. `--from-json FILE` inspects the selected format offline on any host and marks `live: false`, `source: "file"`. Discovery timeout defaults to 30s, with a 5m maximum. Tool failure is never represented as an empty successful list. Unknown connectivity, pairing and developer-mode values remain unknown; discovery does not authorize installation. See [device contract, limits and live matrix](DEVICES.md).
 
+## Store release builds
+
+`apprivet publish <action> --json` reads one JSON object from stdin. The desktop app uses this command behind **Build for Store**.
+
+| Action | Request fields |
+| --- | --- |
+| `settings` | Empty object |
+| `save-settings` | `apple_team_id`, `apple_issuer_id`, `apple_key_id`, `android_upload_certificate_sha256` |
+| `build` | `project`, `platform` (iOS or Android as `ios` or `android`), `trusted` |
+| `history` | `project` |
+| `connection` | `store` (`apple` or `google`), with `apple_private_key` or `google_service_account` supplied from the credential store |
+
+Store builds use the configured local signing tools and require explicit project trust. Results include `platform`, `artifact`, `sha256`, and byte `size`. The connection action checks authentication separately from the build. [Signing prerequisites](DESKTOP.md#build-for-store)
+
 ## JSON for coding agents
 
 `snapshot create` packages explicitly listed files without executing them. `snapshot inspect` verifies without extraction. `snapshot extract` requires `--expect-sha256` and a new `--destination`, verifies a stable bounded copy and materializes only regular files. JSON extraction data contains `destination` and `snapshot`; the envelope's command remains `snapshot`. All work on every CLI host. Existing outputs are never overwritten or merged. See [snapshot format, errors, storage prerequisites and limits](SNAPSHOTS.md). Integrity does not authorize execution, signing or device operations, and does not prove a complete build input.

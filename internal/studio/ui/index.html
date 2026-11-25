@@ -12,13 +12,13 @@
       <div class="brand"><img id="brand-mark" class="brand-mark" src="/apprivet-mark-light.png" alt=""><span>AppRivet</span></div>
       <nav class="top-actions" aria-label="Workspace">
         <button id="go-projects" type="button" class="quiet">Your projects</button>
-        <button id="open-admin" type="button" class="quiet" disabled>Admin</button>
+        <button id="open-admin" type="button" class="quiet" disabled>Settings</button>
         <button id="quit" type="button" class="quiet" disabled>Quit</button>
       </nav>
     </div>
   </header>
   <main class="shell">
-    <section class="intro" aria-labelledby="create-heading">
+    <section id="create-intro" class="intro" aria-labelledby="create-heading">
       <h1 id="create-heading">What app do you<br class="wide-break"> want to build?</h1>
       <p>Describe your app and choose the platforms it should run on.</p>
     </section>
@@ -98,6 +98,35 @@
           </div>
         </fieldset>
       </form>
+      <section id="publish-panel" class="panel publish-panel" aria-labelledby="publish-heading" hidden>
+        <div class="publish-header">
+          <h1 id="publish-heading" tabindex="-1">Publish</h1>
+          <button id="close-publish" class="quiet" type="button">Back to project</button>
+        </div>
+        <p class="publish-description">Build a signed release locally, then upload the artifact yourself in the store console.</p>
+        <fieldset id="publish-build-fields">
+          <label for="publish-platform">Store target</label>
+          <select id="publish-platform" aria-describedby="publish-target-help"></select>
+          <p id="publish-target-help" class="field-help"></p>
+          <p id="publish-unavailable" class="field-help"></p>
+          <div id="publish-checklist" hidden>
+            <h2>Before you build</h2>
+            <ol id="publish-steps"></ol>
+            <label class="trust-project"><input id="trust-publish" type="checkbox"> I have reviewed this project and trust its build scripts.</label>
+          </div>
+          <p id="publish-readiness" class="field-help" role="status"></p>
+          <div class="publish-actions">
+            <button id="build-for-store" class="primary" type="button" disabled>Build for Store</button>
+            <button id="publish-open-settings" class="quiet" type="button">Store connection settings</button>
+          </div>
+        </fieldset>
+        <p id="publish-status" class="message" role="status"></p>
+        <section class="publish-outputs" aria-labelledby="publish-artifacts-heading">
+          <h2 id="publish-artifacts-heading">Signed artifacts</h2>
+          <p id="publish-history-status" class="field-help" role="status"></p>
+          <ul id="publish-artifacts"></ul>
+        </section>
+      </section>
       <aside class="sidebar" aria-label="Starter and project information">
         <section id="starter-panel" class="starter-panel panel" aria-labelledby="starter-heading" hidden>
           <h2 id="starter-heading">Project output</h2>
@@ -127,7 +156,10 @@
   </main>
   <dialog id="admin" class="panel dialog" aria-labelledby="admin-heading">
     <form id="admin-form">
-      <h2 id="admin-heading">Admin</h2>
+      <div class="settings-header">
+        <h2 id="admin-heading">Settings</h2>
+        <button id="admin-open-stores" class="quiet" type="button">Store connections</button>
+      </div>
       <p id="credential-storage" class="dialog-info"></p>
       <fieldset id="admin-fields">
         <div class="appearance-field">
@@ -170,6 +202,58 @@
           <button class="primary" type="submit">Save settings</button>
         </div>
       </fieldset>
+    </form>
+  </dialog>
+  <dialog id="store-settings" class="panel dialog" aria-labelledby="store-settings-heading">
+    <form id="store-settings-form">
+      <h2 id="store-settings-heading" tabindex="-1">Store connections</h2>
+      <p id="store-credential-storage" class="dialog-info"></p>
+      <fieldset id="store-settings-fields" disabled>
+        <section class="store-settings-section" aria-labelledby="store-apple-heading">
+          <h3 id="store-apple-heading">App Store Connect</h3>
+          <div class="dialog-fields">
+            <div>
+              <label for="apple-team-id">Apple Team ID</label>
+              <input id="apple-team-id" maxlength="10" autocomplete="off" spellcheck="false">
+            </div>
+            <div>
+              <label for="apple-key-id">API Key ID</label>
+              <input id="apple-key-id" maxlength="10" autocomplete="off" spellcheck="false">
+            </div>
+          </div>
+          <label for="apple-issuer-id">Issuer ID</label>
+          <input id="apple-issuer-id" maxlength="36" autocomplete="off" spellcheck="false" aria-describedby="apple-issuer-help">
+          <p id="apple-issuer-help" class="field-help">Required for a team API key. Leave blank for an individual API key.</p>
+          <div class="store-file">
+            <label for="apple-private-key">Import API key (.p8)</label>
+            <input id="apple-private-key" type="file" accept=".p8" autocomplete="off" aria-describedby="apple-credential-status">
+            <p id="apple-credential-status" class="field-help"></p>
+          </div>
+          <label id="remove-apple-setting" class="trust-project" hidden><input id="remove-apple-key" type="checkbox"> Remove saved Apple key on save</label>
+          <button id="test-apple-connection" class="quiet" type="button" disabled>Test App Store Connect</button>
+          <p id="apple-connection-status" class="message" role="status"></p>
+        </section>
+        <section class="store-settings-section" aria-labelledby="store-google-heading">
+          <h3 id="store-google-heading">Google Play</h3>
+          <label for="android-upload-certificate">Upload certificate SHA-256</label>
+          <input id="android-upload-certificate" maxlength="95" autocomplete="off" spellcheck="false" aria-describedby="android-certificate-help">
+          <p id="android-certificate-help" class="field-help">Use the upload key certificate fingerprint from Play Console under App integrity.</p>
+          <div class="store-file">
+            <label for="google-service-account">Import service account key (.json)</label>
+            <input id="google-service-account" type="file" accept=".json" autocomplete="off" aria-describedby="google-credential-status">
+            <p id="google-credential-status" class="field-help"></p>
+          </div>
+          <label id="remove-google-setting" class="trust-project" hidden><input id="remove-google-key" type="checkbox"> Remove saved Google key on save</label>
+          <button id="test-google-connection" class="quiet" type="button" disabled>Test Google Play connection</button>
+          <p class="field-help">The test checks Google authentication. Manage app access in Play Console.</p>
+          <p id="google-connection-status" class="message" role="status"></p>
+        </section>
+      </fieldset>
+      <p id="store-settings-status" class="message" role="status"></p>
+      <div class="dialog-actions">
+        <button id="close-store-settings" class="quiet" type="button">Close</button>
+        <button id="save-store-settings" class="primary" type="submit" disabled>Save store settings</button>
+      </div>
     </form>
   </dialog>
   <dialog id="prompt-review" class="panel dialog" aria-labelledby="review-heading">

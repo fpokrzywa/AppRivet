@@ -50,11 +50,61 @@ let preferComponentPlan = false;
 let credentialStorage = false;
 let savedKeys = new Set();
 let vaultRevision = 0;
+const publishPanel = byID("publish-panel");
+const publishPlatform = byID("publish-platform");
+const publishArtifacts = byID("publish-artifacts");
+const trustPublish = byID("trust-publish");
+const buildForStore = byID("build-for-store");
+const publishStatus = byID("publish-status");
+const publishHistoryStatus = byID("publish-history-status");
+const storeSettings = byID("store-settings");
+const storeSettingsFields = byID("store-settings-fields");
+const storeSettingsStatus = byID("store-settings-status");
+const storeMetadata = {
+  apple_team_id: byID("apple-team-id"),
+  apple_issuer_id: byID("apple-issuer-id"),
+  apple_key_id: byID("apple-key-id"),
+  android_upload_certificate_sha256: byID("android-upload-certificate"),
+};
+const storeFiles = {
+  apple: {input: byID("apple-private-key"), key: "apple_private_key", extension: /\.p8$/i, maxBytes: 8 * 1024},
+  google: {input: byID("google-service-account"), key: "google_service_account", extension: /\.json$/i, maxBytes: 24 * 1024},
+};
+let publishProject;
+let publishing = false;
+let savedStoreSettings;
+let storeSettingsBusy = false;
 
 const singlePromptBriefBytes = 4096;
 const briefEncoder = new TextEncoder();
 const platformNames = {ios: "iOS", android: "Android", web: "Web", windows: "Windows", macos: "macOS", linux: "Linux"};
 const formatNames = {flutter: "Flutter (shared code)", swiftui: "SwiftUI (native iOS)"};
+const storeTargets = {
+  android: {
+    label: "Google Play (Android)",
+    output: "Signed Android App Bundle (.aab)",
+    setting: "android_upload_certificate_sha256",
+    missing: "Save your upload certificate SHA-256 in Store connection settings.",
+    steps: [
+      "Install Flutter and the Android SDK on this computer.",
+      "Set up Play App Signing and configure the project’s Android release build to use your upload keystore.",
+      "Save the SHA-256 fingerprint of that upload certificate in Store connection settings.",
+      "Build the signed .aab, then upload it to a release in Play Console.",
+    ],
+  },
+  ios: {
+    label: "App Store (iOS)",
+    output: "Signed iOS archive export (.ipa)",
+    setting: "apple_team_id",
+    missing: "Save your Apple Team ID in Store connection settings.",
+    steps: [
+      "Open the project on a Mac with Xcode. For Flutter projects, install Flutter on that Mac too.",
+      "Configure App Store distribution signing for the app target in Xcode and make the certificate and provisioning profile available.",
+      "Save the Apple Team ID for that signing team in Store connection settings.",
+      "Build the signed .ipa, then upload it to App Store Connect with Transporter.",
+    ],
+  },
+};
 
 const providers = {
   openai: {name: "OpenAI", models: [["gpt-6.2-sol", "GPT-6.2 Sol"], ["gpt-6.2-astra", "GPT-6.2 Astra"]]},
@@ -119,7 +169,7 @@ function updateBrief() {
     : "On your Mac, open the project in AppRivet and choose Build & Run.";
   const settings = profiles[activeProvider];
   byID("selected-model").textContent = ai
-    ? providers[activeProvider].name + " · " + settings.model + (hasProviderKey(activeProvider) ? "" : " · Add a key in Admin")
+    ? providers[activeProvider].name + " · " + settings.model + (hasProviderKey(activeProvider) ? "" : " · Add a key in Settings")
     : "";
 }
 
@@ -164,6 +214,8 @@ function updateLoadedProject() {
 }
 
 async function reopenProject(name) {
+  if (publishing) return;
+  closePublish();
   const sequence = ++openSequence;
   show(message, "Reopening " + name + "…");
   try {
@@ -203,7 +255,7 @@ async function request(path, body) {
   const headers = {"X-AppRivet-Session": session};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const response = await fetch(path, {
-    method: path === "/api/state" ? "GET" : "POST",
+    method: path === "/api/state" || (path === "/api/publish/settings" && body === undefined) ? "GET" : "POST",
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -231,6 +283,8 @@ async function refresh() {
   const rows = document.createDocumentFragment();
   for (const name of state.projects) {
     const row = document.createElement("li");
+    const rowHeader = document.createElement("div");
+    rowHeader.className = "project-row-header";
     const open = document.createElement("button");
     open.className = "project-name";
     open.type = "button";
@@ -238,8 +292,18 @@ async function refresh() {
     open.textContent = name;
     open.setAttribute("aria-current", String(name === loadedProject));
     open.addEventListener("click", () => reopenProject(name));
-    row.append(open);
     const flutter = state.flutter_projects.find(project => project.name === name);
+    const publish = document.createElement("button");
+    publish.className = "quiet";
+    publish.type = "button";
+    publish.dataset.publishProject = name;
+    publish.textContent = "Publish";
+    publish.setAttribute("aria-label", "Publish " + name);
+    publish.setAttribute("aria-controls", "publish-panel");
+    publish.setAttribute("aria-expanded", String(publishProject?.name === name));
+    publish.addEventListener("click", () => openPublish(name, flutter));
+    rowHeader.append(open, publish);
+    row.append(rowHeader);
     if (flutter) {
       const targets = document.createElement("p");
       targets.className = "field-help";
@@ -272,6 +336,7 @@ const closeBuild = byID("close-build");
 const buildStatus = byID("build-status");
 
 function openBuild(name, target) {
+  if (publishing) return;
   buildSelection = {name, target};
   trusted.checked = false;
   confirmedTrust();
@@ -323,6 +388,291 @@ async function readTextFile(file, extension, maxBytes) {
     throw new Error("Choose a file saved as UTF-8 plain text.");
   }
 }
+
+function updatePublishButtons() {
+  for (const button of projects.querySelectorAll("[data-publish-project]")) {
+    button.setAttribute("aria-expanded", String(button.dataset.publishProject === publishProject?.name));
+    button.disabled = publishing;
+  }
+  byID("close-publish").disabled = publishing;
+}
+
+function closePublish() {
+  if (!publishProject) return;
+  publishProject = undefined;
+  publishPanel.hidden = true;
+  form.hidden = byID("create-intro").hidden = false;
+  updatePublishButtons();
+}
+
+function showPublishTarget() {
+  if (!publishProject) return;
+  const target = storeTargets[publishPlatform.value];
+  const steps = target?.steps.map(text => {
+    const step = document.createElement("li");
+    step.textContent = text;
+    return step;
+  }) ?? [];
+  byID("publish-steps").replaceChildren(...steps);
+  byID("publish-checklist").hidden = !target;
+  byID("publish-target-help").textContent = target?.output ?? "";
+  const setting = target && publishProject.settings?.[target.setting];
+  const readiness = !target || setting ? "" : publishProject.settings ? target.missing
+    : publishProject.settingsFailed ? "Open Store connection settings to load your signing settings."
+    : "Checking store signing settings…";
+  show(byID("publish-readiness"), readiness, publishProject.settingsFailed);
+  buildForStore.disabled = !setting || !trustPublish.checked || publishing;
+}
+
+function showArtifacts(selection) {
+  const rows = selection.artifacts.map(artifact => {
+    const row = document.createElement("li");
+    const name = document.createElement("strong");
+    name.textContent = artifact.artifact.split(/[\\/]/).at(-1);
+    const details = document.createElement("p");
+    details.className = "field-help";
+    details.textContent = platformNames[artifact.platform] + " / " + artifact.size.toLocaleString() + " bytes";
+    const checksum = document.createElement("p");
+    checksum.className = "field-help artifact-checksum";
+    checksum.textContent = "SHA-256 " + artifact.sha256;
+    const reveal = document.createElement("button");
+    reveal.type = "button";
+    reveal.className = "quiet";
+    reveal.textContent = "Open artifact folder";
+    reveal.setAttribute("aria-label", "Open artifact folder for " + name.textContent);
+    reveal.addEventListener("click", async () => {
+      reveal.disabled = true;
+      show(publishHistoryStatus, "");
+      try {
+        await request("/api/publish/open-artifact", {name: selection.name, sha256: artifact.sha256});
+      } catch (error) {
+        if (publishProject === selection) show(publishHistoryStatus, error.message, true);
+      } finally {
+        reveal.disabled = false;
+      }
+    });
+    row.append(name, details, checksum, reveal);
+    return row;
+  });
+  publishArtifacts.replaceChildren(...rows);
+  show(publishHistoryStatus, rows.length ? "" : "Signed releases you build will appear here.");
+}
+
+async function loadPublishHistory(selection) {
+  try {
+    const artifacts = await request("/api/publish/history", {name: selection.name});
+    if (publishProject !== selection) return;
+    const known = new Set(selection.artifacts.map(artifact => artifact.sha256));
+    selection.artifacts.push(...(artifacts ?? []).filter(artifact => !known.has(artifact.sha256)));
+    showArtifacts(selection);
+  } catch (error) {
+    if (publishProject === selection && !selection.artifacts.length) show(publishHistoryStatus, error.message, true);
+  }
+}
+
+async function loadPublishSettings(selection) {
+  try {
+    const settings = await request("/api/publish/settings");
+    if (publishProject !== selection || selection.settings) return;
+    selection.settings = settings;
+  } catch {
+    if (publishProject !== selection || selection.settings) return;
+    selection.settingsFailed = true;
+  }
+  showPublishTarget();
+}
+
+function openPublish(name, flutter) {
+  if (publishing) return;
+  if (publishProject?.name === name) {
+    closePublish();
+    return;
+  }
+  openSequence++;
+  const selection = {name, artifacts: []};
+  const options = [];
+  const unavailable = [];
+  const mac = availableFormats.includes("swiftui");
+  if (flutter?.platforms.includes("android")) {
+    if (flutterSDK && flutter.build_targets.includes("android")) {
+      options.push(new Option(storeTargets.android.label, "android"));
+    } else {
+      unavailable.push("Install the Flutter SDK and reopen AppRivet to build for Google Play.");
+    }
+  }
+  if (!flutter || flutter.platforms.includes("ios")) {
+    if (!mac) {
+      unavailable.push("Open this project on a Mac with Xcode to sign for the App Store.");
+    } else if (!flutter || (flutterSDK && flutter.build_targets.includes("ios"))) {
+      options.push(new Option(storeTargets.ios.label, "ios"));
+    } else {
+      unavailable.push("Install the Flutter SDK and reopen AppRivet to build for the App Store.");
+    }
+  }
+  if (!options.length && !unavailable.length) unavailable.push("This project needs an Android or iOS target for a store build.");
+  publishProject = selection;
+  publishPlatform.replaceChildren(...(options.length ? options : [new Option("No store target available", "")]));
+  publishPlatform.disabled = !options.length;
+  trustPublish.checked = false;
+  form.hidden = byID("create-intro").hidden = true;
+  publishPanel.hidden = false;
+  const heading = byID("publish-heading");
+  heading.textContent = "Publish " + name;
+  byID("publish-unavailable").textContent = unavailable.join(" ");
+  show(publishStatus, "");
+  publishArtifacts.replaceChildren();
+  show(publishHistoryStatus, "Loading signed artifacts…");
+  updatePublishButtons();
+  showPublishTarget();
+  heading.focus();
+  void loadPublishHistory(selection);
+  if (options.length) void loadPublishSettings(selection);
+}
+
+byID("close-publish").addEventListener("click", () => {
+  if (publishProject) void reopenProject(publishProject.name);
+});
+publishPlatform.addEventListener("change", () => {
+  trustPublish.checked = false;
+  show(publishStatus, "");
+  showPublishTarget();
+});
+trustPublish.addEventListener("change", showPublishTarget);
+buildForStore.addEventListener("click", async () => {
+  if (buildForStore.disabled || !publishProject) return;
+  const selection = publishProject;
+  const platform = publishPlatform.value;
+  publishing = true;
+  byID("publish-build-fields").disabled = true;
+  updatePublishButtons();
+  showPublishTarget();
+  show(publishStatus, "Building the signed " + platformNames[platform] + " release locally…");
+  try {
+    const artifact = await request("/api/publish/build", {name: selection.name, platform, trusted: true});
+    selection.artifacts = [artifact, ...selection.artifacts.filter(item => item.sha256 !== artifact.sha256)];
+    showArtifacts(selection);
+    show(publishStatus, "Signed release ready. Open its folder when you’re ready to upload it.");
+  } catch (error) {
+    show(publishStatus, error.message, true);
+  } finally {
+    publishing = false;
+    byID("publish-build-fields").disabled = false;
+    updatePublishButtons();
+    showPublishTarget();
+  }
+});
+
+function updateStoreControls() {
+  const ready = Boolean(savedStoreSettings) && !storeSettingsBusy;
+  storeSettingsFields.disabled = !ready;
+  byID("save-store-settings").disabled = !ready;
+  byID("close-store-settings").disabled = storeSettingsBusy;
+  for (const [store, {input}] of Object.entries(storeFiles)) {
+    const hasKey = Boolean(savedStoreSettings?.["has_" + store + "_key"]);
+    const canStore = Boolean(savedStoreSettings?.credential_storage);
+    input.disabled = !canStore;
+    byID("remove-" + store + "-setting").hidden = !canStore || !hasKey;
+    byID("test-" + store + "-connection").disabled = !canStore || !hasKey || (store === "apple" && !savedStoreSettings.apple_key_id);
+    byID(store + "-credential-status").textContent = hasKey ? "Key saved. Choose a file to replace it." : "No key saved.";
+  }
+}
+
+function showStoreSettings(settings) {
+  savedStoreSettings = settings;
+  for (const [key, input] of Object.entries(storeMetadata)) input.value = settings[key] ?? "";
+  for (const [store, {input}] of Object.entries(storeFiles)) {
+    input.value = "";
+    byID("remove-" + store + "-key").checked = false;
+    show(byID(store + "-connection-status"), "");
+  }
+  byID("store-credential-storage").textContent = settings.credential_storage
+    ? "AppRivet stores imported keys in your operating system’s credential vault. Connection tests use saved credentials."
+    : "Protected credential storage is unavailable. You can still save identifiers for local signing.";
+  if (publishProject) {
+    publishProject.settings = settings;
+    publishProject.settingsFailed = false;
+    showPublishTarget();
+  }
+  updateStoreControls();
+}
+
+async function openStoreSettings(fromAdmin) {
+  if (storeSettingsBusy || storeSettings.open || (fromAdmin && adminFields.disabled)) return;
+  byID("close-store-settings").textContent = fromAdmin ? "Back to Settings" : "Close";
+  savedStoreSettings = undefined;
+  storeSettingsBusy = true;
+  byID("store-credential-storage").textContent = "";
+  storeSettingsFields.hidden = true;
+  updateStoreControls();
+  show(storeSettingsStatus, "Loading store settings…");
+  storeSettings.showModal();
+  byID("store-settings-heading").focus();
+  try {
+    showStoreSettings(await request("/api/publish/settings"));
+    storeSettingsFields.hidden = false;
+    show(storeSettingsStatus, "");
+  } catch (error) {
+    show(storeSettingsStatus, error.message, true);
+  } finally {
+    storeSettingsBusy = false;
+    updateStoreControls();
+  }
+}
+
+byID("admin-open-stores").addEventListener("click", () => openStoreSettings(true));
+byID("publish-open-settings").addEventListener("click", () => openStoreSettings(false));
+byID("close-store-settings").addEventListener("click", () => storeSettings.close());
+storeSettings.addEventListener("cancel", event => { if (storeSettingsBusy) event.preventDefault(); });
+storeSettings.addEventListener("close", () => {
+  for (const {input} of Object.values(storeFiles)) input.value = "";
+});
+
+for (const [store, {input}] of Object.entries(storeFiles)) {
+  const remove = byID("remove-" + store + "-key");
+  input.addEventListener("change", () => { if (input.files.length) remove.checked = false; });
+  remove.addEventListener("change", () => { if (remove.checked) input.value = ""; });
+  byID("test-" + store + "-connection").addEventListener("click", async () => {
+    if (storeSettingsBusy) return;
+    const status = byID(store + "-connection-status");
+    storeSettingsBusy = true;
+    updateStoreControls();
+    show(status, "Testing saved credentials…");
+    try {
+      const result = await request("/api/publish/connection", {store});
+      show(status, result.message);
+    } catch (error) {
+      show(status, error.message, true);
+    } finally {
+      storeSettingsBusy = false;
+      updateStoreControls();
+    }
+  });
+}
+
+byID("store-settings-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (storeSettingsBusy || !savedStoreSettings) return;
+  storeSettingsBusy = true;
+  updateStoreControls();
+  show(storeSettingsStatus, "Saving store settings…");
+  const body = Object.fromEntries(Object.entries(storeMetadata).map(([key, input]) => [key, input.value.trim()]));
+  try {
+    if (savedStoreSettings.credential_storage) {
+      for (const [store, {input, key, extension, maxBytes}] of Object.entries(storeFiles)) {
+        if (input.files[0]) body[key] = await readTextFile(input.files[0], extension, maxBytes);
+        if (byID("remove-" + store + "-key").checked) body["remove_" + store + "_key"] = true;
+      }
+    }
+    showStoreSettings(await request("/api/publish/settings", body));
+    show(storeSettingsStatus, "Store settings saved.");
+  } catch (error) {
+    show(storeSettingsStatus, error.message, true);
+  } finally {
+    for (const {input} of Object.values(storeFiles)) input.value = "";
+    storeSettingsBusy = false;
+    updateStoreControls();
+  }
+});
 
 watchFile(byID("import-brief"), byID("brief-file"), async file => {
   try {
@@ -559,7 +909,7 @@ form.addEventListener("submit", async event => {
         + "). Approval sends " + (staged ? "the requests for this step" : "this prompt") + " using your API account."
       : (isFlutter ? "Local Flutter starter." : "Local project · " + starters[draft.starter][0] + " starter.")) + platforms;
     const blocker = isFlutter && !flutterSDK ? "Install the Flutter SDK before creating this project."
-      : ai && !hasProviderKey(project.provider) ? "Add a key for this provider in Admin before sending." : "";
+      : ai && !hasProviderKey(project.provider) ? "Add a key for this provider in Settings before sending." : "";
     confirmCreate.disabled = Boolean(blocker);
     show(reviewStatus, blocker, confirmCreate.disabled);
     show(message, "");

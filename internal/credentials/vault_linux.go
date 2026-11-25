@@ -36,7 +36,7 @@ func NewVault() Vault {
 }
 
 func (v secretTool) Get(provider string) (string, error) {
-	if !ValidProvider(provider) {
+	if !validSlot(provider) {
 		return "", errProvider
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -49,10 +49,10 @@ func (v secretTool) Get(provider string) (string, error) {
 }
 
 func (v secretTool) Save(provider, key string) error {
-	if !ValidProvider(provider) {
+	if !validSlot(provider) {
 		return errProvider
 	}
-	if !ValidKey(key) {
+	if !validStoredValue(provider, key) {
 		return errKey
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -62,7 +62,7 @@ func (v secretTool) Save(provider, key string) error {
 }
 
 func (v secretTool) Remove(provider string) error {
-	if !ValidProvider(provider) {
+	if !validSlot(provider) {
 		return errProvider
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -94,7 +94,7 @@ func (v secretTool) run(ctx context.Context, provider, key string, args ...strin
 		}
 		return "", errSecretService
 	}
-	if len(bytes.TrimSuffix(output, []byte("\n"))) > maxKeyBytes {
+	if len(bytes.TrimSuffix(output, []byte("\n"))) > slotSize(provider) {
 		return "", errKey
 	}
 	return string(output), nil

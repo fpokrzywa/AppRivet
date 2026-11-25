@@ -79,6 +79,61 @@ private enum ProviderKeychain {
     }
 }
 
+private enum PublishingKeychain {
+    private static func attributes(for store: DesktopStore) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: "io.github.fpokrzywa.apprivet.desktop.publishing",
+         kSecAttrAccount as String: store.rawValue]
+    }
+
+    static func contains(_ store: DesktopStore) throws -> Bool {
+        var query = attributes(for: store)
+        query[kSecReturnAttributes as String] = true
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return false }
+        try check(status, action: "find", store: store)
+        return true
+    }
+
+    static func read(_ store: DesktopStore) throws -> Data {
+        var query = attributes(for: store)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        try check(status, action: "read", store: store)
+        guard let data = result as? Data else {
+            throw DesktopFailure(message: "Replace the unreadable \(store.label) credential in Store Connections.")
+        }
+        return data
+    }
+
+    static func save(_ data: Data, for store: DesktopStore) throws {
+        let query = attributes(for: store)
+        var item = query
+        item[kSecValueData as String] = data
+        item[kSecAttrLabel as String] = "AppRivet \(store.label) credential"
+        var status = SecItemAdd(item as CFDictionary, nil)
+        if status == errSecDuplicateItem {
+            status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        }
+        try check(status, action: "save", store: store)
+    }
+
+    static func remove(_ store: DesktopStore) throws {
+        let status = SecItemDelete(attributes(for: store) as CFDictionary)
+        if status != errSecItemNotFound { try check(status, action: "remove", store: store) }
+    }
+
+    private static func check(_ status: OSStatus, action: String, store: DesktopStore) throws {
+        guard status == errSecSuccess else {
+            let reason = SecCopyErrorMessageString(status, nil) as String? ?? "Error \(status)."
+            throw DesktopFailure(message: "Could not \(action) the \(store.label) credential in macOS Keychain. \(reason)")
+        }
+    }
+}
+
 private let appPlatforms: [(id: String, label: String)] = [
     ("ios", "iOS"), ("android", "Android"), ("web", "Web"),
     ("windows", "Windows"), ("macos", "macOS"), ("linux", "Linux"),
@@ -139,7 +194,7 @@ private func chooseTextFile(title: String, extensions: [String], message: String
     return panel.url
 }
 
-private func readTextFile(_ url: URL, extensions: [String], maxBytes: Int? = nil) throws -> String {
+private func readFile(_ url: URL, extensions: [String], maxBytes: Int? = nil) throws -> Data {
     let values = try url.resourceValues(forKeys: [.isRegularFileKey])
     guard values.isRegularFile == true, extensions.contains(url.pathExtension.lowercased()) else {
         throw DesktopFailure(message: "Choose a file in a supported format.")
@@ -153,11 +208,36 @@ private func readTextFile(_ url: URL, extensions: [String], maxBytes: Int? = nil
     } else {
         bytes = try file.readToEnd() ?? Data()
     }
+    return bytes
+}
+
+private func readTextFile(_ url: URL, extensions: [String], maxBytes: Int? = nil) throws -> String {
+    let bytes = try readFile(url, extensions: extensions, maxBytes: maxBytes)
     guard var text = String(data: bytes, encoding: .utf8) else {
         throw DesktopFailure(message: "Choose a file saved as UTF-8 plain text.")
     }
     if text.hasPrefix("\u{feff}") { text.removeFirst() }
     return text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+}
+
+private func importStoreCredential(_ file: URL, store: DesktopStore) throws {
+    let maxBytes = (store == .apple ? 8 : 24) * 1024
+    let data = try readFile(file, extensions: [store.credentialExtension], maxBytes: maxBytes)
+    let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    switch store {
+    case .apple:
+        guard let text, text.hasPrefix("-----BEGIN PRIVATE KEY-----"), text.hasSuffix("-----END PRIVATE KEY-----") else {
+            throw DesktopFailure(message: "Choose an App Store Connect API private key in a .p8 file.")
+        }
+    case .google:
+        let account = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        guard text != nil, account?["type"] as? String == "service_account",
+              let email = account?["client_email"] as? String, !email.isEmpty,
+              let privateKey = account?["private_key"] as? String, !privateKey.isEmpty else {
+            throw DesktopFailure(message: "Choose a Google service account key in a .json file.")
+        }
+    }
+    try PublishingKeychain.save(data, for: store)
 }
 
 private func importBrief(_ url: URL) throws -> String {
@@ -236,6 +316,11 @@ struct AppRivetDesktop: App {
             guard opened.settings.brief == brief, opened.settings.bundleID == "org.example.apprivetdesktop",
                   opened.settings.starter == "auto" else {
                 throw DesktopFailure(message: "The saved project form did not restore the original settings.")
+            }
+            Self.smokeProgress("Checking the store publishing workspace…")
+            _ = try workflow.publishingSettings()
+            guard try workflow.storeBuildHistory(project: project).isEmpty else {
+                throw DesktopFailure(message: "A new project unexpectedly has a release build history.")
             }
             Self.smokeProgress("Checking Flutter project reopening and Web preview…")
             try Self.smokeWebPreviewAndReopen(workflow, parent: parent)
@@ -345,6 +430,7 @@ private final class DesktopModel: ObservableObject {
     @Published private(set) var loadingProviderKeys = false
     @Published private(set) var keychainErrors: [AIProvider: String] = [:]
     @Published private(set) var project: DesktopProject?
+    @Published private(set) var projectSelectionID = UUID()
     @Published private(set) var simulators: [DesktopSimulator] = []
     @Published private(set) var loadingSimulators = false
     @Published private(set) var simulatorMessage = "No iOS simulators available"
@@ -353,6 +439,9 @@ private final class DesktopModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var log = ""
     @Published private(set) var completedBuild: CompletedBuild?
+    @Published private(set) var storeHistory: [DesktopStoreBuild] = []
+    @Published private(set) var loadingStoreHistory = false
+    @Published private(set) var storeHistoryError: String?
     private var webPreview: DesktopWebPreview?
     private let preferences: UserDefaults
 
@@ -386,6 +475,10 @@ private final class DesktopModel: ObservableObject {
     var canRun: Bool {
         guard project != nil, trusted, !isFlutterProject || flutterAvailable else { return false }
         return isFlutterProject && buildTarget != "ios" ? localTargets.contains(buildTarget) : selectedSimulator != nil
+    }
+    var storeTargets: [String] {
+        guard let project else { return [] }
+        return project.kind == "xcode-project" ? ["ios"] : localTargets.filter { $0 == "ios" || $0 == "android" }
     }
 
     func chooseBrief() {
@@ -563,8 +656,12 @@ private final class DesktopModel: ObservableObject {
 
     private func selectProject(_ project: DesktopProject) {
         self.project = project
+        projectSelectionID = UUID()
         trusted = false
         completedBuild = nil
+        storeHistory = []
+        loadingStoreHistory = false
+        storeHistoryError = nil
         webPreview = nil
         if isFlutterProject {
             buildTarget = localTargets.contains("web") ? "web" : localTargets.first ?? ""
@@ -626,6 +723,39 @@ private final class DesktopModel: ObservableObject {
         }
     }
 
+    func loadStoreHistory() {
+        guard let project, !loadingStoreHistory else { return }
+        let selection = projectSelectionID
+        loadingStoreHistory = true
+        storeHistoryError = nil
+        Task {
+            defer { if projectSelectionID == selection { loadingStoreHistory = false } }
+            do {
+                let history = try await Task.detached(priority: .userInitiated) {
+                    try DesktopWorkflow.bundled().storeBuildHistory(project: project)
+                }.value
+                if projectSelectionID == selection { storeHistory = history }
+            } catch {
+                if projectSelectionID == selection { storeHistoryError = error.localizedDescription }
+            }
+        }
+    }
+
+    func buildForStore(_ platform: String) {
+        guard let project, trusted, !busy, !loadingStoreHistory, storeTargets.contains(platform),
+              !isFlutterProject || flutterAvailable else { return }
+        let selection = projectSelectionID
+        let trusted = self.trusted
+        perform("Building \(project.suggestedScheme) for the \(platform == "ios" ? "App Store" : "Play Store")…", work: {
+            try $0.buildForStore(project: project, platform: platform, trusted: trusted)
+        }) { result in
+            guard self.projectSelectionID == selection else { return }
+            self.storeHistory.removeAll { $0.id == result.id }
+            self.storeHistory.insert(result, at: 0)
+            self.status = "The \(platformLabel(result.platform)) store build is ready in Finder."
+        }
+    }
+
     func openWebBuild() {
         guard let project, trusted, !busy else { return }
         if let webPreview, webPreview.isRunning {
@@ -673,12 +803,15 @@ private final class DesktopModel: ObservableObject {
 
 @MainActor
 private struct DesktopView: View {
+    private enum ProjectTab: String, Hashable { case generate, publish }
+
     @ObservedObject var updateCheck: UpdateCheckState
     let checkForUpdates: () -> Void
     @StateObject private var model = DesktopModel()
     @State private var showDetails = false
     @State private var loaded = false
     @State private var showAdmin = false
+    @State private var projectTab = ProjectTab.generate
 
     var body: some View {
         ScrollView {
@@ -694,16 +827,31 @@ private struct DesktopView: View {
                     Button("Check for Updates…", action: checkForUpdates).disabled(!updateCheck.canCheck || model.busy)
                     Button("Quit") { NSApp.terminate(nil) }
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("What app do you want to build?").font(.largeTitle.weight(.semibold))
-                        .accessibilityAddTraits(.isHeader)
-                    Text(model.flutterAvailable
-                         ? "Create a SwiftUI or Flutter project, then build it for your selected platform."
-                         : "Create a SwiftUI project, then run it in the iOS Simulator.")
-                        .foregroundStyle(.secondary)
+                if model.project != nil {
+                    Picker("Project view", selection: $projectTab) {
+                        Text("Generate & Build").tag(ProjectTab.generate)
+                        Text("Publish").tag(ProjectTab.publish)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .disabled(model.busy)
                 }
-                projectSection.disabled(model.busy)
-                simulatorSection.disabled(model.busy)
+                if let project = model.project, projectTab == .publish {
+                    StorePublishPane(model: model, project: project)
+                        .id(model.projectSelectionID)
+                        .disabled(model.busy)
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("What app do you want to build?").font(.largeTitle.weight(.semibold))
+                            .accessibilityAddTraits(.isHeader)
+                        Text(model.flutterAvailable
+                             ? "Create a SwiftUI or Flutter project, then build it for your selected platform."
+                             : "Create a SwiftUI project, then run it in the iOS Simulator.")
+                            .foregroundStyle(.secondary)
+                    }
+                    projectSection.disabled(model.busy)
+                    simulatorSection.disabled(model.busy)
+                }
                 statusSection
             }
             .padding(24)
@@ -1007,6 +1155,96 @@ private struct DesktopView: View {
 }
 
 @MainActor
+private struct StorePublishPane: View {
+    @ObservedObject var model: DesktopModel
+    let project: DesktopProject
+    @State private var target = ""
+
+    private var selectedTarget: String { model.storeTargets.contains(target) ? target : model.storeTargets.first ?? "" }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(verbatim: project.suggestedScheme).font(.largeTitle.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
+                Text(verbatim: project.root).font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+            }
+            GroupBox("Build for Store") {
+                VStack(alignment: .leading, spacing: 10) {
+                    buildControls
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            GroupBox("Store build history") {
+                VStack(alignment: .leading, spacing: 10) {
+                    if model.loadingStoreHistory {
+                        ProgressView("Loading store builds…").controlSize(.small)
+                    } else if let error = model.storeHistoryError {
+                        Text(verbatim: error).foregroundStyle(.secondary)
+                        Button("Reload history", action: model.loadStoreHistory)
+                    } else if model.storeHistory.isEmpty {
+                        Text("No store builds for this project yet.").foregroundStyle(.secondary)
+                    }
+                    ForEach(model.storeHistory) { build in
+                        if build.id != model.storeHistory.first?.id { Divider() }
+                        buildRow(build)
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .onAppear(perform: model.loadStoreHistory)
+    }
+
+    @ViewBuilder
+    private var buildControls: some View {
+        if model.storeTargets.isEmpty {
+            Text("This project has no iOS or Android target.").foregroundStyle(.secondary)
+        } else if model.isFlutterProject && !model.flutterAvailable {
+            HStack {
+                Text("Install Flutter to build this project for a store.").foregroundStyle(.secondary)
+                Button("Check again", action: model.refreshProjectFormats).disabled(model.checkingFormats)
+            }
+        } else {
+            Picker("Target", selection: Binding(get: { selectedTarget }, set: { target = $0 })) {
+                ForEach(model.storeTargets, id: \.self) { platform in
+                    Text(platform == "ios" ? "iOS (.ipa)" : "Android (.aab)").tag(platform)
+                }
+            }
+            Text(selectedTarget == "ios"
+                 ? "Requires Xcode, an Apple Distribution signing certificate, and an App Store provisioning profile for this app. Save the Apple Team ID in Store Connections."
+                 : "Requires the Android SDK and Flutter release signing with your Google Play upload key. Save the upload certificate SHA-256 fingerprint in Store Connections.")
+                .font(.callout).foregroundStyle(.secondary)
+            Text("Open Admin to find Store Connections. Use Generate & Build for simulator or emulator testing. Upload the completed store build manually in the store console.")
+                .font(.callout).foregroundStyle(.secondary)
+            Toggle("I have reviewed this project and trust it to build and run on this Mac", isOn: $model.trusted)
+            Button("Build for Store") { model.buildForStore(selectedTarget) }
+                .buttonStyle(.borderedProminent)
+                .disabled(!model.trusted || model.loadingStoreHistory)
+        }
+    }
+
+    private func buildRow(_ build: DesktopStoreBuild) -> some View {
+        let file = URL(fileURLWithPath: build.artifact)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(verbatim: file.lastPathComponent).font(.headline)
+                    .lineLimit(1).truncationMode(.middle)
+                Spacer()
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([file]) }
+            }
+            Text("\(platformLabel(build.platform)) · \(ByteCountFormatter.string(fromByteCount: build.size, countStyle: .file))")
+                .font(.caption).foregroundStyle(.secondary)
+            Text("SHA-256 \(build.sha256)").font(.caption2.monospaced()).foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        }
+    }
+}
+
+@MainActor
 private struct DesktopPlanSheet: View {
     @ObservedObject var model: DesktopModel
 
@@ -1092,6 +1330,8 @@ private struct DesktopPlanSheet: View {
 
 @MainActor
 private struct AdminSheet: View {
+    private enum Tab: Hashable { case general, stores }
+
     @ObservedObject var model: DesktopModel
     @Environment(\.dismiss) private var dismiss
     @State private var provider = AIProvider.openai
@@ -1101,6 +1341,7 @@ private struct AdminSheet: View {
     @State private var key = ""
     @State private var feedback = ""
     @State private var updatingSettings = false
+    @State private var tab = Tab.general
 
     private var hasKey: Bool { model.profiles[provider]?.key.isEmpty == false }
     private var keyStatus: String {
@@ -1112,7 +1353,34 @@ private struct AdminSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Admin").font(.title2.bold())
+            Text("Settings").font(.title2.bold())
+            Picker("Settings section", selection: $tab) {
+                Text("General").tag(Tab.general)
+                Text("Store Connections").tag(Tab.stores)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            if tab == .general {
+                generalSettings
+            } else {
+                StoreConnectionsView(updatingSettings: $updatingSettings, close: { dismiss() })
+            }
+        }
+        .padding(22)
+        .frame(width: 500)
+        .disabled(updatingSettings)
+        .interactiveDismissDisabled(updatingSettings)
+        .onAppear {
+            provider = model.selectedProvider
+            appearance = model.appearance
+            loadSettings()
+            if !model.keychainErrors.isEmpty { model.loadProviderKeys() }
+        }
+        .onChange(of: provider) { _ in loadSettings() }
+    }
+
+    private var generalSettings: some View {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Choose the AI provider and model. Save settings stores your API key in macOS Keychain.")
                 .foregroundStyle(.secondary)
             Picker("Appearance", selection: $appearance) {
@@ -1158,17 +1426,6 @@ private struct AdminSheet: View {
                     .disabled(model.loadingProviderKeys)
             }
         }
-        .padding(22)
-        .frame(width: 480)
-        .disabled(updatingSettings)
-        .interactiveDismissDisabled(updatingSettings)
-        .onAppear {
-            provider = model.selectedProvider
-            appearance = model.appearance
-            loadSettings()
-            if !model.keychainErrors.isEmpty { model.loadProviderKeys() }
-        }
-        .onChange(of: provider) { _ in loadSettings() }
     }
 
     private func loadSettings() {
@@ -1218,6 +1475,177 @@ private struct AdminSheet: View {
         guard !updatingSettings && !model.loadingProviderKeys else { return }
         updatingSettings = true
         feedback = "Updating settings…"
+        Task {
+            defer { updatingSettings = false }
+            do { try await action() }
+            catch { feedback = error.localizedDescription }
+        }
+    }
+}
+
+@MainActor
+private struct StoreConnectionsView: View {
+    @Binding var updatingSettings: Bool
+    let close: () -> Void
+    @State private var settings = DesktopPublishingSettings()
+    @State private var savedSettings: DesktopPublishingSettings?
+    @State private var credentialPresent: [DesktopStore: Bool] = [:]
+    @State private var storeMessages: [DesktopStore: String] = [:]
+    @State private var feedback = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if savedSettings != nil {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        GroupBox(DesktopStore.apple.label) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                metadataField("Apple Team ID", text: $settings.appleTeamID)
+                                metadataField("Issuer ID (team API keys)", text: $settings.appleIssuerID)
+                                metadataField("Key ID", text: $settings.appleKeyID)
+                                credentialControls(.apple)
+                                Text("Save the Key ID and the Issuer ID for team keys before testing. The connection check reads App Store Connect data.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            .padding(6)
+                        }
+                        GroupBox(DesktopStore.google.label) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                metadataField("Upload certificate SHA-256", text: $settings.androidUploadCertificateSHA256)
+                                credentialControls(.google)
+                                Text("Use the upload key certificate fingerprint from Play Console’s App integrity page.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                Text("Test Connection verifies that Google issues an access token for the service account. App permissions are managed in Play Console.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            .padding(6)
+                        }
+                    }
+                }
+                .frame(maxHeight: 370)
+            }
+            if !feedback.isEmpty {
+                Text(verbatim: feedback).font(.caption).foregroundStyle(.secondary)
+            }
+            HStack {
+                if updatingSettings { ProgressView().controlSize(.small) }
+                if savedSettings == nil && !updatingSettings {
+                    Button("Retry", action: loadSettings)
+                }
+                Spacer()
+                Button("Close", action: close)
+                if let savedSettings {
+                    Button("Save settings", action: saveSettings)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(settings == savedSettings)
+                }
+            }
+        }
+        .onAppear(perform: loadSettings)
+    }
+
+    private func metadataField(_ label: String, text: Binding<String>) -> some View {
+        LabeledContent(label) {
+            TextField("", text: text).accessibilityLabel(label)
+        }
+    }
+
+    private func credentialControls(_ store: DesktopStore) -> some View {
+        let fileType = store.credentialExtension
+        let present = credentialPresent[store]
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Button(present == true ? "Replace (.\(fileType))…" : "Import (.\(fileType))…") { importCredential(store) }
+                Button("Remove") { removeCredential(store) }.disabled(present == false)
+                Spacer()
+                Button("Test Connection") { testConnection(store) }
+                    .disabled(present != true || (store == .apple && !appleSettingsReady))
+            }
+            if let present {
+                Text(present ? "Credential saved in macOS Keychain." : "No credential saved.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if let message = storeMessages[store] {
+                Text(verbatim: message).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+        }
+    }
+
+    private var appleSettingsReady: Bool {
+        guard let savedSettings else { return false }
+        return !savedSettings.appleKeyID.isEmpty && settings.appleKeyID == savedSettings.appleKeyID
+            && settings.appleIssuerID == savedSettings.appleIssuerID
+    }
+
+    private func loadSettings() {
+        update("Loading store settings…") {
+            let saved = try await Task.detached(priority: .userInitiated) { try DesktopWorkflow.bundled().publishingSettings() }.value
+            settings = saved
+            savedSettings = saved
+            let credentials = await Task.detached(priority: .userInitiated) {
+                DesktopStore.allCases.map { store -> (DesktopStore, Bool?, String?) in
+                    do { return (store, try PublishingKeychain.contains(store), nil) }
+                    catch { return (store, nil, error.localizedDescription) }
+                }
+            }.value
+            for (store, present, error) in credentials {
+                credentialPresent[store] = present
+                storeMessages[store] = error
+            }
+            feedback = ""
+        }
+    }
+
+    private func saveSettings() {
+        let replacement = settings
+        update("Saving store settings…") {
+            let saved = try await Task.detached(priority: .userInitiated) {
+                try DesktopWorkflow.bundled().savePublishingSettings(replacement)
+            }.value
+            if saved.appleIssuerID != savedSettings?.appleIssuerID || saved.appleKeyID != savedSettings?.appleKeyID {
+                storeMessages[.apple] = nil
+            }
+            settings = saved
+            savedSettings = saved
+            feedback = "Store settings saved."
+        }
+    }
+
+    private func importCredential(_ store: DesktopStore) {
+        guard let file = chooseTextFile(title: "Import \(store.label) credential", extensions: [store.credentialExtension]) else { return }
+        update("Saving credential in macOS Keychain…") {
+            try await Task.detached(priority: .userInitiated) { try importStoreCredential(file, store: store) }.value
+            credentialPresent[store] = true
+            storeMessages[store] = nil
+            feedback = ""
+        }
+    }
+
+    private func removeCredential(_ store: DesktopStore) {
+        update("Removing credential from macOS Keychain…") {
+            try await Task.detached(priority: .userInitiated) { try PublishingKeychain.remove(store) }.value
+            credentialPresent[store] = false
+            storeMessages[store] = nil
+            feedback = ""
+        }
+    }
+
+    private func testConnection(_ store: DesktopStore) {
+        storeMessages[store] = nil
+        update("Testing \(store.label) connection…") {
+            let message = try await Task.detached(priority: .userInitiated) {
+                let credential = try PublishingKeychain.read(store)
+                return try DesktopWorkflow.bundled().checkStoreConnection(store, credential: credential)
+            }.value
+            storeMessages[store] = message
+            feedback = ""
+        }
+    }
+
+    private func update(_ progress: String, action: @escaping @MainActor () async throws -> Void) {
+        guard !updatingSettings else { return }
+        updatingSettings = true
+        feedback = progress
         Task {
             defer { updatingSettings = false }
             do { try await action() }

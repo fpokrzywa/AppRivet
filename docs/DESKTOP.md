@@ -49,7 +49,26 @@ After building in the Mac app, **Open in Browser** previews the built Web app on
 | macOS | macOS with Flutter and Xcode |
 | Linux | Linux with Flutter and desktop development libraries |
 
-Copy the complete Flutter project folder to a matching host to build another target. AppRivet creates web output, debug Android APKs, desktop builds, and iOS Simulator builds. Store signing and publication are separate. [Official target setup](https://docs.flutter.dev/platform-integration)
+Copy the complete Flutter project folder to a matching host to build another target. AppRivet creates web output, debug Android APKs, desktop builds, and iOS Simulator builds. Open **Publish** for signed release packages. [Official target setup](https://docs.flutter.dev/platform-integration)
+
+### Build for Store
+
+1. Open **Admin**, then **Store Connections**. For iOS signing, save your Apple Developer Team ID. For Android, save the SHA-256 fingerprint of your upload certificate.
+2. Open a project and choose **Publish**. Select iOS or Android, review the signing setup, and confirm that you trust the project’s build scripts. **Build for Store** prepares a local package and records its SHA-256 in the project’s release history.
+3. Reveal the signed package from **Publish**. Upload it through the store console when ready.
+
+On a Mac, configure Xcode signing for the project with the selected team and an App Store distribution signing identity and profile. AppRivet archives the project for a device and exports an App Store Connect `.ipa`. The archive uses your local signing setup. [Xcode distribution setup](https://developer.apple.com/documentation/xcode/distributing-your-app-for-beta-testing-and-releases)
+
+For Google Play, configure the Flutter project’s Gradle release signing for your upload keystore. AppRivet builds a release `.aab` and checks its signature against the upload certificate fingerprint saved in Settings. Keep the signing keystore and password outside source control. [Flutter Android deployment](https://docs.flutter.dev/deployment/android) · [Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756)
+
+The release packages and their records are saved in the user's local AppRivet data folder, outside the project. You can build with signing configured and set up the store connections when you are ready to check account access.
+
+### Store connections
+
+- **App Store Connect**. Save the API Key ID and import the `.p8` private key. Include the Issuer ID for a team key, or leave it blank for an individual key. **Test Connection** checks read access to the app list. The Xcode signing team is a separate setting. [App Store Connect API setup](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/)
+- **Google Play**. Import a Google Cloud service account `.json` key. Invite the service account in Play Console and grant it access to the relevant app and testing track. **Test Connection** verifies that Google issues a token. App and track permissions still need a live check. [Google Play Developer API setup](https://developers.google.com/android-publisher/getting_started)
+
+Only identifiers and signing fingerprints go in the local settings file. Store credentials go into macOS Keychain, Windows Credential Manager, or Linux Secret Service when available. Use **Remove** in Settings to clear a saved credential. Revoke lost credentials in the corresponding store console.
 
 ### Generate with AI
 

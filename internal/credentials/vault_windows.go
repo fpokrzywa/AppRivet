@@ -47,7 +47,7 @@ func NewVault() Vault {
 }
 
 func (v windowsVault) target(provider string) (*uint16, error) {
-	if !ValidProvider(provider) {
+	if !validSlot(provider) {
 		return nil, errProvider
 	}
 	return syscall.UTF16PtrFromString(string(v) + provider)
@@ -67,7 +67,7 @@ func (v windowsVault) Get(provider string) (string, error) {
 		return "", callErr
 	}
 	defer credFree.Call(uintptr(unsafe.Pointer(credential)))
-	if credential.BlobSize > maxKeyBytes {
+	if credential.BlobSize > uint32(slotSize(provider)) {
 		return "", errKey
 	}
 	return string(unsafe.Slice(credential.Blob, credential.BlobSize)), nil
@@ -78,7 +78,7 @@ func (v windowsVault) Save(provider, key string) error {
 	if err != nil {
 		return err
 	}
-	if !ValidKey(key) {
+	if !validStoredValue(provider, key) {
 		return errKey
 	}
 	blob := []byte(key)

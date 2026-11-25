@@ -222,6 +222,69 @@ func BuildFlutter(ctx context.Context, path, target string, trusted bool) (Flutt
 	return FlutterBuild{Target: target, Artifact: product, Output: output}, nil
 }
 
+// RunFlutterStore runs the fixed Flutter release build or Xcode preparation
+// step and returns the project-relative AAB path on Android. The caller must
+// have confirmed project trust and validated the target.
+func RunFlutterStore(ctx context.Context, root, target string) (string, error) {
+	var args []string
+	switch target {
+	case "android":
+		args = []string{"build", "appbundle", "--release"}
+	case "ios":
+		if runtime.GOOS != "darwin" {
+			return "", errors.New("Flutter iOS preparation requires macOS with full Xcode")
+		}
+		args = []string{"build", "ios", "--release", "--no-codesign", "--config-only"}
+	default:
+		return "", errors.New("unsupported Flutter store platform")
+	}
+	executable := flutterExecutable()
+	if executable == "" {
+		return "", errors.New("install the Flutter SDK to build this project")
+	}
+	ctx, cancel := context.WithTimeout(ctx, FlutterBuildTimeout)
+	defer cancel()
+	output, err := runFlutter(ctx, executable, root, args...)
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("Flutter release command did not finish: %w", ctx.Err())
+		}
+		if target == "android" {
+			return "", errors.New("Flutter could not build the release AAB. Check the Android toolchain and the project's release signing configuration")
+		}
+		return "", errors.New("Flutter could not prepare the iOS Release configuration. Check the Flutter, CocoaPods, and Xcode setup")
+	}
+	if target == "android" {
+		return flutterAppBundlePath(output)
+	}
+	return "", nil
+}
+
+func flutterAppBundlePath(output string) (string, error) {
+	// Flutter reports the successful bundle path at the end of the command.
+	// Use that path so a custom build directory cannot pick up an older AAB.
+	lines := strings.Split(output, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		_, reported, ok := strings.Cut(strings.TrimSpace(lines[i]), "Built ")
+		if !ok {
+			continue
+		}
+		end := strings.LastIndex(reported, ".aab")
+		if end == -1 {
+			continue
+		}
+		end += len(".aab")
+		if suffix := reported[end:]; suffix != "" && !strings.HasPrefix(suffix, " (") {
+			continue
+		}
+		if path := filepath.FromSlash(reported[:end]); filepath.IsLocal(path) {
+			return filepath.Clean(path), nil
+		}
+		break
+	}
+	return "", errors.New("Flutter did not report a release AAB inside the project")
+}
+
 func runFlutter(ctx context.Context, executable, dir string, args ...string) (string, error) {
 	cmd, err := flutterCommand(ctx, executable, args)
 	if err != nil {

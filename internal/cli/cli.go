@@ -49,6 +49,7 @@ Usage:
   apprivet init NAME (--brief TEXT | --brief-stdin) --provider PROVIDER --model MODEL (--review | --approve HASH) [--json]
   apprivet init NAME --format flutter --platforms ios,android,web,windows,macos,linux [--review] [--json]
   apprivet plan (review|draft|create) --json  Read the component-generation request from stdin
+  apprivet publish (settings|save-settings|connection|build|history) --json
   apprivet flutter-build --project PATH --target PLATFORM --trust-project [--json]
   apprivet flutter-preview --project PATH --trust-project
   apprivet inspect [--project PATH] [--form] [--json]
@@ -128,6 +129,9 @@ func (a App) Run(ctx context.Context, args []string) int {
 	}
 	if command == "worker" {
 		return a.runWorker(ctx, filtered, jsonMode)
+	}
+	if command == "publish" {
+		return a.runPublish(ctx, filtered, jsonMode)
 	}
 	if command == "plan" {
 		if a.In == nil || len(filtered) != 1 || !jsonMode {

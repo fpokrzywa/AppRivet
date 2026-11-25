@@ -168,6 +168,47 @@ struct DesktopFlutterBuild: Decodable, Sendable {
     let artifact: String
 }
 
+enum DesktopStore: String, CaseIterable, Identifiable, Hashable, Sendable {
+    case apple, google
+
+    var id: String { rawValue }
+    var label: String { self == .apple ? "App Store Connect" : "Google Play Console" }
+    var credentialExtension: String { self == .apple ? "p8" : "json" }
+}
+
+struct DesktopPublishingSettings: Codable, Equatable, Sendable {
+    var appleTeamID = ""
+    var appleIssuerID = ""
+    var appleKeyID = ""
+    var androidUploadCertificateSHA256 = ""
+
+    enum CodingKeys: String, CodingKey {
+        case appleTeamID = "apple_team_id"
+        case appleIssuerID = "apple_issuer_id"
+        case appleKeyID = "apple_key_id"
+        case androidUploadCertificateSHA256 = "android_upload_certificate_sha256"
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        appleTeamID = try values.decodeIfPresent(String.self, forKey: .appleTeamID) ?? ""
+        appleIssuerID = try values.decodeIfPresent(String.self, forKey: .appleIssuerID) ?? ""
+        appleKeyID = try values.decodeIfPresent(String.self, forKey: .appleKeyID) ?? ""
+        androidUploadCertificateSHA256 = try values.decodeIfPresent(String.self, forKey: .androidUploadCertificateSHA256) ?? ""
+    }
+}
+
+struct DesktopStoreBuild: Decodable, Identifiable, Sendable {
+    let platform: String
+    let artifact: String
+    let sha256: String
+    let size: Int64
+
+    var id: String { artifact }
+}
+
 final class DesktopWebPreview: @unchecked Sendable {
     let url: URL
     private let child: Process
@@ -262,6 +303,42 @@ struct DesktopWorkflow: Sendable {
 
     func projectFormats() throws -> [String] {
         try invoke(["doctor", "--project-formats"])
+    }
+
+    func publishingSettings() throws -> DesktopPublishingSettings {
+        try invoke(["publish", "settings"], input: Data("{}".utf8))
+    }
+
+    func savePublishingSettings(_ settings: DesktopPublishingSettings) throws -> DesktopPublishingSettings {
+        try invoke(["publish", "save-settings"], input: JSONEncoder().encode(settings))
+    }
+
+    func checkStoreConnection(_ store: DesktopStore, credential: Data) throws -> String {
+        struct Connection: Decodable { let message: String }
+        guard let secret = String(data: credential, encoding: .utf8) else {
+            throw DesktopFailure(message: "Replace the saved \(store.label) credential with a valid UTF-8 file.")
+        }
+        let key = store == .apple ? "apple_private_key" : "google_service_account"
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .withoutEscapingSlashes
+        let input = try encoder.encode(["store": store.rawValue, key: secret])
+        let result: Connection = try invoke(["publish", "connection"], timeout: 45, input: input, privateInput: true)
+        return result.message
+    }
+
+    func buildForStore(project: DesktopProject, platform: String, trusted: Bool) throws -> DesktopStoreBuild {
+        struct Request: Encodable {
+            let project: String
+            let platform: String
+            let trusted: Bool
+        }
+        guard trusted else { throw DesktopFailure(message: "Confirm you trust this project before building it.") }
+        let request = Request(project: project.root, platform: platform, trusted: trusted)
+        return try invoke(["publish", "build"], timeout: 1850, input: JSONEncoder().encode(request))
+    }
+
+    func storeBuildHistory(project: DesktopProject) throws -> [DesktopStoreBuild] {
+        try invoke(["publish", "history"], input: JSONEncoder().encode(["project": project.root]))
     }
 
     func simulators() throws -> [DesktopSimulator] {
@@ -375,14 +452,15 @@ struct DesktopWorkflow: Sendable {
     }
 
     private func invoke<Value: Decodable>(_ args: [String], directory: URL? = nil, timeout: Int = 30,
-                                          apiKey: String? = nil, input: Data? = nil, fullOutput: Bool = false) throws -> Value {
+                                          apiKey: String? = nil, input: Data? = nil, fullOutput: Bool = false,
+                                          privateInput: Bool = false) throws -> Value {
         let result = try runProcess(cli, args + ["--json"], directory: directory, timeout: timeout,
-                                    apiKey: apiKey, input: input, fullOutput: fullOutput)
+                                    apiKey: apiKey, input: input, fullOutput: fullOutput, privateInput: privateInput)
         guard let response = try? JSONDecoder().decode(CLIEnvelope<Value>.self, from: result.stdout), response.schema_version == 1 else {
-            throw DesktopFailure(message: "AppRivet returned an unreadable result.", details: result.diagnostics)
+            throw DesktopFailure(message: "AppRivet returned an unreadable result.", details: privateInput ? "" : result.diagnostics)
         }
         guard result.status == 0, response.ok, let value = response.data else {
-            let buildLog = (response.data as? DesktopBuild)?.execution.output ?? result.diagnostics
+            let buildLog = privateInput ? "" : ((response.data as? DesktopBuild)?.execution.output ?? result.diagnostics)
             throw DesktopFailure(message: response.error?.message ?? "AppRivet did not complete this action.", details: buildLog)
         }
         return value
@@ -412,7 +490,8 @@ private struct ProcessResult {
 // Use files for separate stdout and stderr so a verbose child cannot deadlock
 // on a full pipe. Bound what the app reads back into memory.
 private func runProcess(_ executable: URL, _ args: [String], directory: URL? = nil, timeout: Int,
-                        apiKey: String? = nil, input: Data? = nil, fullOutput: Bool = false) throws -> ProcessResult {
+                        apiKey: String? = nil, input: Data? = nil, fullOutput: Bool = false,
+                        privateInput: Bool = false) throws -> ProcessResult {
     let manager = FileManager.default
     let scratch = manager.temporaryDirectory.appendingPathComponent("apprivet-ui-\(UUID().uuidString)", isDirectory: true)
     try manager.createDirectory(at: scratch, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
@@ -426,8 +505,14 @@ private func runProcess(_ executable: URL, _ args: [String], directory: URL? = n
     defer { try? output.close() }
     let errors = try FileHandle(forUpdating: stderr)
     defer { try? errors.close() }
+    let inputPipe = privateInput && input != nil ? Pipe() : nil
     let standardInput: FileHandle?
-    if let input {
+    if let inputPipe {
+        guard fcntl(inputPipe.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1) != -1 else {
+            throw DesktopFailure(message: "Could not prepare private input for the store connection check.")
+        }
+        standardInput = nil
+    } else if let input {
         let stdin = scratch.appendingPathComponent("stdin")
         try input.write(to: stdin, options: .withoutOverwriting)
         standardInput = try FileHandle(forReadingFrom: stdin)
@@ -440,7 +525,11 @@ private func runProcess(_ executable: URL, _ args: [String], directory: URL? = n
     child.executableURL = executable
     child.arguments = args
     child.currentDirectoryURL = directory ?? manager.temporaryDirectory
-    child.standardInput = standardInput ?? FileHandle.nullDevice
+    if let inputPipe {
+        child.standardInput = inputPipe
+    } else {
+        child.standardInput = standardInput ?? FileHandle.nullDevice
+    }
     child.standardOutput = output
     child.standardError = errors
     var environment = ProcessInfo.processInfo.environment.filter { key, _ in
@@ -462,15 +551,26 @@ private func runProcess(_ executable: URL, _ args: [String], directory: URL? = n
     let exited = DispatchSemaphore(value: 0)
     child.terminationHandler = { _ in exited.signal() }
     try child.run()
+    if let writer = inputPipe?.fileHandleForWriting, let input {
+        DispatchQueue.global(qos: .userInitiated).async {
+            defer { try? writer.close() }
+            try? writer.write(contentsOf: input)
+        }
+    }
     if exited.wait(timeout: .now() + .seconds(timeout)) == .timedOut {
         if child.isRunning { child.terminate() }
         if exited.wait(timeout: .now() + .seconds(5)) == .timedOut, child.isRunning {
             kill(child.processIdentifier, SIGKILL)
         }
         let command = args.first == "simctl" ? "simctl \(args.dropFirst().first ?? "")" : executable.lastPathComponent
-        let hint = args.first == "plan" ? "Try again from the app brief." : "Check Xcode and Simulator, then try again."
+        let hint: String
+        switch args.first {
+        case "plan": hint = "Try again from the app brief."
+        case "publish": hint = "Try the publishing action again."
+        default: hint = "Check Xcode and Simulator, then try again."
+        }
         throw DesktopFailure(message: "The \(command) command timed out. \(hint)",
-                             details: (try? readOutput().diagnostics) ?? "")
+                             details: privateInput ? "" : ((try? readOutput().diagnostics) ?? ""))
     }
     return try readOutput()
 }
