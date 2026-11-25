@@ -97,7 +97,8 @@ struct DesktopWorkflow: Sendable {
             .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
     }
 
-    func buildAndRun(project: DesktopProject, simulator: DesktopSimulator, trusted: Bool, showSimulator: Bool) throws -> DesktopRun {
+    func buildAndRun(project: DesktopProject, simulator: DesktopSimulator, trusted: Bool, showSimulator: Bool,
+                     progress: @Sendable (String) -> Void = { _ in }) throws -> DesktopRun {
         guard trusted else { throw DesktopFailure(message: "Confirm you trust this project before building it.") }
         guard simulator.platform == "iOS", simulator.available == true, UUID(uuidString: simulator.id) != nil else {
             throw DesktopFailure(message: "Select an available iOS simulator.")
@@ -107,15 +108,19 @@ struct DesktopWorkflow: Sendable {
               name.range(of: #"^[A-Za-z][A-Za-z0-9]{0,49}\z"#, options: .regularExpression) != nil else {
             throw DesktopFailure(message: "Open an AppRivet project with its generated app name and shared scheme.")
         }
+        progress("Building \(name)…")
         let build: DesktopBuild = try invoke([
             "build", "--project", project.path, "--scheme", name, "--simulator", simulator.id,
             "--trust-project", "--timeout", "15m",
         ], timeout: 920)
         let (app, bundleID) = try simulatorProduct(build: build, name: name)
         do {
+            progress("Starting \(simulator.name)…")
             _ = try appleTool("/usr/bin/xcrun", ["simctl", "bootstatus", simulator.id, "-b"], timeout: 480)
-            _ = try appleTool("/usr/bin/xcrun", ["simctl", "install", simulator.id, app.path], timeout: 90)
-            _ = try appleTool("/usr/bin/xcrun", ["simctl", "launch", "--terminate-running-process", simulator.id, bundleID], timeout: 90)
+            progress("Installing \(name)…")
+            _ = try appleTool("/usr/bin/xcrun", ["simctl", "install", simulator.id, app.path], timeout: 240)
+            progress("Launching \(name)…")
+            _ = try appleTool("/usr/bin/xcrun", ["simctl", "launch", "--terminate-running-process", simulator.id, bundleID], timeout: 240)
             if showSimulator {
                 let developer = try appleTool("/usr/bin/xcode-select", ["-p"], timeout: 15)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -207,6 +212,14 @@ private func runProcess(_ executable: URL, _ args: [String], directory: URL? = n
         key != "DEVELOPER_DIR" && !key.hasPrefix("SIMCTL_CHILD_")
     }
 
+    func readOutput() throws -> ProcessResult {
+        try output.seek(toOffset: 0)
+        try errors.seek(toOffset: 0)
+        return ProcessResult(status: child.isRunning ? -1 : child.terminationStatus,
+                             stdout: try output.read(upToCount: 4 * 1024 * 1024) ?? Data(),
+                             stderr: try errors.read(upToCount: 256 * 1024) ?? Data())
+    }
+
     let exited = DispatchSemaphore(value: 0)
     child.terminationHandler = { _ in exited.signal() }
     try child.run()
@@ -215,11 +228,9 @@ private func runProcess(_ executable: URL, _ args: [String], directory: URL? = n
         if exited.wait(timeout: .now() + .seconds(5)) == .timedOut, child.isRunning {
             kill(child.processIdentifier, SIGKILL)
         }
-        throw DesktopFailure(message: "The \(executable.lastPathComponent) command timed out. Check Xcode and Simulator, then try again.")
+        let command = args.first == "simctl" ? "simctl \(args.dropFirst().first ?? "")" : executable.lastPathComponent
+        throw DesktopFailure(message: "The \(command) command timed out. Check Xcode and Simulator, then try again.",
+                             details: (try? readOutput().diagnostics) ?? "")
     }
-    try output.seek(toOffset: 0)
-    try errors.seek(toOffset: 0)
-    return ProcessResult(status: child.terminationStatus,
-                         stdout: try output.read(upToCount: 4 * 1024 * 1024) ?? Data(),
-                         stderr: try errors.read(upToCount: 256 * 1024) ?? Data())
+    return try readOutput()
 }

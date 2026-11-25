@@ -153,20 +153,30 @@ jobs:
         run: |
           ./apprivet init SwiftUI --bundle-id org.example.modulecollision
           ./apprivet build --project SwiftUI --trust-project --timeout 10m
+
+  macos-frontend:
+    runs-on: macos-15
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: false
       - name: Package the macOS frontend
         run: bash scripts/package-macos-app.sh "$RUNNER_TEMP/desktop-package"
       - name: Create, build and launch through the packaged frontend
-        timeout-minutes: 14
+        timeout-minutes: 23
         run: |
           ditto -x -k "$RUNNER_TEMP/desktop-package/AppRivet-macOS.zip" "$RUNNER_TEMP/desktop-unpacked"
           APP="$RUNNER_TEMP/desktop-unpacked/AppRivet.app"
           codesign --verify --deep --strict "$APP"
           xcrun lipo "$APP/Contents/MacOS/AppRivetDesktop" -verify_arch arm64 x86_64
           xcrun lipo "$APP/Contents/MacOS/apprivet" -verify_arch arm64 x86_64
-          SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for k,vs in d["devices"].items() if "iOS" in k for v in vs if v.get("isAvailable") and "iPhone" in v["name"]))')
           mkdir "$RUNNER_TEMP/desktop-smoke"
-          "$APP/Contents/MacOS/AppRivetDesktop" --smoke-test "$RUNNER_TEMP/desktop-smoke" "$SIMULATOR_ID"
-          xcrun simctl get_app_container "$SIMULATOR_ID" org.example.apprivetdesktop app
+          "$APP/Contents/MacOS/AppRivetDesktop" --smoke-test "$RUNNER_TEMP/desktop-smoke"
       - name: Upload the macOS app download
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

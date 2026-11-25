@@ -8,15 +8,19 @@ struct AppRivetDesktop: App {
         let arguments = CommandLine.arguments
         guard arguments.dropFirst().first == "--smoke-test" else { return }
         do {
-            guard arguments.count == 4 else { throw DesktopFailure(message: "Smoke test requires a parent folder and simulator UUID.") }
+            guard arguments.count == 3 else { throw DesktopFailure(message: "Smoke test requires a parent folder.") }
             let workflow = try DesktopWorkflow.bundled()
             let parent = URL(fileURLWithPath: arguments[2], isDirectory: true)
+            Self.smokeProgress("Creating the SwiftUI test project…")
             let created = try workflow.create(name: "DesktopSmoke", bundleID: "org.example.apprivetdesktop", parent: parent)
             let project = try workflow.inspect(URL(fileURLWithPath: created.root, isDirectory: true))
-            guard let simulator = try workflow.simulators().first(where: { $0.id == arguments[3] }) else {
-                throw DesktopFailure(message: "The requested iOS simulator is unavailable.")
+            Self.smokeProgress("Discovering an iPhone simulator…")
+            guard let simulator = try workflow.simulators().first(where: { $0.name.hasPrefix("iPhone") }) else {
+                throw DesktopFailure(message: "An iPhone simulator is unavailable.")
             }
-            let result = try workflow.buildAndRun(project: project, simulator: simulator, trusted: true, showSimulator: false)
+            let result = try workflow.buildAndRun(project: project, simulator: simulator, trusted: true, showSimulator: false) {
+                Self.smokeProgress($0)
+            }
             guard result.bundleIdentifier == "org.example.apprivetdesktop" else {
                 throw DesktopFailure(message: "The wrong product was launched.")
             }
@@ -27,6 +31,10 @@ struct AppRivetDesktop: App {
             FileHandle.standardError.write(Data("\(error.localizedDescription)\n\(details)\n".utf8))
             exit(1)
         }
+    }
+
+    private nonisolated static func smokeProgress(_ message: String) {
+        FileHandle.standardOutput.write(Data("\(message)\n".utf8))
     }
 
     var body: some Scene {
@@ -108,7 +116,9 @@ private final class DesktopModel: ObservableObject {
         guard let project, let simulator = simulators.first(where: { $0.id == selectedSimulator }), trusted else { return }
         let trusted = self.trusted
         perform("Building \(project.suggestedScheme) and starting \(simulator.name)…", work: {
-            try $0.buildAndRun(project: project, simulator: simulator, trusted: trusted, showSimulator: true)
+            try $0.buildAndRun(project: project, simulator: simulator, trusted: trusted, showSimulator: true) { message in
+                Task { @MainActor in if self.busy { self.activity = message } }
+            }
         }) { result in
             self.status = "\(project.suggestedScheme) is running on \(simulator.name)."
             self.log = result.buildLog
