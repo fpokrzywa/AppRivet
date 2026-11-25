@@ -147,7 +147,7 @@ struct DesktopWorkflow: Sendable {
             args.append("--starter=\(draft.starterChoice)")
         }
         // Allow the provider request and Flutter scaffolding to run sequentially.
-        let timeout: TimeInterval = draft.isAI ? (draft.format == "flutter" ? 690 : 390) : (draft.format == "flutter" ? 540 : 30)
+        let timeout = draft.isAI ? (draft.format == "flutter" ? 690 : 390) : (draft.format == "flutter" ? 540 : 30)
         return try invoke(args + [draft.name], directory: parent, timeout: timeout,
                           apiKey: apiKey, input: Data(draft.brief.utf8))
     }
