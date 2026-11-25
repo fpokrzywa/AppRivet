@@ -129,3 +129,24 @@ jobs:
         run: |
           ./apprivet init SwiftUI --bundle-id org.example.modulecollision
           ./apprivet build --project SwiftUI --trust-project --timeout 10m
+      - name: Package the macOS frontend
+        run: bash scripts/package-macos-app.sh "$RUNNER_TEMP/desktop-package"
+      - name: Create, build and launch through the packaged frontend
+        timeout-minutes: 14
+        run: |
+          ditto -x -k "$RUNNER_TEMP/desktop-package/AppRivet-macOS.zip" "$RUNNER_TEMP/desktop-unpacked"
+          APP="$RUNNER_TEMP/desktop-unpacked/AppRivet.app"
+          codesign --verify --deep --strict "$APP"
+          xcrun lipo -verify_arch arm64 x86_64 "$APP/Contents/MacOS/AppRivetDesktop"
+          xcrun lipo -verify_arch arm64 x86_64 "$APP/Contents/MacOS/apprivet"
+          SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for k,vs in d["devices"].items() if "iOS" in k for v in vs if v.get("isAvailable") and "iPhone" in v["name"]))')
+          mkdir "$RUNNER_TEMP/desktop-smoke"
+          "$APP/Contents/MacOS/AppRivetDesktop" --smoke-test "$RUNNER_TEMP/desktop-smoke" "$SIMULATOR_ID"
+          xcrun simctl get_app_container "$SIMULATOR_ID" org.example.apprivetdesktop app
+      - name: Upload the macOS app download
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: AppRivet-desktop-download
+          path: ${{ runner.temp }}/desktop-package/AppRivet-macOS.zip
+          if-no-files-found: error

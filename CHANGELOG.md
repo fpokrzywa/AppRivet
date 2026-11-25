@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased: macOS desktop preview
+
+- Add a native AppRivet window for creating or opening a generated SwiftUI project and building, installing and launching it on a selected iOS Simulator.
+- Package the bundled CLI and desktop app for Apple silicon and Intel. The hosted macOS workflow runs the packaged create, build and launch path before uploading the app archive.
+
 ## Unreleased: native Linux journal writeback testing
 
 - Exercise real journal `fsync` `EIO` on a disposable ext4 device-mapper image. Verify recovery of a durable pending event and refusal of divergent persisted tails after device restoration.
