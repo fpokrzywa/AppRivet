@@ -208,10 +208,13 @@ struct DesktopWorkflow: Sendable {
         let lifetime = input.fileHandleForWriting
         let ready = output.fileHandleForReading
         var descriptor = pollfd(fd: ready.fileDescriptor, events: Int16(POLLIN), revents: 0)
-        // The preview emits a single short line after its socket is ready.
-        guard poll(&descriptor, 1, 8000) > 0,
-              let data = try? ready.read(upToCount: 256),
-              let url = URL(string: String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)),
+        // Read the single readiness line without waiting for EOF on the live child process.
+        var bytes = [UInt8](repeating: 0, count: 256)
+        let received = poll(&descriptor, 1, 8000) > 0 ? bytes.withUnsafeMutableBytes {
+            Darwin.read(descriptor.fd, $0.baseAddress, $0.count)
+        } : -1
+        guard received > 0,
+              let url = URL(string: String(decoding: bytes.prefix(received), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)),
               let port = url.port, (1...65535).contains(port),
               url.absoluteString == "http://127.0.0.1:\(port)/" else {
             try? lifetime.close()

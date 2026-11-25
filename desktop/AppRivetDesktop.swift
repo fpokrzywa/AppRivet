@@ -167,6 +167,7 @@ struct AppRivetDesktop: App {
                   opened.settings.starter == "auto" else {
                 throw DesktopFailure(message: "The saved project form did not restore the original settings.")
             }
+            Self.smokeProgress("Checking Flutter project reopening and Web preview…")
             try Self.smokeWebPreviewAndReopen(workflow, parent: parent)
             Self.smokeProgress("Discovering an iPhone simulator…")
             guard let simulator = try workflow.simulators().first(where: { $0.name.hasPrefix("iPhone") }) else {
