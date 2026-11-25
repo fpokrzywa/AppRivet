@@ -1,5 +1,9 @@
 # Verification record
 
+## Graphical frontend preview
+
+All five jobs passed at `6627dd4f8e52b3539614b078e334de547f33115d`. The packaged macOS app created and reopened the SwiftUI sample, selected an iPhone 16 simulator, built the app, booted the simulator, installed the build and launched `org.example.apprivetdesktop`. CI checked both Mach-O architecture slices. Runtime launch was tested on hosted Apple silicon. Windows and Linux ran the packaged launchers through project creation, inventory and clean shutdown. A local Chrome test also exercised the form, narrow layout, inventory update and quit. Initial Mac runs exposed a `lipo` argument order error and a Simulator command timeout. The final workflow corrected the verifier and uses an independent Mac job with phase diagnostics and bounded startup, install and launch deadlines. [Passing CI run and downloads](https://github.com/fpokrzywa/AppRivet/actions/runs/45553338536#artifacts)
+
 ## Native Linux journal writeback errors
 
 The Linux device-mapper harness fails I/O to one initialized data block on a disposable ext4 image. It requires native `fsync` `EIO` after a buffered journal append and during repair. One case remounts first and verifies that an exact prefix can be completed and divergent bytes stay blocked. Another retries on the restored mount and verifies a successful acknowledgement survives remount. Failed repair of a fully written event must retain its marker. Subsequent repair preserves the intended head, rejects replay and stale ownership, and retains the original worker, claim and fence after another remount. The initial run found that an event could appear complete from cache after `EIO` but diverge on disk. A regression failed before the repair writer reasserted the exact event ahead of sync. See [Linux native writeback tests and remaining gaps](LINUX_JOURNAL_FAULTS.md).

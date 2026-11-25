@@ -36,3 +36,5 @@ bash scripts/package-macos-app.sh
 ```
 
 The script creates `dist/macos/AppRivet.app` and `dist/macos/AppRivet-macOS.zip`. Use a new output folder as the first argument for a repeat package. The hosted simulator job verifies the archived bundle and invokes the same workflow as the window to create a project, build it, install it and launch it. The smoke test exercises the command path on a hosted Apple silicon Mac. Visual interaction and Intel execution require a Mac with the corresponding setup.
+
+All five jobs passed on `6627dd4`. The Mac download launched a generated SwiftUI app on an iPhone 16 simulator. The Windows and Linux downloads each passed the project creation smoke test. [Verified builds and downloads](https://github.com/fpokrzywa/AppRivet/actions/runs/45553338536#artifacts)
