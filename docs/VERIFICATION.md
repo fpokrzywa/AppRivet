@@ -1,5 +1,11 @@
 # Verification record
 
+## Mac icon, project reopening, and build previews
+
+All six jobs passed at `9c9399126f6bb92657f5c36648e853c85e50610f`. The packaged app reopened Flutter from `ios/Runner.xcodeproj` and restored the name, brief, platforms, creation method, provider and model into a fresh desktop form. The Mac smoke test served the Web build and launched a SwiftUI checklist in Simulator. Chrome separately loaded a Flutter Web build through the same preview server. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45645873257)
+
+CI decoded the Finder and Dock icon at standard and Retina sizes. The public 0.4.6 download matched the CI ZIP and verified against the existing updater key. Finder and Dock appearance on an installed Mac, in-place updating from 0.4.5, and Android APK installation on a live emulator still need validation. [Public Mac release](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.6)
+
 ## Mac updates and AI generation limits
 
 All six jobs passed at `7b6c1f328984019b8ecbd314854f89031233c143`. Hosted macOS verified the archived AppRivet bundle and its Apple silicon and Intel slices, initialized Sparkle, and created, reopened, built, installed and launched a SwiftUI checklist in the iOS Simulator. The public 0.4.5 ZIP matched the CI artifact byte for byte. Its update signature verified against the public key in the bundle. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45636471412) [Public Mac release](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.5)
