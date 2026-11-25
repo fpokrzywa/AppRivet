@@ -1,5 +1,11 @@
 # Verification record
 
+## Component generation and provider credentials
+
+All six jobs passed at `642d7a6f9a7a94f24243f74e25e5657eb5559fdd`. The packaged Mac app reviewed a split brief locally and launched the SwiftUI sample in Simulator. Mock provider tests checked exact component prompts, input chunking, output caps, approval invalidation, and refusal of partial source and credential material. A generated Flutter project with multiple parts passed analysis with informational diagnostics allowed. Chrome exercised the browser approval and key import flows against fixtures. The public Mac installer, updater ZIP and Windows launcher matched the CI packages. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45651280730) [Desktop release](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.8)
+
+Windows Credential Manager passed a save, replace, read and remove check with isolated test credentials. Linux Secret Service passed command and input tests with a simulated keyring. Live model calls, macOS Keychain access after relaunch, and a live Linux keyring still need verification.
+
 ## Mac disk image, Windows download, and toolchain detection
 
 All six jobs passed at `63d4ac7690a5bc50f64b47ba5177b8fbcc44b53e`. Hosted macOS mounted the DMG, checked the Applications shortcut, copied the app out, and verified the copied bundle signature. The Mac smoke test also checked SwiftUI availability with Flutter absent. The packaged Windows launcher passed a Chrome check with a real Flutter SDK and with the SDK missing. The public DMG and both ZIP downloads matched their CI artifacts. Interactive Finder installation and in-place updating on a personal Mac still need live validation. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45649344236) [Desktop release](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.7)

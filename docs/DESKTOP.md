@@ -8,7 +8,7 @@ The Windows and Linux launchers target x86-64 desktop machines. They open AppRiv
 
 ### Install on Windows
 
-1. Download **AppRivet-Windows.zip**. [Windows download](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.7/AppRivet-Windows.zip)
+1. Download **AppRivet-Windows.zip**. [Windows download](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.8/AppRivet-Windows.zip)
 2. Right-click the downloaded ZIP and select **Extract All**.
 3. Double-click **AppRivet.exe**. The browser opens your local workspace.
 
@@ -74,7 +74,7 @@ In **Generate with AI**, choose **Plan components before generating code**. AppR
 
 ### Install AppRivet
 
-1. Download and open **AppRivet-macOS.dmg**. The app includes Apple silicon and Intel executables. [Mac disk image](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.7/AppRivet-macOS.dmg) · [Release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.7)
+1. Download and open **AppRivet-macOS.dmg**. The app includes Apple silicon and Intel executables. [Mac disk image](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.8/AppRivet-macOS.dmg) · [Release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.8)
 2. Drag **AppRivet.app** onto **Applications** in the disk image window. Eject the disk image, then open AppRivet from **Applications**.
 3. Open **AppRivet.app** from Finder. This preview uses an ad hoc signature and has no Apple notarization. If macOS says it couldn’t verify AppRivet is free of malware, click **Done**. If you trust the download, open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway** for AppRivet. Authenticate if prompted and confirm with **Open**. [Apple’s Gatekeeper guidance](https://support.apple.com/en-us/102445)
 
@@ -96,7 +96,7 @@ Install full Xcode and open it once to finish setup. In **Xcode → Settings →
 4. To run an iOS project, review the generated source, select an available iPhone or iPad simulator, confirm that you trust the project to build and run, and click **Build & Run**. If no simulator appears, check the runtime in Xcode and click **Refresh** in AppRivet. If building or launching fails, expand **Build details** for the command output.
 5. Use **Your projects** to reopen a project. Use **Open in Xcode** to edit a SwiftUI project or **Open project folder** to access the generated Flutter code.
 
-CI started the updater, reopened a Flutter project from its Runner package, served a Web preview, and used the packaged Mac app to build and launch a SwiftUI checklist on a hosted iPhone Simulator. A live AI generation run with an actual provider key still needs verification. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45645873257)
+CI started the updater, reviewed a split brief, reopened a Flutter project from its Runner package, served a Web preview, and used the packaged Mac app to build and launch a SwiftUI checklist on a hosted iPhone Simulator. A live AI generation run with an actual provider key still needs verification. [Passing CI run](https://github.com/fpokrzywa/AppRivet/actions/runs/45651280730)
 
 Build scripts run with the access of your macOS user account. SwiftUI build output is kept in the CLI’s temporary DerivedData directories. Physical-device signing, install and launch remain separate milestones.
 
