@@ -50,6 +50,17 @@ security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$
 rm -f -- "$scratch/certificate.p12"
 unset keychain_password APPLE_DEVELOPER_ID_P12_PASSWORD
 
+# codesign also uses the search list to build the certificate chain.
+# Deleting the temporary keychain removes its entry from the list.
+listed_keychains=$(security list-keychains -d user) || fail 'Could not read the signing keychain search list.'
+search_list=("$keychain")
+while IFS= read -r listed; do
+  if [[ $listed =~ \"(.+)\" ]] && [[ ${BASH_REMATCH[1]} != "$keychain" ]]; then
+    search_list+=("${BASH_REMATCH[1]}")
+  fi
+done <<< "$listed_keychains"
+security list-keychains -d user -s "${search_list[@]}" || fail 'Could not register the temporary signing keychain.'
+
 identity=$(security find-identity -v -p codesigning "$keychain" | awk -v team="$APPLE_TEAM_ID" '
   length($2) == 40 && /"Developer ID Application: / && index($0, "(" team ")\"") { print $2; exit }
 ')
@@ -76,6 +87,7 @@ submit_and_staple() {
 app="$scratch/AppRivet.app"
 ditto "$source_app" "$app"
 sparkle="$app/Contents/Frameworks/Sparkle.framework/Versions/Current"
+printf 'Signing AppRivet and its bundled executables with Developer ID.\n'
 # Sparkle's Downloader must retain the entitlements from the pinned framework.
 "${sign[@]}" --options runtime --preserve-metadata=entitlements "$sparkle/XPCServices/Downloader.xpc"
 for component in "$sparkle/Autoupdate" "$sparkle/Updater.app" "$sparkle/XPCServices/Installer.xpc"; do
