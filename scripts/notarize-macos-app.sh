@@ -23,10 +23,10 @@ info="$source_app/Contents/Info.plist"
   || fail 'Expected the AppRivet desktop bundle.'
 version=$(plutil -extract CFBundleShortVersionString raw -o - "$info")
 [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'Expected an AppRivet version such as 0.4.10.'
-codesign --verify --deep --strict "$source_app"
+codesign --verify --deep --strict "$source_app" || fail 'The prepared app could not be verified before signing.'
 
 umask 077
-scratch=$(mktemp -d "${TMPDIR:-/tmp}/apprivet-notary.XXXXXX")
+scratch=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/apprivet-notary.XXXXXX")
 keychain="$scratch/signing.keychain-db"
 notary_key="$scratch/AuthKey.p8"
 cleanup() {
@@ -35,16 +35,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
-keychain_password=$(openssl rand -hex 32)
-printf '%s' "$APPLE_DEVELOPER_ID_P12_BASE64" | base64 -D > "$scratch/certificate.p12"
+keychain_password=$(openssl rand -hex 32) || fail 'Could not generate the temporary keychain password.'
+printf '%s' "$APPLE_DEVELOPER_ID_P12_BASE64" | base64 -D > "$scratch/certificate.p12" \
+  || fail 'Could not decode APPLE_DEVELOPER_ID_P12_BASE64.'
 printf '%s\n' "$APPLE_NOTARY_KEY" > "$notary_key"
 unset APPLE_DEVELOPER_ID_P12_BASE64 APPLE_NOTARY_KEY
-security create-keychain -p "$keychain_password" "$keychain"
-security set-keychain-settings -lut 3600 "$keychain"
-security unlock-keychain -p "$keychain_password" "$keychain"
-security import "$scratch/certificate.p12" -k "$keychain" -f pkcs12 \
-  -P "$APPLE_DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
-security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
+security create-keychain -p "$keychain_password" "$keychain" || fail 'Could not create the temporary signing keychain.'
+security set-keychain-settings -lut 3600 "$keychain" || fail 'Could not configure the temporary signing keychain.'
+security unlock-keychain -p "$keychain_password" "$keychain" || fail 'Could not unlock the temporary signing keychain.'
+security import "$scratch/certificate.p12" -k "$keychain" -t cert -f pkcs12 \
+  -P "$APPLE_DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign || fail 'Could not import the Developer ID certificate and key from the .p12 export.'
+security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" >/dev/null \
+  || fail 'Could not grant codesign access to the imported private key.'
 rm -f -- "$scratch/certificate.p12"
 unset keychain_password APPLE_DEVELOPER_ID_P12_PASSWORD
 
