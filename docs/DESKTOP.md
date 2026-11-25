@@ -1,15 +1,24 @@
-# AppRivet for macOS
+# AppRivet frontends
 
-Open **AppRivet.app** from Finder to create, build, and run a SwiftUI app in an iOS Simulator. The app includes the AppRivet command-line tool. You need full Xcode and an iOS Simulator runtime on your Mac. The simulator flow uses unsigned builds and works without a phone or developer signing team.
+Use the Windows or Linux launcher to create a SwiftUI project in your browser. On macOS, open **AppRivet.app** from Finder to create, build, and run the project in an iOS Simulator. The Mac app includes the AppRivet command-line tool. The simulator flow uses unsigned builds and works without a phone or developer signing team.
 
-## Get the app
+## Windows and Linux
+
+Open the [AppRivet CI run](https://github.com/fpokrzywa/AppRivet/actions/workflows/ci.yml) and download the artifact for your operating system. Sign in to GitHub if prompted. The current Windows and Linux downloads target x86-64 desktop machines.
+
+- **Windows**. Extract **AppRivet-Windows-download** and double-click **AppRivet.exe**. It opens your default browser without opening a Terminal window.
+- **Linux**. Extract **AppRivet-Linux-download**, then extract **AppRivet-linux.tar.gz**. Open the **AppRivet** executable from your file manager. Use the file’s permissions dialog to allow execution if the file manager asks. The launcher uses `xdg-open` and requires a graphical desktop and a default browser.
+
+Click **Create App**. The browser launcher saves a new project in **AppRivet Projects** in your home folder. **Open Projects Folder** reveals your projects so you can move the whole generated folder to a Mac. Use **Quit AppRivet** to stop the launcher when you finish. The browser interface listens only on loopback. Simulator builds and launches use the AppRivet Mac app with Xcode.
+
+## macOS
 
 1. Open a successful [AppRivet CI run](https://github.com/fpokrzywa/AppRivet/actions/workflows/ci.yml) and download **AppRivet-desktop-download** under **Artifacts**. Sign in to GitHub if prompted.
 2. Extract the download, then extract **AppRivet-macOS.zip** inside it. Move **AppRivet.app** to Applications or another folder you use for apps. The archive includes Apple silicon and Intel executables.
 3. Install full Xcode and open it once to finish setup. In **Xcode → Settings → Components**, install an iOS runtime compatible with the generated app’s iOS 17 minimum. Select the full Xcode installation under **Settings → Locations → Command Line Tools**. Exact runtime availability depends on your Xcode release. [Xcode system requirements](https://developer.apple.com/xcode/system-requirements/) · [Installing components](https://developer.apple.com/documentation/xcode/downloading-and-installing-additional-xcode-components)
 4. Open **AppRivet.app**. The CI download uses an ad hoc signature and has no Apple notarization. If macOS blocks it as an unverified developer and you trust the download, macOS provides an **Open Anyway** option under **System Settings → Privacy & Security** after you try to open it. [Apple’s Gatekeeper guidance](https://support.apple.com/en-us/102445)
 
-## Create and run an app
+### Create and run an app on the Mac
 
 1. Enter an app name such as `MyFirstApp`. Leave **Bundle ID** blank to use the default. Pick a save folder, then click **Create App**. AppRivet creates a new subfolder and refuses to overwrite an existing project. Use **Open Project…** to reopen a previous project.
 2. Choose an available iPhone or iPad simulator. If the list is empty after first setup, check the runtime in Xcode and click **Refresh** in AppRivet.

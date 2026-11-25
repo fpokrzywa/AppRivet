@@ -86,6 +86,30 @@ jobs:
           PYTHON=python3
           if [ "$RUNNER_OS" = Windows ]; then PYTHON=python; fi
           "$PYTHON" .github/scripts/worker-smoke.py
+      - name: Build and verify the Windows or Linux frontend download
+        if: runner.os != 'macOS'
+        timeout-minutes: 4
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/frontend"
+          DEST="$RUNNER_TEMP/frontend"
+          if [ "$RUNNER_OS" = Windows ]; then
+            go build -trimpath -ldflags=-H=windowsgui -o "$DEST/AppRivet.exe" ./cmd/apprivet-studio
+            python .github/scripts/studio-smoke.py "$DEST/AppRivet.exe"
+          else
+            go build -trimpath -o "$DEST/AppRivet" ./cmd/apprivet-studio
+            python3 .github/scripts/studio-smoke.py "$DEST/AppRivet"
+            tar -czf "$DEST/AppRivet-linux.tar.gz" -C "$DEST" AppRivet
+          fi
+      - name: Upload the portable frontend download
+        if: runner.os != 'macOS' && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: AppRivet-${{ runner.os }}-download
+          path: |
+            ${{ runner.temp }}/frontend/AppRivet.exe
+            ${{ runner.temp }}/frontend/AppRivet-linux.tar.gz
+          if-no-files-found: error
 
   ios-simulator:
     runs-on: macos-15

@@ -8,7 +8,7 @@
 | M4: remote Mac | mTLS pairing, per-user/project grants, queue, logs, cancellation, audit and artifacts; hostile upload/isolation tests | Portable snapshots, local safe extraction and offline admission checks implemented; local replay protection and capacity reservations implemented; local ownership/recovery, lossless journal maintenance and intent-backed torn-manifest repair implemented; authenticated transport, external fencing, execution agent and isolation remain planned |
 | M5: agent integration | Stabilize JSON contract; optional MCP with explicit human approval channel | Planned; CLI JSON starts in M1 |
 | M6: distribution | Supported-version matrix, private release rehearsal, signed/checksummed binaries, installation docs; approve licensing before public release | Planned |
-| Desktop preview | macOS window for SwiftUI project creation and simulator build/launch | Implemented for generated projects. See [desktop setup](DESKTOP.md) |
+| Desktop preview | Graphical SwiftUI project creation on Windows, Linux and macOS, plus simulator build and launch on the Mac | Implemented for generated projects. See [frontend setup](DESKTOP.md) |
 | Later | Broader project adapters and hosted providers | Unscheduled |
 
 For each milestone: record outcome and acceptance criteria, implement the smallest usable slice, run tests, identify failures and unverified assumptions, update STATUS/CHANGELOG, then commit. Never conflate adapter tests, hosted simulator validation and physical device evidence.

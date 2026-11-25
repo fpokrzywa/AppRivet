@@ -14,7 +14,7 @@ Status: Milestone 2 device discovery is implemented with synthetic-fixture and o
 
 ## Development
 
-For a graphical workflow on a Mac, open the [AppRivet desktop app](docs/DESKTOP.md) to create a SwiftUI project, select an iOS Simulator, and build and run the app from one window.
+The [AppRivet frontends](docs/DESKTOP.md) let you create SwiftUI projects without Terminal on Windows, Linux, and macOS. The Mac app also builds and runs the project on a selected iOS Simulator.
 
 Install Go from [go.dev](https://go.dev/dl/). The tested version and commands are recorded in [verification](docs/VERIFICATION.md).
 
