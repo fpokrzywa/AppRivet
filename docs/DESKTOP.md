@@ -8,13 +8,13 @@ The Windows and Linux launchers target x86-64 desktop machines. They open AppRiv
 
 ### Install on Windows
 
-1. Download **AppRivet-Windows.zip**. [Windows download](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.9/AppRivet-Windows.zip)
+1. Download **AppRivet-Windows.zip**. [AppRivet 0.4.9 Windows ZIP](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.9/AppRivet-Windows.zip)
 2. Right-click the downloaded ZIP and select **Extract All**.
 3. Double-click **AppRivet.exe**. The browser opens your local workspace.
 
 ### Install on Linux
 
-Download **AppRivet-Linux-download** from [AppRivet CI](https://github.com/fpokrzywa/AppRivet/actions/workflows/ci.yml), then extract **AppRivet-linux.tar.gz**. Open the **AppRivet** executable from your file manager. Use the file’s permissions dialog to allow execution if the file manager asks. The launcher uses `xdg-open` and requires a graphical desktop and a default browser.
+Open the [AppRivet Linux CI builds](https://github.com/fpokrzywa/AppRivet/actions/workflows/ci.yml), download **AppRivet-Linux-download** from a successful run, and extract **AppRivet-linux.tar.gz**. Linux downloads are identified by the CI run. Open the **AppRivet** executable from your file manager. Use the file’s permissions dialog to allow execution if the file manager asks. The launcher uses `xdg-open` and requires a graphical desktop and a default browser.
 
 ### Project formats and SDK detection
 
@@ -93,7 +93,7 @@ In **Generate with AI**, choose **Plan components before generating code**. AppR
 
 ### Install AppRivet
 
-1. Download and open **AppRivet-macOS.dmg**. The app includes Apple silicon and Intel executables. [Mac disk image](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.9/AppRivet-macOS.dmg) · [Release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.9)
+1. Download and open **AppRivet-macOS.dmg**. The app includes Apple silicon and Intel executables. [AppRivet 0.4.9 macOS disk image](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.9/AppRivet-macOS.dmg) and [AppRivet 0.4.9 release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.9).
 2. Drag **AppRivet.app** onto **Applications** in the disk image window. Eject the disk image, then open AppRivet from **Applications**.
 3. Open **AppRivet.app** from Finder. This preview uses an ad hoc signature and has no Apple notarization. If macOS says it couldn’t verify AppRivet is free of malware, click **Done**. If you trust the download, open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway** for AppRivet. Authenticate if prompted and confirm with **Open**. [Apple’s Gatekeeper guidance](https://support.apple.com/en-us/102445)
 
@@ -147,5 +147,13 @@ See the build results and platform downloads under **Artifacts** in GitHub Actio
    Remove-Variable seed
    ```
 
-3. Publish the Mac DMG, Mac ZIP and Windows ZIP in GitHub Releases. Verify that the public Mac ZIP matches the archive you signed. Update `updates/appcast.xml` with the public Mac ZIP URL, signature and length, the bundle build number and display version, and the minimum macOS version. Commit the feed to `main` after the assets are public.
+3. Publish the Mac DMG, Mac ZIP and Windows ZIP in GitHub Releases. Verify that the public Mac ZIP matches the archive you signed. Update `updates/appcast.xml` with the public Mac ZIP URL, signature and length, the bundle build number and display version, and the minimum macOS version. In this guide, update the macOS and Windows download labels, release notes label, and their URLs to the same published version. Commit the feed and guide together to `main` after the assets are public. CI checks that the visible versions and link destinations match the feed.
 4. Check for the release from an older installed build. Confirm that the signed download installs and relaunches, and reopen an existing project. The hosted update smoke test exercised the 0.4.8 to 0.4.9 download, replacement and relaunch with an automated approval driver. The standard update dialogs and installed-app behavior on personal Apple silicon and Intel Macs still need live validation. [Hosted update test](https://github.com/fpokrzywa/AppRivet/actions/runs/45665268741)
+
+### Sign and notarize AppRivet for direct Mac downloads
+
+AppRivet's current Mac preview uses ad hoc signing. To distribute future downloads through GitHub without requiring **Open Anyway**, the publisher needs an Apple Developer Program team and its **Developer ID Application** certificate. The certificate's private key belongs in the release Mac's Keychain or a protected signing environment. [Create a Developer ID certificate](https://developer.apple.com/help/account/certificates/create-developer-id-certificates)
+
+1. On a Mac with Xcode, sign the bundled CLI and Sparkle code before signing the outer app. Use Developer ID, Hardened Runtime, and secure timestamps for the release executables. [Apple notarization requirements](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) and [Sparkle distribution guide](https://sparkle-project.org/documentation/#4-distributing-your-app).
+2. Submit a ZIP of the signed app with `xcrun notarytool`. After Apple accepts it, staple the ticket to `AppRivet.app` before packaging the Sparkle ZIP and the disk image. Sign and notarize the final disk image and staple its ticket too. [Apple's command-line notarization guide](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)
+3. Sign the finished Sparkle ZIP with AppRivet's existing update key. Test both a fresh download under normal Gatekeeper settings and an in-place update from the previous public release before publishing. [Sparkle release signing](https://sparkle-project.org/documentation/publishing/) and [Apple distribution testing](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution).
