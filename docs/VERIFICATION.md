@@ -1,5 +1,11 @@
 # Verification record
 
+## Saved project forms and appearance
+
+All six CI jobs passed at `a176919ca4f13ab2fe5f4b42fb511863b2612821`. Chrome exercised the downloaded Windows launcher in both appearances and verified that the header chose the matching transparent PNG. The browser also imported a long Markdown brief, reviewed a mocked AI request, reopened SwiftUI and Flutter projects, restored the checked platforms, and built a Flutter web app. A project generated before form metadata was added reopened from its original brief and target folders.
+
+The archived Mac app contained byte-identical copies of both transparent PNGs. Its smoke test restored a brief over 2 MB, checked Flutter target review, and created, reopened, built, installed, and launched a SwiftUI checklist on a hosted iPhone Simulator. Hosted Linux built Web and Linux from one Flutter project. Live model calls and remaining native Flutter checks are listed below. [Verified CI run and downloads](https://github.com/fpokrzywa/AppRivet/actions/runs/45627004772#artifacts)
+
 ## Shared Flutter projects and prompt review
 
 All six jobs passed at `b9bdc99e02f0ce9a779f00c45af1c4ad38023918`. With Flutter 3.50.1, hosted Linux created the selected scaffolds and built Web and Linux from one shared project. A Windows Chrome test imported a long brief, exercised provider settings and prompt review with mock calls, created a Flutter project for Web and Linux, and built Web through the launcher. The resulting web app ran in Chrome. The hosted Mac package verified prompt review and built and launched a SwiftUI project on an iPhone Simulator. [CI run and platform downloads](https://github.com/fpokrzywa/AppRivet/actions/runs/45622901036#artifacts)
