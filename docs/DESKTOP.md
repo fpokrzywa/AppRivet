@@ -51,8 +51,8 @@ The automated provider tests use mock HTTP responses. Live generation requires a
 
 ### Install AppRivet
 
-1. Sign in to GitHub and download **AppRivet-desktop-download**. If the verified download has expired, open a recent successful CI run and select the artifact of the same name under **Artifacts**. [Verified Mac download](https://github.com/fpokrzywa/AppRivet/actions/runs/45627004772/artifacts/15029801331) · [AppRivet CI runs](https://github.com/fpokrzywa/AppRivet/actions/workflows/ci.yml)
-2. Extract the download, then extract **AppRivet-macOS.zip** inside it. Move **AppRivet.app** to Applications. The archive includes Apple silicon and Intel executables.
+1. Download **AppRivet-macOS.zip** from GitHub Releases. The download works without signing in. [Verified Mac download](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.4/AppRivet-macOS.zip) · [Release notes](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.4)
+2. Extract **AppRivet-macOS.zip** and move **AppRivet.app** to Applications. The archive includes Apple silicon and Intel executables.
 3. Open **AppRivet.app** from Finder. This preview uses an ad hoc signature and has no Apple notarization. If macOS blocks it as an unverified developer and you trust the download, try opening it once, then use **Open Anyway** under **System Settings → Privacy & Security**. [Apple’s Gatekeeper guidance](https://support.apple.com/en-us/102445)
 
 ### Set up the iOS Simulator
