@@ -26,6 +26,8 @@ with tempfile.TemporaryDirectory(prefix="apprivet-studio-") as home:
                 html = page.read()
                 assert b"Describe your app" in html and b"<style>" in html
                 assert b"<script>" in html and b"X-AppRivet-Session" in html
+                assert b'class="brand-mark"' in html and b"data:image/png;base64," in html
+                assert "img-src data:" in page.headers["Content-Security-Policy"]
                 assert b"Import brief" in html and b"Review prompt" in html and b'aria-labelledby="admin-heading"' in html
                 assert "style-src 'sha256-" in page.headers["Content-Security-Policy"]
             brief = "A checklist I can use to pack for a weekend trip.\n" + "Store the list on the device.\n" * 2000 + "Show my trip plan."

@@ -31,6 +31,63 @@ private func platformLabel(_ id: String) -> String {
 }
 
 @MainActor
+private enum DesktopBlueprint {
+    private static let artwork = Bundle.main.url(forResource: "AppRivetBlueprint", withExtension: "png")
+        .flatMap { NSImage(contentsOf: $0) }
+
+    @ViewBuilder static var mark: some View {
+        if let artwork {
+            Image(nsImage: artwork)
+                .resizable()
+                .frame(width: 132, height: 63)
+                .frame(width: 46, height: 46)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 9))
+                .overlay { RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.18)) }
+                .accessibilityLabel("AppRivet")
+        } else {
+            Text("AppRivet").font(.headline)
+        }
+    }
+
+    static var backdrop: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color(red: 0.06, green: 0.15, blue: 0.16)
+                if let artwork {
+                    Image(nsImage: artwork)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: max(geometry.size.width * 4.2, 2080))
+                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
+                        .clipped()
+                        .opacity(0.52)
+                }
+                LinearGradient(colors: [.clear, Color(red: 0.05, green: 0.11, blue: 0.13).opacity(0.8)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                Canvas { context, size in
+                    let spacings: [CGFloat] = [27, 108]
+                    for spacing in spacings {
+                        var grid = Path()
+                        for x in stride(from: 0.0, to: size.width, by: spacing) {
+                            grid.move(to: CGPoint(x: x, y: 0))
+                            grid.addLine(to: CGPoint(x: x, y: size.height))
+                        }
+                        for y in stride(from: 0.0, to: size.height, by: spacing) {
+                            grid.move(to: CGPoint(x: 0, y: y))
+                            grid.addLine(to: CGPoint(x: size.width, y: y))
+                        }
+                        context.stroke(grid, with: .color(.mint.opacity(spacing == 108 ? 0.10 : 0.05)), lineWidth: 1)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+@MainActor
 private func chooseTextFile(title: String, extensions: [String]) -> URL? {
     let panel = NSOpenPanel()
     panel.title = title
@@ -78,6 +135,9 @@ struct AppRivetDesktop: App {
         guard arguments.dropFirst().first == "--smoke-test" else { return }
         do {
             guard arguments.count == 3 else { throw DesktopFailure(message: "Smoke test requires a parent folder.") }
+            guard Bundle.main.url(forResource: "AppRivetBlueprint", withExtension: "png") != nil else {
+                throw DesktopFailure(message: "The AppRivet blueprint artwork is missing from the package.")
+            }
             let workflow = try DesktopWorkflow.bundled()
             let parent = URL(fileURLWithPath: arguments[2], isDirectory: true)
             let file = parent.appendingPathComponent("TripBrief.md")
@@ -368,7 +428,7 @@ private struct DesktopView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
-                    Text("AppRivet").font(.headline)
+                    DesktopBlueprint.mark
                     Spacer()
                     Button("Your projects", action: model.openProject).disabled(model.busy)
                     Button("Admin") { showAdmin = true }.disabled(model.busy)
@@ -388,6 +448,8 @@ private struct DesktopView: View {
             .frame(maxWidth: 740)
             .frame(maxWidth: .infinity)
         }
+        .background { DesktopBlueprint.backdrop }
+        .preferredColorScheme(.dark)
         .frame(minWidth: 540, minHeight: 510)
         .sheet(isPresented: $showAdmin) { AdminSheet(model: model) }
         .sheet(item: $model.draft) { draft in reviewSheet(draft) }
