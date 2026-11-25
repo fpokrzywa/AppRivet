@@ -76,6 +76,8 @@ button:disabled { opacity: .57; cursor: default; }
 .examples button:hover:enabled, .quiet:hover:enabled { background: #b0d8d32b; }
 .project-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 17px 24px 12px; }
 .project-fields > div { min-width: 0; }
+#generation-settings { margin-top: 12px; }
+#generation-settings label { margin-bottom: 0; }
 .platform-settings { padding: 4px 24px 15px; }
 .platform-settings > select { max-width: 350px; }
 #platform-settings { margin-top: 11px; }
@@ -157,8 +159,43 @@ button:disabled { opacity: .57; cursor: default; }
 #custom-model-field { margin-top: 12px; }
 .key-label { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 7px; margin: 16px 0 6px; }
 .key-label label { margin: 0; }
+.key-import { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 8px; }
+.key-import .field-help { margin: 0; }
 .dialog textarea { margin-top: 0; font-family: Consolas, "SF Mono", monospace; font-size: .9rem; }
 .dialog .message:not(:empty) { margin-top: 10px; }
+#review-budget { margin: 0; font-weight: 680; }
+.review-content {
+  max-height: min(44vh, 400px);
+  overflow: auto;
+  padding: 0 8px 2px 0;
+  margin-top: 14px;
+  overflow-wrap: anywhere;
+}
+.review-content h3 { margin: 0 0 8px; font-size: 1rem; }
+#review-plan { margin-bottom: 18px; }
+#review-architecture { margin: 0 0 10px; white-space: pre-wrap; }
+#review-components { margin: 0; padding-left: 1.35em; }
+#review-components li + li { margin-top: 7px; }
+#review-components p { color: var(--muted); margin: 2px 0 0; white-space: pre-wrap; }
+#review-prompts details { padding: 9px 0; border-top: 1px solid var(--line); }
+#review-prompts summary { font-weight: 660; cursor: pointer; }
+#review-prompts summary span {
+  display: block;
+  margin-left: 1.1em;
+  color: var(--muted);
+  font-size: .84rem;
+  font-weight: 400;
+}
+#review-prompts pre {
+  margin: 8px 0 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  max-height: 11rem;
+  overflow: auto;
+  font: .84rem/1.55 Consolas, "SF Mono", monospace;
+  white-space: pre-wrap;
+}
 #build-status { white-space: pre-wrap; }
 .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 16px; }
 @media (max-width: 830px) {

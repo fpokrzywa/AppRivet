@@ -105,6 +105,10 @@ func Generate(ctx context.Context, provider, model, key, prompt string) (string,
 }
 
 func requestSource(ctx context.Context, httpClient *http.Client, provider, model, key, prompt string) (string, error) {
+	return requestSourceWithBudget(ctx, httpClient, provider, model, key, prompt, 0)
+}
+
+func requestSourceWithBudget(ctx context.Context, httpClient *http.Client, provider, model, key, prompt string, override int) (string, error) {
 	schema := map[string]any{
 		"type": "object", "properties": map[string]any{"source": map[string]string{"type": "string"}},
 		"required": []string{"source"}, "additionalProperties": false,
@@ -118,6 +122,9 @@ func requestSource(ctx context.Context, httpClient *http.Client, provider, model
 		if model == "gpt-6.2-sol" || model == "gpt-6.2-astra" {
 			budget = 25000
 		}
+		if override > 0 {
+			budget = override
+		}
 		payload = map[string]any{
 			"model": model, "input": prompt, "store": false, "max_output_tokens": budget,
 			"text": map[string]any{"format": map[string]any{"type": "json_schema", "name": "swiftui_source", "strict": true, "schema": schema}},
@@ -126,6 +133,9 @@ func requestSource(ctx context.Context, httpClient *http.Client, provider, model
 		endpoint, label = "https://api.anthropic.com/v1/messages", "Anthropic"
 		if model == "claude-opus-5-5" || model == "claude-fable-5-2" {
 			budget = 20000
+		}
+		if override > 0 {
+			budget = override
 		}
 		payload = map[string]any{
 			"model": model, "max_tokens": budget,

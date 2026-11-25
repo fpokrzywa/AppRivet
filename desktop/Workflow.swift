@@ -44,6 +44,61 @@ struct DesktopDraft: Decodable, Identifiable, Sendable {
     }
 }
 
+struct DesktopPlanRequest: Encodable, Sendable {
+    let name: String
+    let bundleID: String
+    let brief: String
+    let format: String
+    let platforms: [String]
+    let provider: String
+    let model: String
+    var approval: String? = nil
+    var plan: DesktopPlanReview.Plan? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case name, brief, format, platforms, provider, model, approval, plan
+        case bundleID = "bundle_id"
+    }
+}
+
+struct DesktopPlanReview: Decodable, Sendable {
+    struct Prompt: Decodable, Sendable {
+        let title: String
+        let file: String?
+        let prompt: String
+        let maxOutputTokens: Int
+
+        enum CodingKeys: String, CodingKey {
+            case title, file, prompt
+            case maxOutputTokens = "max_output_tokens"
+        }
+    }
+
+    struct Plan: Codable, Sendable {
+        struct Component: Codable, Sendable {
+            let title: String
+            let scope: String
+        }
+
+        let architecture: String
+        let components: [Component]
+    }
+
+    let approval: String
+    let plan: Plan?
+    let prompts: [Prompt]
+    let requestCount: Int
+    let maxOutputTokens: Int
+    let usesSynthesis: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case approval, plan, prompts
+        case requestCount = "request_count"
+        case maxOutputTokens = "max_output_tokens"
+        case usesSynthesis = "uses_synthesis"
+    }
+}
+
 struct DesktopOpened: Decodable, Sendable {
     struct Settings: Decodable, Sendable {
         let name: String
@@ -167,6 +222,30 @@ struct DesktopWorkflow: Sendable {
         let timeout = draft.isAI ? (draft.format == "flutter" ? 690 : 390) : (draft.format == "flutter" ? 540 : 30)
         return try invoke(args + [draft.name], directory: parent, timeout: timeout,
                           apiKey: apiKey, input: Data(draft.brief.utf8))
+    }
+
+    func reviewPlan(_ request: DesktopPlanRequest) throws -> DesktopPlanReview {
+        try invoke(["plan", "review"], input: JSONEncoder().encode(request), fullOutput: true)
+    }
+
+    func draftPlan(_ request: DesktopPlanRequest, review: DesktopPlanReview, apiKey: String) throws -> DesktopPlanReview {
+        var input = request
+        input.approval = review.approval
+        let result: DesktopPlanReview = try invoke(["plan", "draft"], timeout: review.requestCount * 360 + 30,
+                                                  apiKey: apiKey, input: JSONEncoder().encode(input), fullOutput: true)
+        guard result.plan != nil else {
+            throw DesktopFailure(message: "AppRivet did not return a component plan to review.")
+        }
+        return result
+    }
+
+    func createFromPlan(_ request: DesktopPlanRequest, review: DesktopPlanReview, parent: URL, apiKey: String) throws -> DesktopProject {
+        var input = request
+        input.approval = review.approval
+        input.plan = review.plan
+        let timeout = review.requestCount * 360 + (request.format == "flutter" ? 330 : 30)
+        return try invoke(["plan", "create"], directory: parent, timeout: timeout,
+                          apiKey: apiKey, input: JSONEncoder().encode(input))
     }
 
     func inspect(_ url: URL) throws -> DesktopProject {
@@ -368,6 +447,7 @@ private func runProcess(_ executable: URL, _ args: [String], directory: URL? = n
         key != "DEVELOPER_DIR" && key != "APPRIVET_API_KEY" && !key.hasPrefix("SIMCTL_CHILD_")
     }
     environment["APPRIVET_API_KEY"] = apiKey
+    environment["APPRIVET_PLAN_OWNER_PID"] = args.first == "plan" ? String(ProcessInfo.processInfo.processIdentifier) : nil
     child.environment = environment
 
     func readOutput() throws -> ProcessResult {
@@ -388,7 +468,8 @@ private func runProcess(_ executable: URL, _ args: [String], directory: URL? = n
             kill(child.processIdentifier, SIGKILL)
         }
         let command = args.first == "simctl" ? "simctl \(args.dropFirst().first ?? "")" : executable.lastPathComponent
-        throw DesktopFailure(message: "The \(command) command timed out. Check Xcode and Simulator, then try again.",
+        let hint = args.first == "plan" ? "Try again from the app brief." : "Check Xcode and Simulator, then try again."
+        throw DesktopFailure(message: "The \(command) command timed out. \(hint)",
                              details: (try? readOutput().diagnostics) ?? "")
     }
     return try readOutput()

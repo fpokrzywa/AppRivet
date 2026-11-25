@@ -93,3 +93,27 @@ func TestProviderFailureDoesNotReturnRawProviderMessage(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestPlanBudgetsReachProvider(t *testing.T) {
+	for _, provider := range []string{"openai", "anthropic"} {
+		t.Run(provider, func(t *testing.T) {
+			client := &http.Client{Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
+				var body map[string]any
+				if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+					t.Fatal(err)
+				}
+				field := "max_output_tokens"
+				if provider == "anthropic" {
+					field = "max_tokens"
+				}
+				if body[field] != float64(summaryTokens) {
+					t.Fatal("provider request did not use the approved summary budget")
+				}
+				return &http.Response{StatusCode: http.StatusTooManyRequests, Body: io.NopCloser(strings.NewReader(""))}, nil
+			})}
+			if _, err := requestSourceWithBudget(t.Context(), client, provider, "test-model", "test-key", "brief", summaryTokens); err == nil {
+				t.Fatal("expected a rate limit from the mock provider")
+			}
+		})
+	}
+}

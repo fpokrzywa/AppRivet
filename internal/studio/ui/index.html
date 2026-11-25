@@ -62,6 +62,10 @@
                 </optgroup>
               </select>
               <p id="selected-model" class="field-help"></p>
+              <div id="generation-settings" hidden>
+                <label class="trust-project"><input id="plan-components" type="checkbox" aria-describedby="generation-help"> Plan components before generating code</label>
+                <p id="generation-help" class="field-help"></p>
+              </div>
             </div>
           </div>
           <div class="platform-settings">
@@ -124,50 +128,70 @@
   <dialog id="admin" class="panel dialog" aria-labelledby="admin-heading">
     <form id="admin-form">
       <h2 id="admin-heading">Admin</h2>
-      <p class="dialog-info">Set your AI provider, model and key. You can keep a separate key for each provider during this session.</p>
-      <div class="appearance-field">
-        <label for="appearance">Appearance</label>
-        <select id="appearance">
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-        </select>
-      </div>
-      <div class="dialog-fields">
-        <div>
-          <label for="provider">Provider</label>
-          <select id="provider">
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
+      <p id="credential-storage" class="dialog-info"></p>
+      <fieldset id="admin-fields">
+        <div class="appearance-field">
+          <label for="appearance">Appearance</label>
+          <select id="appearance">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
           </select>
         </div>
-        <div>
-          <label for="model">Model</label>
-          <select id="model"></select>
+        <div class="dialog-fields">
+          <div>
+            <label for="provider">Provider</label>
+            <select id="provider">
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+            </select>
+          </div>
+          <div>
+            <label for="model">Model</label>
+            <select id="model"></select>
+          </div>
         </div>
-      </div>
-      <div id="custom-model-field" hidden>
-        <label for="custom-model">Custom model ID</label>
-        <input id="custom-model" maxlength="128" spellcheck="false">
-      </div>
-      <div class="key-label">
-        <label for="api-key">API key</label>
-        <button id="import-key" class="quiet" type="button">Import key file</button>
-        <input id="key-file" type="file" accept=".txt" hidden>
-      </div>
-      <input id="api-key" type="password" maxlength="512" autocomplete="off" spellcheck="false" placeholder="Paste a key to add or replace it">
-      <p id="key-status" class="field-help" role="status"></p>
-      <div class="dialog-actions">
-        <button id="clear-key" class="quiet" type="button">Remove key</button>
-        <button id="close-admin" class="quiet" type="button">Close</button>
-        <button class="primary" type="submit">Save settings</button>
-      </div>
+        <div id="custom-model-field" hidden>
+          <label for="custom-model">Custom model ID</label>
+          <input id="custom-model" maxlength="128" spellcheck="false">
+        </div>
+        <div class="key-label">
+          <label for="api-key">API key</label>
+          <div class="key-import">
+            <button id="import-key" class="quiet" type="button" aria-describedby="key-file-help">Import key (.txt)</button>
+            <span id="key-file-help" class="field-help">UTF-8 .txt file with one API key</span>
+            <input id="key-file" type="file" accept=".txt" hidden>
+          </div>
+        </div>
+        <input id="api-key" type="password" maxlength="512" autocomplete="off" spellcheck="false" placeholder="Paste a key to add or replace it" aria-describedby="key-status">
+        <p id="key-status" class="field-help" role="status"></p>
+        <div class="dialog-actions">
+          <button id="clear-key" class="quiet" type="button">Remove key</button>
+          <button id="close-admin" class="quiet" type="button">Close</button>
+          <button class="primary" type="submit">Save settings</button>
+        </div>
+      </fieldset>
     </form>
   </dialog>
   <dialog id="prompt-review" class="panel dialog" aria-labelledby="review-heading">
-    <h2 id="review-heading">Review prompt</h2>
+    <h2 id="review-heading" tabindex="-1">Review prompt</h2>
     <p id="review-target" class="dialog-info"></p>
-    <label for="prompt-text">Prompt text</label>
-    <textarea id="prompt-text" readonly rows="11" spellcheck="false"></textarea>
+    <div id="single-prompt">
+      <label for="prompt-text">Prompt text</label>
+      <textarea id="prompt-text" readonly rows="11" spellcheck="false"></textarea>
+    </div>
+    <div id="staged-review" hidden>
+      <p id="review-budget"></p>
+      <p id="review-synthesis" class="field-help" hidden>AppRivet sends the extracted summaries to the same provider for plan synthesis. Those requests are included in the budget above. Their exact prompt text depends on the summaries returned.</p>
+      <div class="review-content">
+        <section id="review-plan" aria-labelledby="review-plan-heading" hidden>
+          <h3 id="review-plan-heading">Architecture</h3>
+          <p id="review-architecture"></p>
+          <ul id="review-components"></ul>
+        </section>
+        <h3 id="review-prompts-heading" hidden>Code prompts</h3>
+        <div id="review-prompts"></div>
+      </div>
+    </div>
     <p id="review-status" class="message" role="status"></p>
     <div class="dialog-actions">
       <button id="edit-brief" type="button" class="quiet" autofocus>Back to brief</button>

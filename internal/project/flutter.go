@@ -98,6 +98,10 @@ func flutterPlatforms(root string) []string {
 // CreateFlutter asks the installed SDK for native scaffolds. Application code
 // is shared in lib/main.dart, regardless of the chosen target set.
 func CreateFlutter(ctx context.Context, parent string, draft Draft, source string) (Info, error) {
+	return createFlutter(ctx, parent, draft, source, nil)
+}
+
+func createFlutter(ctx context.Context, parent string, draft Draft, source string, parts []string) (Info, error) {
 	validated, err := ReviewTarget(draft.Name, draft.BundleID, StarterOptions{Brief: draft.Brief},
 		TargetOptions{Format: "flutter", Platforms: draft.Platforms}, source != "")
 	if err != nil {
@@ -124,6 +128,17 @@ func CreateFlutter(ctx context.Context, parent string, draft Draft, source strin
 	}
 	if got := flutterPlatforms(root); !slices.Equal(got, validated.Platforms) {
 		return Info{}, fmt.Errorf("the Flutter SDK did not create the requested platforms at %s", root)
+	}
+	for i, part := range parts {
+		name := fmt.Sprintf("apprivet_part_%02d.dart", i+1)
+		file, err := os.OpenFile(filepath.Join(root, "lib", name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		if err != nil {
+			return Info{}, fmt.Errorf("partial project remains at %s: %w", root, err)
+		}
+		_, writeErr := file.WriteString(part + "\n")
+		if err := errors.Join(writeErr, file.Close()); err != nil {
+			return Info{}, fmt.Errorf("partial project remains at %s: %w", root, err)
+		}
 	}
 	if source != "" {
 		if err := os.WriteFile(filepath.Join(root, "lib", "main.dart"), []byte(source+"\n"), 0644); err != nil {

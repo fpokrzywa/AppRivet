@@ -12,8 +12,10 @@ const projects = byID("projects");
 const brief = byID("brief");
 const nameField = byID("name");
 const starter = byID("starter");
+const planComponents = byID("plan-components");
 const format = byID("format");
 const admin = byID("admin");
+const adminFields = byID("admin-fields");
 const adminButton = byID("open-admin");
 const provider = byID("provider");
 const model = byID("model");
@@ -23,8 +25,12 @@ const keyStatus = byID("key-status");
 const clearKey = byID("clear-key");
 const appearance = byID("appearance");
 const review = byID("prompt-review");
+const reviewHeading = byID("review-heading");
+const reviewContent = review.querySelector(".review-content");
+const reviewPrompts = byID("review-prompts");
 const reviewStatus = byID("review-status");
 const promptText = byID("prompt-text");
+const copyPrompt = byID("copy-prompt");
 const confirmCreate = byID("confirm-create");
 const editBrief = byID("edit-brief");
 const importStatus = byID("import-status");
@@ -40,7 +46,13 @@ let buildSelection;
 let building = false;
 let loadedProject = "";
 let openSequence = 0;
+let preferComponentPlan = false;
+let credentialStorage = false;
+let savedKeys = new Set();
+let vaultRevision = 0;
 
+const singlePromptBriefBytes = 4096;
+const briefEncoder = new TextEncoder();
 const platformNames = {ios: "iOS", android: "Android", web: "Web", windows: "Windows", macos: "macOS", linux: "Linux"};
 const formatNames = {flutter: "Flutter (shared code)", swiftui: "SwiftUI (native iOS)"};
 
@@ -48,12 +60,16 @@ const providers = {
   openai: {name: "OpenAI", models: [["gpt-6.2-sol", "GPT-6.2 Sol"], ["gpt-6.2-astra", "GPT-6.2 Astra"]]},
   anthropic: {name: "Anthropic", models: [["claude-opus-5-5", "Claude Opus 5.5"], ["claude-fable-5-2", "Claude Fable 5.2"]]},
 };
-// Keys live in page memory. They are never written to browser storage or the URL.
+// Session-only keys live in memory. The credential vault exposes only which providers have keys.
 const profiles = {
   openai: {model: providers.openai.models[0][0], key: ""},
   anthropic: {model: providers.anthropic.models[0][0], key: ""},
 };
 const keyPattern = /^[A-Za-z0-9_-]{8,512}$/;
+
+function hasProviderKey(id) {
+  return savedKeys.has(id) || Boolean(profiles[id].key);
+}
 
 const starters = {
   ai: ["AI-generated SwiftUI", "A model writes the app’s SwiftUI source from your brief. Review the source before building in Xcode."],
@@ -76,24 +92,34 @@ function show(element, text, error = false) {
 
 function updateBrief() {
   byID("brief-count").textContent = brief.value.length.toLocaleString() + " characters";
+  const needsComponentPlan = briefEncoder.encode(brief.value.trim()).length > singlePromptBriefBytes;
+  const ai = Boolean(format.value) && starter.value === "ai";
+  byID("generation-settings").hidden = !ai;
+  planComponents.disabled = needsComponentPlan;
+  planComponents.checked = needsComponentPlan || preferComponentPlan;
+  byID("generation-help").textContent = needsComponentPlan
+    ? "Descriptions over 4,096 UTF-8 bytes use component planning."
+    : "Review a component plan before sending the code prompts.";
   if (!format.value) return;
   const isFlutter = format.value === "flutter";
   const [title, description] = isFlutter
-    ? starter.value === "ai"
+    ? ai
       ? ["AI-generated Flutter", "The selected model writes shared Dart code for the platforms you checked."]
       : ["Flutter starter", "One shared Dart project with build files for the platforms you checked."]
     : starters[starter.value];
   byID("starter-title").textContent = title;
   byID("starter-copy").textContent = description;
   byID("output-title").textContent = isFlutter ? "Flutter project" : "Xcode project";
-  byID("output-source").textContent = isFlutter ? "Shared Dart code in lib/main.dart" : "Editable SwiftUI source";
+  byID("output-source").textContent = isFlutter
+    ? ai && planComponents.checked ? "Shared Dart code in lib/" : "Shared Dart code in lib/main.dart"
+    : "Editable SwiftUI source";
   byID("run-heading").textContent = isFlutter ? "Build your app" : "Run in Simulator";
   byID("run-copy").textContent = isFlutter
     ? "Pick a build target beside a saved project. Targets that require another host use the same project folder."
     : "On your Mac, open the project in AppRivet and choose Build & Run.";
   const settings = profiles[activeProvider];
-  byID("selected-model").textContent = starter.value === "ai"
-    ? providers[activeProvider].name + " · " + settings.model + (settings.key ? "" : " · Add a key in Admin")
+  byID("selected-model").textContent = ai
+    ? providers[activeProvider].name + " · " + settings.model + (hasProviderKey(activeProvider) ? "" : " · Add a key in Admin")
     : "";
 }
 
@@ -188,7 +214,13 @@ async function request(path, body) {
 }
 
 async function refresh() {
+  const revision = vaultRevision;
   const state = await request("/api/state");
+  if (revision === vaultRevision) {
+    credentialStorage = state.credential_storage === true;
+    savedKeys = new Set(state.saved_keys ?? []);
+    if (admin.open && !adminFields.disabled) refreshKeyStatus();
+  }
   flutterSDK = state.flutter_sdk;
   availableFormats = state.project_formats.filter(id => Object.hasOwn(formatNames, id));
   byID("flutter-sdk-help").hidden = flutterSDK;
@@ -308,9 +340,35 @@ watchFile(byID("import-brief"), byID("brief-file"), async file => {
 });
 
 function refreshKeyStatus() {
-  const hasKey = Boolean(profiles[provider.value].key);
-  show(keyStatus, hasKey ? "Key set for this session. Paste or import a replacement." : "No key set for this provider.");
-  clearKey.disabled = !hasKey;
+  byID("credential-storage").textContent = credentialStorage
+    ? "AppRivet saves one key per provider in your operating system’s credential vault."
+    : "API keys are available for this session only. You can set one key per provider.";
+  const id = provider.value;
+  show(keyStatus, savedKeys.has(id) ? "Key saved for this provider."
+    : hasProviderKey(id) ? "Key set for this session." : "No key set for this provider.");
+  clearKey.disabled = !hasProviderKey(id);
+}
+
+async function updateProviderKey(id, key) {
+  if (credentialStorage && (key || savedKeys.has(id))) {
+    adminFields.disabled = true;
+    show(keyStatus, key ? "Saving the key…" : "Removing the key…");
+    try {
+      if (key) {
+        await request("/api/provider-key", {provider: id, key});
+        savedKeys.add(id);
+      } else {
+        await request("/api/remove-provider-key", {provider: id});
+        savedKeys.delete(id);
+      }
+      vaultRevision++;
+      profiles[id].key = "";
+    } finally {
+      adminFields.disabled = false;
+    }
+  } else {
+    profiles[id].key = key;
+  }
 }
 
 function updateCustomField() {
@@ -335,29 +393,37 @@ adminButton.addEventListener("click", () => {
   admin.showModal();
 });
 admin.addEventListener("close", () => { if (!admin.open) apiKey.value = ""; });
+admin.addEventListener("cancel", event => { if (adminFields.disabled) event.preventDefault(); });
 byID("close-admin").addEventListener("click", () => admin.close());
 provider.addEventListener("change", showProviderSettings);
 model.addEventListener("change", updateCustomField);
-clearKey.addEventListener("click", () => {
-  profiles[provider.value].key = "";
-  apiKey.value = "";
-  refreshKeyStatus();
-  updateBrief();
+clearKey.addEventListener("click", async () => {
+  if (adminFields.disabled) return;
+  try {
+    await updateProviderKey(provider.value, "");
+    apiKey.value = "";
+    refreshKeyStatus();
+    updateBrief();
+  } catch (error) {
+    show(keyStatus, error.message, true);
+  }
 });
 watchFile(byID("import-key"), byID("key-file"), async file => {
   const selected = provider.value;
   try {
     const key = (await readTextFile(file, /\.txt$/i, 1024)).trim();
     if (!keyPattern.test(key)) throw new Error("Choose a text file containing just one API key.");
-    if (!admin.open || provider.value !== selected) return;
+    if (!admin.open || adminFields.disabled || provider.value !== selected) return;
     apiKey.value = key;
     show(keyStatus, "Key loaded. Save settings to use it.");
   } catch (error) {
-    show(keyStatus, error.message, true);
+    if (admin.open && !adminFields.disabled && provider.value === selected) show(keyStatus, error.message, true);
   }
 });
-byID("admin-form").addEventListener("submit", event => {
+byID("admin-form").addEventListener("submit", async event => {
   event.preventDefault();
+  if (adminFields.disabled) return;
+  const selected = provider.value;
   const modelID = model.value === "custom" ? customModel.value.trim() : model.value;
   const key = apiKey.value.trim();
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(modelID)) {
@@ -370,9 +436,17 @@ byID("admin-form").addEventListener("submit", event => {
     apiKey.focus();
     return;
   }
-  activeProvider = provider.value;
+  if (key) {
+    try {
+      await updateProviderKey(selected, key);
+    } catch (error) {
+      show(keyStatus, error.message.replaceAll(key, "[redacted]"), true);
+      apiKey.focus();
+      return;
+    }
+  }
+  activeProvider = selected;
   profiles[activeProvider].model = modelID;
-  if (key) profiles[activeProvider].key = key;
   const theme = appearance.value;
   document.documentElement.dataset.theme = theme;
   byID("brand-mark").src = theme === "light" ? "/apprivet-mark-dark.png" : "/apprivet-mark-light.png";
@@ -382,6 +456,10 @@ byID("admin-form").addEventListener("submit", event => {
 
 brief.addEventListener("input", updateBrief);
 starter.addEventListener("change", updateBrief);
+planComponents.addEventListener("change", () => {
+  preferComponentPlan = planComponents.checked;
+  updateBrief();
+});
 format.addEventListener("change", () => {
   selectedFormat = format.value;
   updateFormat();
@@ -406,10 +484,48 @@ for (const button of document.querySelectorAll("[data-example]")) {
   });
 }
 
+function displayStagedReview(draft) {
+  const plan = draft.plan;
+  reviewHeading.textContent = plan ? "Review component plan" : "Review planning prompts";
+  byID("review-budget").textContent = draft.request_count.toLocaleString()
+    + (draft.request_count === 1 ? " request, up to " : " requests, up to ")
+    + draft.max_output_tokens.toLocaleString() + " output tokens in this step.";
+  byID("review-synthesis").hidden = !draft.uses_synthesis;
+  byID("review-plan").hidden = !plan;
+  byID("review-architecture").textContent = plan?.architecture ?? "";
+  byID("review-components").replaceChildren(...(plan?.components ?? []).map(component => {
+    const item = document.createElement("li");
+    const title = document.createElement("strong");
+    title.textContent = component.title;
+    const scope = document.createElement("p");
+    scope.textContent = component.scope;
+    item.append(title, scope);
+    return item;
+  }));
+  byID("review-prompts-heading").hidden = !plan;
+  reviewPrompts.replaceChildren(...draft.prompts.map((entry, index) => {
+    const details = document.createElement("details");
+    details.open = index === 0;
+    const summary = document.createElement("summary");
+    summary.textContent = entry.title;
+    const caption = document.createElement("span");
+    caption.textContent = (entry.file ? entry.file + " (" : "")
+      + "Up to " + entry.max_output_tokens.toLocaleString() + " output tokens" + (entry.file ? ")" : "");
+    summary.append(caption);
+    const prompt = document.createElement("pre");
+    prompt.tabIndex = 0;
+    prompt.textContent = entry.prompt;
+    details.append(summary, prompt);
+    return details;
+  }));
+  confirmCreate.textContent = plan ? "Approve plan & generate" : "Send to plan";
+}
+
 form.addEventListener("submit", async event => {
   event.preventDefault();
-  if (submit.disabled) return;
+  if (fields.disabled || submit.disabled) return;
   const ai = starter.value === "ai";
+  const staged = ai && planComponents.checked;
   const isFlutter = format.value === "flutter";
   const settings = profiles[activeProvider];
   const project = {
@@ -423,22 +539,35 @@ form.addEventListener("submit", async event => {
   fields.disabled = true;
   show(message, "Validating the brief and project settings…");
   try {
-    const draft = await request("/api/review", project);
-    reviewedRequest = ai ? {...project, approval: draft.approval} : project;
-    promptText.value = draft.prompt;
-    const platforms = isFlutter ? " Flutter targets: " + draft.platforms.map(platform => platformNames[platform]).join(", ") + "." : "";
+    const draft = await request(staged ? "/api/plan/review" : "/api/review", project);
+    reviewedRequest = {
+      project: ai ? {...project, approval: draft.approval} : project,
+      stage: staged ? "planning" : "single",
+    };
+    byID("staged-review").hidden = !staged;
+    byID("single-prompt").hidden = copyPrompt.hidden = staged;
+    if (staged) {
+      displayStagedReview(draft);
+    } else {
+      reviewHeading.textContent = "Review prompt";
+      promptText.value = draft.prompt;
+      confirmCreate.textContent = ai ? "Send & create project" : (isFlutter ? "Create Flutter project" : "Create SwiftUI starter");
+    }
+    const platforms = isFlutter ? " Flutter targets are " + (draft.platforms ?? project.platforms).map(platform => platformNames[platform]).join(", ") + "." : "";
     byID("review-target").textContent = (ai
-      ? "Destination: " + providers[draft.provider].name + " · " + draft.model + ". Approval sends this prompt and uses your API account."
+      ? providers[draft.provider ?? project.provider].name + " (" + (draft.model ?? project.model)
+        + "). Approval sends " + (staged ? "the requests for this step" : "this prompt") + " using your API account."
       : (isFlutter ? "Local Flutter starter." : "Local project · " + starters[draft.starter][0] + " starter.")) + platforms;
-    confirmCreate.textContent = ai ? "Send & create project" : (isFlutter ? "Create Flutter project" : "Create SwiftUI starter");
     const blocker = isFlutter && !flutterSDK ? "Install the Flutter SDK before creating this project."
-      : ai && !settings.key ? "Add a key for this provider in Admin to send the prompt." : "";
+      : ai && !hasProviderKey(project.provider) ? "Add a key for this provider in Admin before sending." : "";
     confirmCreate.disabled = Boolean(blocker);
     show(reviewStatus, blocker, confirmCreate.disabled);
     show(message, "");
     fields.disabled = false;
     submit.focus();
     review.showModal();
+    review.scrollTop = 0;
+    reviewContent.scrollTop = 0;
     promptText.scrollTop = 0;
   } catch (error) {
     show(message, error.message, true);
@@ -452,8 +581,11 @@ review.addEventListener("close", () => {
   if (review.open) return;
   reviewedRequest = undefined;
   promptText.value = "";
+  reviewPrompts.replaceChildren();
+  byID("review-components").replaceChildren();
+  byID("review-architecture").textContent = "";
 });
-byID("copy-prompt").addEventListener("click", async () => {
+copyPrompt.addEventListener("click", async () => {
   promptText.focus();
   promptText.select();
   try {
@@ -464,13 +596,26 @@ byID("copy-prompt").addEventListener("click", async () => {
   }
 });
 confirmCreate.addEventListener("click", async () => {
-  if (!reviewedRequest || creating) return;
-  const project = reviewedRequest;
+  if (!reviewedRequest || creating || confirmCreate.disabled) return;
+  const {project, stage} = reviewedRequest;
+  const key = project.provider ? profiles[project.provider].key : "";
+  const approvedRequest = key ? {...project, api_key: key} : project;
   creating = true;
   confirmCreate.disabled = editBrief.disabled = true;
-  show(reviewStatus, project.provider ? "Waiting for the model to generate the source…" : "Creating your project…");
+  show(reviewStatus, stage === "planning" ? "Waiting for the model to plan the components…"
+    : project.provider ? "Waiting for the model to generate the source…" : "Creating your project…");
   try {
-    const result = await request("/api/create", project.provider ? {...project, api_key: profiles[project.provider].key} : project);
+    if (stage === "planning") {
+      const draft = await request("/api/plan/draft", approvedRequest);
+      displayStagedReview(draft);
+      reviewedRequest = {project: {...project, approval: draft.approval, plan: draft.plan}, stage: "generation"};
+      show(reviewStatus, "");
+      review.scrollTop = 0;
+      reviewContent.scrollTop = 0;
+      reviewHeading.focus();
+      return;
+    }
+    const result = await request(stage === "generation" ? "/api/plan/create" : "/api/create", approvedRequest);
     const label = starters[result.starter]?.[0] ?? "SwiftUI";
     review.close();
     loadedProject = result.suggested_scheme;
@@ -481,7 +626,7 @@ confirmCreate.addEventListener("click", async () => {
       : "Created " + result.suggested_scheme + " with the " + label + " starter.");
     await refresh().catch(() => {});
   } catch (error) {
-    show(reviewStatus, error.message, true);
+    show(reviewStatus, key ? error.message.replaceAll(key, "[redacted]") : error.message, true);
   } finally {
     creating = false;
     confirmCreate.disabled = editBrief.disabled = false;

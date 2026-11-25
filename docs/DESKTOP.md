@@ -28,7 +28,7 @@ For SwiftUI, **Automatic from brief** looks for checklist, notes, or counter ter
 
 Click a project name under **Your projects** in the browser. On macOS, choose **Your projects** and select its main folder, `APP_BRIEF.md`, or Xcode project. Selecting Flutter’s `ios/Runner.xcodeproj` or `ios/Runner.xcworkspace` reopens the surrounding Flutter project. AppRivet restores the brief, format, platforms, and saved creation settings. The browser’s **Open project folder** button reveals the selected files. The existing build controls work with the reopened project.
 
-Use a different name to **Review as new project** if you want to create a separate copy from the restored settings. Older projects restore data from their saved brief and platform files. The original provider and model can be restored only when the project recorded those settings. API keys stay in Admin for the current session.
+Use a different name to **Review as new project** if you want to create a separate copy from the restored settings. Older projects restore data from their saved brief and platform files. The original provider and model can be restored only when the project recorded those settings. Manage provider keys in **Admin**.
 
 **Admin → Appearance** switches between the dark and light gradients for the current session. The header uses the ivory emblem on dark and the charcoal emblem on light.
 
@@ -54,13 +54,21 @@ Copy the complete Flutter project folder to a matching host to build another tar
 ### Generate with AI
 
 1. Open **Admin** between **Your projects** and **Quit**. Choose OpenAI or Anthropic and a model. Presets include GPT-6.2 Sol, GPT-6.2 Astra, Claude Opus 5.5 and Claude Fable 5.2. **Custom model ID** accepts another model on the selected provider that supports structured output.
-2. Paste a key or choose **Import key file** to read a `.txt` file containing one key. Use **Save settings** to select that provider and model and add or replace its key. Keys are held in memory separately for each provider. Closing or reloading the browser tab, or quitting the Mac app, clears the session settings. Provider API usage is billed to your API account.
+2. Select the provider and paste its key, or choose **Import key (.txt)**. Use a UTF-8 plain-text file with just the key on one line. Click **Save settings** to add or replace that provider’s key. **Remove key** clears the selected provider’s saved credential.
 3. Under **Creation method**, choose **Generate with AI**, then **Review prompt**. Check the provider, model, selected targets and full text, or copy the prompt. **Send & create project** sends that exact text and saves the returned SwiftUI or Dart source. AppRivet reads the brief file locally and sends the reviewed text.
-4. Review the generated source before building. Generation fills one source file in a fixed project. The compiler reports any errors. Complex apps can require source fixes, additional files, or target-specific integrations.
+4. Review the generated source before building. The compiler reports any errors. Complex apps can require source fixes or target-specific integrations.
+
+AppRivet stores OpenAI and Anthropic keys separately in macOS Keychain, Windows Credential Manager, or Linux Secret Service when available. If the browser launcher displays session storage, the key is cleared when the session ends. Provider API usage is billed to your API account.
 
 The automated provider tests use mock HTTP responses. Live generation requires an API key with access to the selected model and is a separate validation step.
 
-If the provider reaches its output limit, simplify what the first version must do. A short description can still ask for more code than the model can return in one response. AppRivet rejects incomplete source and lets you revise the brief or select a different model.
+### Plan a complex app
+
+In **Generate with AI**, choose **Plan components before generating code**. AppRivet selects this workflow automatically for briefs over 4 KiB of UTF-8 text. You can select it for a short brief that still describes complex features.
+
+1. Review the planning prompts and request budget, then choose **Send to plan**. AppRivet splits very long briefs at text boundaries and synthesizes the extracted requirements into a plan. It saves the original brief in full.
+2. Check the component responsibilities and shared interfaces against your brief. Review the exact code prompt, destination file and output-token cap for each component. Approve once to send all of the displayed code prompts. Input sizes are shown in UTF-8 bytes, and output caps are upper limits for each request.
+3. Review the generated files and build the app. If a component fails, AppRivet names it and leaves the project uncreated. You can revise the brief or request a plan with smaller components.
 
 ## macOS
 
@@ -74,7 +82,7 @@ If the provider reaches its output limit, simplify what the first version must d
 
 Version 0.4.5 introduced in-app updates. In 0.4.5, open the **AppRivet** menu in the macOS menu bar while AppRivet is active and choose **Check for Updates…**. Starting in 0.4.6, the same button appears in the main window. To move from 0.4.4 or earlier, quit AppRivet and replace the copy in Applications with the download above. AppRivet also checks periodically. When a release is available, choose **Install Update**, then **Install and Relaunch** when prompted.
 
-The updater verifies the download with AppRivet’s release key before unpacking it. It replaces the app in Applications. Project folders stay where you saved them. Finish active work and copy any unsaved brief before approving a relaunch. Re-enter your provider API key in **Admin** after reopening, as with any fresh session.
+The updater verifies the download with AppRivet’s release key before unpacking it. It replaces the app in Applications. Project folders stay where you saved them. Finish active work and copy any unsaved brief before approving a relaunch. If your key was set before credential storage was added, enter it once in **Admin** and save it to the credential store.
 
 ### Set up the iOS Simulator
 

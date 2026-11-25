@@ -48,6 +48,7 @@ Usage:
   apprivet init NAME [--bundle-id com.example.app] [--brief TEXT | --brief-stdin] [--starter TYPE] [--review] [--json]
   apprivet init NAME (--brief TEXT | --brief-stdin) --provider PROVIDER --model MODEL (--review | --approve HASH) [--json]
   apprivet init NAME --format flutter --platforms ios,android,web,windows,macos,linux [--review] [--json]
+  apprivet plan (review|draft|create) --json  Read the component-generation request from stdin
   apprivet flutter-build --project PATH --target PLATFORM --trust-project [--json]
   apprivet flutter-preview --project PATH --trust-project
   apprivet inspect [--project PATH] [--form] [--json]
@@ -127,6 +128,36 @@ func (a App) Run(ctx context.Context, args []string) int {
 	}
 	if command == "worker" {
 		return a.runWorker(ctx, filtered, jsonMode)
+	}
+	if command == "plan" {
+		if a.In == nil || len(filtered) != 1 || !jsonMode {
+			return fail("invalid_arguments", "use apprivet plan review, draft or create with --json and a JSON request on stdin", 2)
+		}
+		var request generation.PlanRequest
+		decoder := json.NewDecoder(a.In)
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&request) != nil || decoder.Decode(new(any)) != io.EOF || request.APIKey != "" {
+			return fail("invalid_arguments", "provide a valid plan request and use APPRIVET_API_KEY for the provider key", 2)
+		}
+		request.APIKey = os.Getenv("APPRIVET_API_KEY")
+		ctx, cancel := planContext(ctx)
+		defer cancel()
+		var err error
+		switch filtered[0] {
+		case "review":
+			response.Data, err = generation.ReviewPlanning(request)
+		case "draft":
+			response.Data, err = generation.DraftComponents(ctx, request, generation.GenerateBudgeted)
+		case "create":
+			response.Data, err = generation.CreatePlanned(ctx, a.Dir, request, generation.GenerateBudgeted)
+		default:
+			return fail("invalid_arguments", "choose a plan action: review, draft or create", 2)
+		}
+		if err != nil {
+			response.Data = nil
+			return fail("generation_failed", err.Error(), 4)
+		}
+		return a.emit(response, jsonMode, 0)
 	}
 	if command == "install" || command == "launch" {
 		return fail("not_implemented", command+" is planned after Milestone 1; use Xcode's official device workflow", 3)

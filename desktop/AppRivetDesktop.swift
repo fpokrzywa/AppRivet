@@ -1,14 +1,16 @@
 import AppKit
 import Darwin
+import Security
 import Sparkle
 import SwiftUI
 import UniformTypeIdentifiers
 
-private enum AIProvider: String, CaseIterable, Identifiable, Hashable {
+private enum AIProvider: String, CaseIterable, Identifiable, Hashable, Sendable {
     case openai, anthropic
 
     var id: String { rawValue }
     var label: String { self == .openai ? "OpenAI" : "Anthropic" }
+    var modelPreferenceKey: String { "aiModel.\(rawValue)" }
     var models: [(id: String, label: String)] {
         switch self {
         case .openai: return [("gpt-6.2-sol", "GPT-6.2 Sol"), ("gpt-6.2-astra", "GPT-6.2 Astra")]
@@ -20,6 +22,61 @@ private enum AIProvider: String, CaseIterable, Identifiable, Hashable {
 private struct AIProfile {
     var model: String
     var key = ""
+}
+
+private func validModelID(_ value: String) -> Bool {
+    value.range(of: #"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\z"#, options: .regularExpression) != nil
+}
+
+private func validAPIKey(_ value: String) -> Bool {
+    value.range(of: #"^[A-Za-z0-9_-]{8,512}\z"#, options: .regularExpression) != nil
+}
+
+private enum ProviderKeychain {
+    private static func attributes(for provider: AIProvider) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: "io.github.fpokrzywa.apprivet.desktop.api-key",
+         kSecAttrAccount as String: provider.rawValue]
+    }
+
+    static func read(for provider: AIProvider) throws -> String? {
+        var query = attributes(for: provider)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        try check(status, action: "read", provider: provider)
+        guard let data = result as? Data, let key = String(data: data, encoding: .utf8), validAPIKey(key) else {
+            throw DesktopFailure(message: "The saved \(provider.label) key is unreadable. Replace it in Admin.")
+        }
+        return key
+    }
+
+    static func save(_ key: String, for provider: AIProvider) throws {
+        let query = attributes(for: provider)
+        let data = Data(key.utf8)
+        var item = query
+        item[kSecValueData as String] = data
+        item[kSecAttrLabel as String] = "AppRivet \(provider.label) API key"
+        var status = SecItemAdd(item as CFDictionary, nil)
+        if status == errSecDuplicateItem {
+            status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        }
+        try check(status, action: "save", provider: provider)
+    }
+
+    static func remove(for provider: AIProvider) throws {
+        let status = SecItemDelete(attributes(for: provider) as CFDictionary)
+        if status != errSecItemNotFound { try check(status, action: "remove", provider: provider) }
+    }
+
+    private static func check(_ status: OSStatus, action: String, provider: AIProvider) throws {
+        guard status == errSecSuccess else {
+            let reason = SecCopyErrorMessageString(status, nil) as String? ?? "Error \(status)."
+            throw DesktopFailure(message: "Could not \(action) the \(provider.label) key in macOS Keychain. \(reason)")
+        }
+    }
 }
 
 private let appPlatforms: [(id: String, label: String)] = [
@@ -71,9 +128,10 @@ private enum DesktopBrand {
 }
 
 @MainActor
-private func chooseTextFile(title: String, extensions: [String]) -> URL? {
+private func chooseTextFile(title: String, extensions: [String], message: String = "") -> URL? {
     let panel = NSOpenPanel()
     panel.title = title
+    panel.message = message
     panel.prompt = "Import"
     panel.canChooseDirectories = false
     panel.allowedContentTypes = extensions.compactMap { UTType(filenameExtension: $0) }
@@ -158,6 +216,15 @@ struct AppRivetDesktop: App {
             guard sharedDraft.platforms == ["web", "linux"], sharedDraft.format == "flutter",
                   sharedDraft.prompt.contains("lib/main.dart") else {
                 throw DesktopFailure(message: "The shared project review did not preserve the selected Flutter platforms.")
+            }
+            let planRequest = DesktopPlanRequest(name: "DesktopPlan", bundleID: "", brief: String(imported.prefix(13 * 1024)),
+                                                 format: "swiftui", platforms: ["ios"], provider: "anthropic", model: "claude-opus-5-5")
+            let planReview = try workflow.reviewPlan(planRequest)
+            guard planReview.usesSynthesis == true, planReview.approval.count == 64,
+                  planReview.prompts.count > 1, planReview.requestCount == planReview.prompts.count + 1,
+                  planReview.maxOutputTokens > planReview.prompts.reduce(0, { $0 + $1.maxOutputTokens }),
+                  planReview.prompts.allSatisfy({ !$0.prompt.isEmpty }) else {
+                throw DesktopFailure(message: "The local planning review did not include the expected extraction prompts and synthesis allowance.")
             }
             let draft = try workflow.review(name: "DesktopSmoke", bundleID: "org.example.apprivetdesktop", brief: imported,
                                             starter: "auto", provider: "", model: "")
@@ -247,11 +314,19 @@ private enum CompletedBuild {
     case flutter(DesktopFlutterBuild)
 }
 
+private struct DesktopPlanSession: Identifiable, Sendable {
+    let id = UUID()
+    let request: DesktopPlanRequest
+    let parent: URL
+    var review: DesktopPlanReview
+}
+
 @MainActor
 private final class DesktopModel: ObservableObject {
     @Published var name = "MyFirstApp"
     @Published var brief = ""
     @Published var starter = "blank"
+    @Published var stageShortBriefs = false
     @Published private(set) var format = ""
     @Published private(set) var projectFormats = ["swiftui"]
     @Published private(set) var checkingFormats = false
@@ -263,12 +338,12 @@ private final class DesktopModel: ObservableObject {
     @Published var selectedSimulator: String?
     @Published var trusted = false
     @Published var draft: DesktopDraft?
-    @Published private(set) var selectedProvider = AIProvider.openai
+    @Published var planSession: DesktopPlanSession?
+    @Published private(set) var selectedProvider: AIProvider
     @Published private(set) var briefMessage = ""
-    @Published private(set) var profiles: [AIProvider: AIProfile] = [
-        .openai: AIProfile(model: AIProvider.openai.models[0].id),
-        .anthropic: AIProfile(model: AIProvider.anthropic.models[0].id),
-    ]
+    @Published private(set) var profiles: [AIProvider: AIProfile]
+    @Published private(set) var loadingProviderKeys = false
+    @Published private(set) var keychainErrors: [AIProvider: String] = [:]
     @Published private(set) var project: DesktopProject?
     @Published private(set) var simulators: [DesktopSimulator] = []
     @Published private(set) var loadingSimulators = false
@@ -279,10 +354,22 @@ private final class DesktopModel: ObservableObject {
     @Published private(set) var log = ""
     @Published private(set) var completedBuild: CompletedBuild?
     private var webPreview: DesktopWebPreview?
+    private let preferences: UserDefaults
+
+    init(preferences: UserDefaults = .standard) {
+        self.preferences = preferences
+        selectedProvider = preferences.string(forKey: "aiProvider").flatMap(AIProvider.init(rawValue:)) ?? .openai
+        profiles = Dictionary(uniqueKeysWithValues: AIProvider.allCases.map { provider in
+            let saved = preferences.string(forKey: provider.modelPreferenceKey) ?? ""
+            return (provider, AIProfile(model: validModelID(saved) ? saved : provider.models[0].id))
+        })
+    }
 
     var busy: Bool { activity != nil }
     var flutterAvailable: Bool { projectFormats.contains("flutter") }
     var hasSelectedFormat: Bool { projectFormats.contains(format) }
+    var largeBrief: Bool { brief.trimmingCharacters(in: .whitespacesAndNewlines).utf8.count > 4096 }
+    var usesStagedGeneration: Bool { starter == "ai" && (largeBrief || stageShortBriefs) }
     var canCreate: Bool {
         guard hasSelectedFormat, let parent else { return false }
         let projectName = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -311,13 +398,39 @@ private final class DesktopModel: ObservableObject {
         }
     }
 
-    func saveSettings(provider: AIProvider, model: String, key: String) {
-        profiles[provider] = AIProfile(model: model, key: key.isEmpty ? profiles[provider]?.key ?? "" : key)
-        selectedProvider = provider
+    func loadProviderKeys() {
+        guard !loadingProviderKeys else { return }
+        loadingProviderKeys = true
+        Task {
+            let results = await Task.detached(priority: .userInitiated) {
+                AIProvider.allCases.map { provider -> (AIProvider, String, String?) in
+                    do { return (provider, try ProviderKeychain.read(for: provider) ?? "", nil) }
+                    catch { return (provider, "", error.localizedDescription) }
+                }
+            }.value
+            for (provider, key, error) in results {
+                profiles[provider]?.key = key
+                keychainErrors[provider] = error
+            }
+            loadingProviderKeys = false
+        }
     }
 
-    func removeKey(for provider: AIProvider) {
+    func saveSettings(provider: AIProvider, model: String, key: String) async throws {
+        if !key.isEmpty {
+            try await Task.detached(priority: .userInitiated) { try ProviderKeychain.save(key, for: provider) }.value
+            keychainErrors[provider] = nil
+        }
+        profiles[provider] = AIProfile(model: model, key: key.isEmpty ? profiles[provider]?.key ?? "" : key)
+        selectedProvider = provider
+        preferences.set(provider.rawValue, forKey: "aiProvider")
+        preferences.set(model, forKey: provider.modelPreferenceKey)
+    }
+
+    func removeKey(for provider: AIProvider) async throws {
+        try await Task.detached(priority: .userInitiated) { try ProviderKeychain.remove(for: provider) }.value
         profiles[provider]?.key = ""
+        keychainErrors[provider] = nil
     }
 
     func chooseParent() {
@@ -349,9 +462,9 @@ private final class DesktopModel: ObservableObject {
         format = settings.format
         platforms = Set(settings.platforms)
         starter = settings.starter
+        stageShortBriefs = false
         if let provider = settings.provider.flatMap(AIProvider.init(rawValue:)),
-           let model = settings.model,
-           model.range(of: #"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\z"#, options: .regularExpression) != nil {
+           let model = settings.model, validModelID(model) {
             selectedProvider = provider
             profiles[provider]?.model = model
         }
@@ -361,7 +474,7 @@ private final class DesktopModel: ObservableObject {
     }
 
     func reviewProject() {
-        guard canCreate else { return }
+        guard canCreate, let parent else { return }
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let format = self.format
         let bundleID = format == "flutter" ? "" : bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -370,26 +483,60 @@ private final class DesktopModel: ObservableObject {
         let provider = selectedProvider
         let model = profiles[provider]?.model ?? ""
         let platforms = format == "flutter" ? appPlatforms.map { $0.id }.filter { self.platforms.contains($0) } : ["ios"]
+        if usesStagedGeneration {
+            let request = DesktopPlanRequest(name: name, bundleID: bundleID, brief: brief, format: format,
+                                             platforms: platforms, provider: provider.rawValue, model: model)
+            perform("Preparing planning prompts locally…", work: { try $0.reviewPlan(request) }) {
+                self.planSession = DesktopPlanSession(request: request, parent: parent, review: $0)
+            }
+            return
+        }
         perform("Validating the app brief…", work: {
             try $0.review(name: name, bundleID: bundleID, brief: brief, starter: starter, provider: provider.rawValue, model: model,
                           format: format, platforms: platforms)
         }) { self.draft = $0 }
     }
 
-    func key(for draft: DesktopDraft) -> String? {
-        guard let provider = draft.provider.flatMap(AIProvider.init(rawValue:)),
+    func key(for providerID: String?) -> String? {
+        guard let provider = providerID.flatMap(AIProvider.init(rawValue:)),
               let key = profiles[provider]?.key, !key.isEmpty else { return nil }
         return key
     }
 
+    func missingKeyMessage(for providerID: String?) -> String {
+        if loadingProviderKeys { return "Checking macOS Keychain…" }
+        if let provider = providerID.flatMap(AIProvider.init(rawValue:)), let error = keychainErrors[provider] {
+            return "\(error) Check this provider’s key in Admin."
+        }
+        return "Add and save a key for this provider in Admin."
+    }
+
     func createProject(_ draft: DesktopDraft) {
         guard projectFormats.contains(draft.format ?? "swiftui"), let parent else { return }
-        let key = key(for: draft)
+        let key = key(for: draft.provider)
         guard !draft.isAI || key != nil else { return }
         self.draft = nil
         perform(draft.isAI ? "Waiting for the model to generate the source…" : "Creating \(draft.name)…", work: {
             try $0.create(draft: draft, parent: parent, apiKey: key)
         }, done: selectProject)
+    }
+
+    func sendPlanningRequests(_ session: DesktopPlanSession) {
+        guard session.review.plan == nil, let key = key(for: session.request.provider) else { return }
+        perform("Waiting for the model to prepare a component plan…", work: {
+            try $0.draftPlan(session.request, review: session.review, apiKey: key)
+        }) { self.planSession?.review = $0 }
+    }
+
+    func createProject(_ session: DesktopPlanSession) {
+        guard session.review.plan != nil, projectFormats.contains(session.request.format),
+              let key = key(for: session.request.provider) else { return }
+        perform("Waiting for the model to generate the approved source files…", work: {
+            try $0.createFromPlan(session.request, review: session.review, parent: session.parent, apiKey: key)
+        }) { project in
+            self.planSession = nil
+            self.selectProject(project)
+        }
     }
 
     func chooseFormat(_ format: String) {
@@ -568,9 +715,11 @@ private struct DesktopView: View {
         .frame(minWidth: 540, minHeight: 510)
         .sheet(isPresented: $showAdmin) { AdminSheet(model: model) }
         .sheet(item: $model.draft) { draft in reviewSheet(draft) }
+        .sheet(item: $model.planSession) { _ in DesktopPlanSheet(model: model) }
         .onAppear {
             if !loaded {
                 loaded = true
+                model.loadProviderKeys()
                 model.refreshProjectFormats()
                 model.refreshSimulators()
             }
@@ -673,8 +822,18 @@ private struct DesktopView: View {
                         }
                     }
                 }
+                if model.hasSelectedFormat && model.starter == "ai" {
+                    if model.largeBrief {
+                        Text("This brief will use component planning before code generation.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Toggle("Plan components before generating code", isOn: $model.stageShortBriefs)
+                            .toggleStyle(.checkbox)
+                    }
+                }
                 HStack {
-                    Button(model.project == nil ? "Review prompt" : "Review as new project", action: model.reviewProject)
+                    Button(model.usesStagedGeneration ? "Review planning requests" : (model.project == nil ? "Review prompt" : "Review as new project"),
+                           action: model.reviewProject)
                         .disabled(!model.canCreate)
                     Button("Open Project…", action: model.openProject)
                 }
@@ -802,7 +961,7 @@ private struct DesktopView: View {
 
     private func reviewSheet(_ draft: DesktopDraft) -> some View {
         let target = draft.provider.flatMap(AIProvider.init(rawValue:))?.label ?? ""
-        let ready = !draft.isAI || model.key(for: draft) != nil
+        let ready = !draft.isAI || model.key(for: draft.provider) != nil
         return VStack(alignment: .leading, spacing: 12) {
             Text("Review prompt").font(.title2.bold())
             if let modelID = draft.model {
@@ -825,7 +984,7 @@ private struct DesktopView: View {
             .frame(minHeight: 180, maxHeight: 250)
             .border(Color.secondary.opacity(0.25))
             if !ready {
-                Text("Add a key for this provider in Admin to send the prompt.")
+                Text(model.missingKeyMessage(for: draft.provider))
                     .foregroundStyle(.secondary)
             }
             HStack {
@@ -848,6 +1007,90 @@ private struct DesktopView: View {
 }
 
 @MainActor
+private struct DesktopPlanSheet: View {
+    @ObservedObject var model: DesktopModel
+
+    var body: some View {
+        if let session = model.planSession {
+            reviewSheet(session)
+                .interactiveDismissDisabled(model.busy)
+        }
+    }
+
+    private func reviewSheet(_ session: DesktopPlanSession) -> some View {
+        let review = session.review
+        let ready = model.key(for: session.request.provider) != nil
+        let target = AIProvider(rawValue: session.request.provider)?.label ?? session.request.provider
+        let generating = review.plan != nil
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(generating ? "Review component code requests" : "Review planning requests")
+                .font(.title2.bold())
+            Text("\(target) \(session.request.model) will receive these requests through your API account.")
+                .foregroundStyle(.secondary)
+            Text("\(review.requestCount) \(review.requestCount == 1 ? "request" : "requests"), up to \(review.maxOutputTokens) output tokens total.")
+            if !generating {
+                Text("After planning, you can review the exact code requests before approving them together.")
+                    .foregroundStyle(.secondary)
+            }
+            if review.usesSynthesis == true {
+                let synthesisCount = review.requestCount - review.prompts.count
+                let synthesisTokens = review.maxOutputTokens - review.prompts.reduce(0) { $0 + $1.maxOutputTokens }
+                let requests = synthesisCount == 1 ? "1 follow-up request" : "\(synthesisCount) follow-up requests"
+                Text("The plan uses \(requests) to combine the extracted requirements. Exact input depends on the extraction results. Up to \(synthesisTokens) output tokens for these requests are included in the total.")
+                    .foregroundStyle(.secondary)
+            }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    if let plan = review.plan {
+                        Text(verbatim: plan.architecture).textSelection(.enabled)
+                    }
+                    ForEach(Array(review.prompts.enumerated()), id: \.offset) { _, prompt in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(verbatim: prompt.title).font(.headline)
+                            if let file = prompt.file {
+                                Text(verbatim: file).font(.system(.subheadline, design: .monospaced))
+                                    .textSelection(.enabled)
+                            }
+                            Text("\(prompt.prompt.utf8.count) UTF-8 input bytes, up to \(prompt.maxOutputTokens) output tokens")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Text(verbatim: prompt.prompt)
+                                .font(.system(.body, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .padding(10)
+            }
+            .frame(minHeight: 220, maxHeight: 360)
+            .border(Color.secondary.opacity(0.25))
+            if let activity = model.activity {
+                ProgressView(activity)
+            }
+            if let error = model.errorMessage {
+                Text(verbatim: error).foregroundStyle(.red).textSelection(.enabled)
+            }
+            if !ready {
+                Text(model.missingKeyMessage(for: session.request.provider))
+                    .foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("Back to brief") { model.planSession = nil }
+                    .disabled(model.busy)
+                Spacer()
+                Button(generating ? "Approve all code requests & create" : "Send to plan") {
+                    if generating { model.createProject(session) } else { model.sendPlanningRequests(session) }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.busy || !ready)
+            }
+        }
+        .padding(22)
+        .frame(width: 640)
+    }
+}
+
+@MainActor
 private struct AdminSheet: View {
     @ObservedObject var model: DesktopModel
     @Environment(\.dismiss) private var dismiss
@@ -857,13 +1100,20 @@ private struct AdminSheet: View {
     @State private var custom = ""
     @State private var key = ""
     @State private var feedback = ""
+    @State private var updatingSettings = false
 
     private var hasKey: Bool { model.profiles[provider]?.key.isEmpty == false }
+    private var keyStatus: String {
+        if !feedback.isEmpty { return feedback }
+        if model.loadingProviderKeys { return "Checking macOS Keychain…" }
+        if let error = model.keychainErrors[provider] { return error }
+        return hasKey ? "Key saved in macOS Keychain." : "No key saved for this provider."
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Admin").font(.title2.bold())
-            Text("Choose the AI provider and model. API keys stay in memory for this AppRivet session.")
+            Text("Choose the AI provider and model. Save settings stores your API key in macOS Keychain.")
                 .foregroundStyle(.secondary)
             Picker("Appearance", selection: $appearance) {
                 Text("Dark").tag(WorkspaceAppearance.dark)
@@ -886,29 +1136,37 @@ private struct AdminSheet: View {
             HStack {
                 SecureField("Paste API key to add or replace", text: $key)
                     .accessibilityLabel("API key")
-                Button("Import key file", action: importKey)
+                Button("Import key (.txt)", action: importKey)
             }
-            Text(feedback.isEmpty ? (hasKey ? "Key set for this session." : "No key set for this provider.") : feedback)
+            Text("Import a UTF-8 .txt file containing only one API key for the selected provider.")
+                .font(.caption).foregroundStyle(.secondary)
+            Text(keyStatus)
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button("Remove key") {
-                    model.removeKey(for: provider)
-                    key = ""
-                    feedback = ""
+                    updateSettings {
+                        try await model.removeKey(for: provider)
+                        key = ""
+                        feedback = "Key removed from macOS Keychain."
+                    }
                 }
-                .disabled(!hasKey)
+                .disabled(model.loadingProviderKeys || (!hasKey && model.keychainErrors[provider] == nil))
                 Spacer()
                 Button("Close") { dismiss() }
                 Button("Save settings", action: save)
                     .buttonStyle(.borderedProminent)
+                    .disabled(model.loadingProviderKeys)
             }
         }
         .padding(22)
         .frame(width: 480)
+        .disabled(updatingSettings)
+        .interactiveDismissDisabled(updatingSettings)
         .onAppear {
             provider = model.selectedProvider
             appearance = model.appearance
             loadSettings()
+            if !model.keychainErrors.isEmpty { model.loadProviderKeys() }
         }
         .onChange(of: provider) { _ in loadSettings() }
     }
@@ -922,15 +1180,16 @@ private struct AdminSheet: View {
     }
 
     private func importKey() {
-        guard let url = chooseTextFile(title: "Import API key", extensions: ["txt"]) else { return }
+        guard let url = chooseTextFile(title: "Import API key", extensions: ["txt"],
+                                       message: "Select a UTF-8 .txt file containing only one \(provider.label) API key.") else { return }
         do {
             let text = try readTextFile(url, extensions: ["txt"], maxBytes: 1024).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard text.range(of: #"^[A-Za-z0-9_-]{8,512}\z"#, options: .regularExpression) != nil else {
-                feedback = "Choose a text file containing just one API key."
+            guard validAPIKey(text) else {
+                feedback = "Choose a UTF-8 .txt file containing only one API key."
                 return
             }
             key = text
-            feedback = "Key loaded. Save settings to use it."
+            feedback = "Key loaded. Save settings to keep it in macOS Keychain."
         } catch {
             feedback = error.localizedDescription
         }
@@ -939,16 +1198,30 @@ private struct AdminSheet: View {
     private func save() {
         let modelID = preset == "custom" ? custom.trimmingCharacters(in: .whitespacesAndNewlines) : preset
         let replacement = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard modelID.range(of: #"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\z"#, options: .regularExpression) != nil else {
+        guard validModelID(modelID) else {
             feedback = "Enter a valid model ID from the provider."
             return
         }
-        guard replacement.isEmpty || replacement.range(of: #"^[A-Za-z0-9_-]{8,512}\z"#, options: .regularExpression) != nil else {
+        guard replacement.isEmpty || validAPIKey(replacement) else {
             feedback = "Enter a valid API key."
             return
         }
-        model.saveSettings(provider: provider, model: modelID, key: replacement)
-        model.appearance = appearance
-        dismiss()
+        updateSettings {
+            try await model.saveSettings(provider: provider, model: modelID, key: replacement)
+            model.appearance = appearance
+            key = ""
+            dismiss()
+        }
+    }
+
+    private func updateSettings(_ action: @escaping @MainActor () async throws -> Void) {
+        guard !updatingSettings && !model.loadingProviderKeys else { return }
+        updatingSettings = true
+        feedback = "Updating settings…"
+        Task {
+            defer { updatingSettings = false }
+            do { try await action() }
+            catch { feedback = error.localizedDescription }
+        }
     }
 }

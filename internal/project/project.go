@@ -82,7 +82,7 @@ func CreateWithOptions(parent, name, bundleID string, options StarterOptions) (I
 	if err != nil {
 		return Info{}, err
 	}
-	return create(parent, draft, "", options.Starter != "" || draft.Brief != "")
+	return create(parent, draft, "", nil, options.Starter != "" || draft.Brief != "")
 }
 
 func ReviewAI(name, bundleID, brief string) (Draft, error) {
@@ -119,10 +119,16 @@ func CreateGenerated(parent string, draft Draft, source string) (Info, error) {
 		return Info{}, err
 	}
 	validated.SourceProvider, validated.SourceModel = draft.SourceProvider, draft.SourceModel
-	return create(parent, validated, source, true)
+	return create(parent, validated, source, nil, true)
 }
 
-func create(parent string, draft Draft, swiftSource string, includeStarter bool) (Info, error) {
+type swiftPart struct {
+	Name    string
+	FileID  string
+	BuildID string
+}
+
+func create(parent string, draft Draft, swiftSource string, helperSources []string, includeStarter bool) (Info, error) {
 	name := draft.Name
 	root, err := filepath.Abs(filepath.Join(parent, name))
 	if err != nil {
@@ -141,6 +147,18 @@ func create(parent string, draft Draft, swiftSource string, includeStarter bool)
 		files = append(files, struct{ src, dst string }{"APP_BRIEF.md.tmpl", "APP_BRIEF.md"})
 	}
 	files = append(files, struct{ src, dst string }{"", settingsFilename})
+	data := struct {
+		Draft
+		SwiftParts []swiftPart
+	}{Draft: draft}
+	// The scaffold's project object IDs all start with A.
+	for i := range helperSources {
+		data.SwiftParts = append(data.SwiftParts, swiftPart{
+			Name:    fmt.Sprintf("AppRivetPart%02d.swift", i+1),
+			FileID:  fmt.Sprintf("B%023X", i+1),
+			BuildID: fmt.Sprintf("C%023X", i+1),
+		})
+	}
 	// Render everything before writing. The destination is exclusively created;
 	// failures preserve any partial project for inspection rather than deleting it.
 	rendered := make([][]byte, len(files))
@@ -162,10 +180,14 @@ func create(parent string, draft Draft, swiftSource string, includeStarter bool)
 			return Info{}, err
 		}
 		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, draft); err != nil {
+		if err := tmpl.Execute(&buf, data); err != nil {
 			return Info{}, err
 		}
 		rendered[i] = buf.Bytes()
+	}
+	for i, part := range data.SwiftParts {
+		files = append(files, struct{ src, dst string }{"", name + "/" + part.Name})
+		rendered = append(rendered, []byte(helperSources[i]+"\n"))
 	}
 	if err := os.Mkdir(root, 0755); err != nil {
 		return Info{}, fmt.Errorf("create project destination (must not already exist): %w", err)

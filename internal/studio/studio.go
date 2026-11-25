@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fpokrzywa/AppRivet/internal/credentials"
 	"github.com/fpokrzywa/AppRivet/internal/generation"
 	"github.com/fpokrzywa/AppRivet/internal/project"
 )
@@ -25,20 +26,24 @@ import (
 var assets embed.FS
 
 type Config struct {
-	Host       string
-	Session    string
-	Workspace  string
-	OpenFolder func(string) error
-	Quit       func()
-	Generate   generation.SourceGenerator
+	Host             string
+	Session          string
+	Workspace        string
+	OpenFolder       func(string) error
+	Quit             func()
+	Generate         generation.SourceGenerator
+	GenerateBudgeted generation.BudgetedGenerator
+	Vault            credentials.Vault
 }
 
 type state struct {
-	Workspace       string           `json:"workspace"`
-	Projects        []string         `json:"projects"`
-	FlutterSDK      bool             `json:"flutter_sdk"`
-	ProjectFormats  []string         `json:"project_formats"`
-	FlutterProjects []flutterProject `json:"flutter_projects"`
+	Workspace         string           `json:"workspace"`
+	Projects          []string         `json:"projects"`
+	FlutterSDK        bool             `json:"flutter_sdk"`
+	ProjectFormats    []string         `json:"project_formats"`
+	FlutterProjects   []flutterProject `json:"flutter_projects"`
+	CredentialStorage bool             `json:"credential_storage"`
+	SavedKeys         []string         `json:"saved_keys"`
 }
 
 type flutterProject struct {
@@ -117,8 +122,11 @@ func Handler(config Config) http.Handler {
 			writeError(w, http.StatusInternalServerError, "Could not read your AppRivet Projects folder.")
 			return
 		}
+		inventory.CredentialStorage = config.Vault != nil
+		inventory.SavedKeys = savedProviders(config.Vault)
 		writeJSON(w, http.StatusOK, inventory)
 	})
+	registerCredentialHandlers(mux, config.Vault)
 	projectRequest := func(w http.ResponseWriter, r *http.Request) {
 		var req createRequest
 		decoder := json.NewDecoder(r.Body)
@@ -150,6 +158,10 @@ func Handler(config Config) http.Handler {
 				writeError(w, http.StatusBadRequest, "Review and approve the current prompt, provider and model first.")
 				return
 			}
+			key, ok := generationKey(w, config.Vault, draft.Provider, req.APIKey)
+			if !ok {
+				return
+			}
 			if err := ensureWorkspace(config.Workspace); err != nil {
 				writeError(w, http.StatusInternalServerError, "Could not create your AppRivet Projects folder.")
 				return
@@ -159,9 +171,9 @@ func Handler(config Config) http.Handler {
 				timeout += 5 * time.Minute
 			}
 			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(timeout))
-			info, err := generation.Create(r.Context(), config.Workspace, draft, req.Approval, req.APIKey, config.Generate)
+			info, err := generation.Create(r.Context(), config.Workspace, draft, req.Approval, key, config.Generate)
 			if err != nil {
-				writeError(w, http.StatusBadRequest, err.Error())
+				writeGenerationError(w, err, key)
 				return
 			}
 			writeJSON(w, http.StatusCreated, info)
@@ -195,6 +207,76 @@ func Handler(config Config) http.Handler {
 	}
 	mux.HandleFunc("POST /api/review", projectRequest)
 	mux.HandleFunc("POST /api/create", projectRequest)
+	planRequest := func(w http.ResponseWriter, r *http.Request) {
+		var req generation.PlanRequest
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF {
+			writeError(w, http.StatusBadRequest, "Enter a valid component plan request.")
+			return
+		}
+		switch r.URL.Path {
+		case "/api/plan/review", "/api/plan/draft":
+			review, err := generation.ReviewPlanning(req)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			if r.URL.Path == "/api/plan/draft" {
+				if !approveComponentCall(w, req.Approval, review.Approval) {
+					return
+				}
+				key, ok := generationKey(w, config.Vault, req.Provider, req.APIKey)
+				if !ok {
+					return
+				}
+				req.APIKey = key
+				_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(time.Duration(review.RequestCount)*generation.RequestTimeout + time.Minute))
+				review, err = generation.DraftComponents(r.Context(), req, config.GenerateBudgeted)
+				if err != nil {
+					writeGenerationError(w, err, key)
+					return
+				}
+			}
+			writeJSON(w, http.StatusOK, review)
+		case "/api/plan/create":
+			if req.Plan == nil {
+				writeError(w, http.StatusBadRequest, "Review and approve a component plan first.")
+				return
+			}
+			review, err := generation.ReviewComponents(req)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			if !approveComponentCall(w, req.Approval, review.Approval) {
+				return
+			}
+			key, ok := generationKey(w, config.Vault, req.Provider, req.APIKey)
+			if !ok {
+				return
+			}
+			req.APIKey = key
+			if err := ensureWorkspace(config.Workspace); err != nil {
+				writeError(w, http.StatusInternalServerError, "Could not create your AppRivet Projects folder.")
+				return
+			}
+			timeout := time.Duration(review.RequestCount)*generation.RequestTimeout + time.Minute
+			if req.Format == "flutter" {
+				timeout += 5 * time.Minute
+			}
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(timeout))
+			info, err := generation.CreatePlanned(r.Context(), config.Workspace, req, config.GenerateBudgeted)
+			if err != nil {
+				writeGenerationError(w, err, key)
+				return
+			}
+			writeJSON(w, http.StatusCreated, info)
+		}
+	}
+	mux.HandleFunc("POST /api/plan/review", planRequest)
+	mux.HandleFunc("POST /api/plan/draft", planRequest)
+	mux.HandleFunc("POST /api/plan/create", planRequest)
 	projectPath := func(name string) (string, error) {
 		if _, err := project.Review(name, "com.example."+strings.ToLower(name), project.StarterOptions{}); err != nil || checkWorkspace(config.Workspace) != nil {
 			return "", errors.New("Choose a project in your AppRivet Projects folder.")
