@@ -1,5 +1,9 @@
 # Verification record
 
+## AppRivet 0.4.15 Windows preview
+
+All six release CI jobs passed. The Windows package passed a second local launcher smoke test, and its public download matched the staged ZIP by SHA-256. Chrome verified the compact browser layout at desktop and narrow widths, both themes, long-brief import and local planning review, SDK detection, project reopening, and Publish. Apple accepted the Mac packages, and the generated iOS sample compiled. The notarized app's separate Simulator smoke test timed out at `simctl launch`. The published Mac installer and update feed remain on 0.4.14. [Release CI](https://github.com/fpokrzywa/AppRivet/actions/runs/45756643750) · [Mac release attempt](https://github.com/fpokrzywa/AppRivet/actions/runs/45756655929) · [Windows preview](https://github.com/fpokrzywa/AppRivet/releases/tag/v0.4.15)
+
 ## AppRivet 0.4.14 release
 
 All six CI jobs passed on the 0.4.14 release commit. Apple accepted the Mac app and disk image, and the notarized app passed its Simulator smoke test. The public downloads matched the staged packages by SHA-256, and the updater archive verified against AppRivet's public update key. The native review dialog and a live provider run with the watchmaker brief remain personal Mac checks. [Release CI](https://github.com/fpokrzywa/AppRivet/actions/runs/45718521873) and [notarized release check](https://github.com/fpokrzywa/AppRivet/actions/runs/45718543017).

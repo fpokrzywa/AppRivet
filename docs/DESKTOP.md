@@ -10,9 +10,11 @@ The Windows and Linux launchers target x86-64 desktop machines. They open AppRiv
 
 ### Install on Windows
 
-1. Download **AppRivet-Windows.zip**. [AppRivet 0.4.14 Windows ZIP](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.14/AppRivet-Windows.zip)
+1. Download **AppRivet-Windows.zip**. [AppRivet 0.4.15 Windows ZIP](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.15/AppRivet-Windows.zip)
 2. Right-click the downloaded ZIP and select **Extract All**.
 3. Double-click **AppRivet.exe**. The browser opens your local workspace.
+
+The previous Windows ZIP is available from the 0.4.14 desktop release. [AppRivet 0.4.14 Windows ZIP](https://github.com/fpokrzywa/AppRivet/releases/download/v0.4.14/AppRivet-Windows.zip)
 
 ### Install on Linux
 
