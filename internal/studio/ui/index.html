@@ -12,14 +12,14 @@
       <div class="brand"><img id="brand-mark" class="brand-mark" src="/apprivet-mark-light.png" alt=""><span>AppRivet</span></div>
       <nav class="top-actions" aria-label="Workspace">
         <button id="go-projects" type="button" class="quiet">Your projects</button>
-        <button id="open-admin" type="button" class="quiet" disabled>Settings</button>
+        <button id="open-admin" type="button" class="quiet" disabled>Admin</button>
         <button id="quit" type="button" class="quiet" disabled>Quit</button>
       </nav>
     </div>
   </header>
   <main class="shell">
     <section id="create-intro" class="intro" aria-labelledby="create-heading">
-      <h1 id="create-heading">What app do you<br class="wide-break"> want to build?</h1>
+      <h1 id="create-heading">What app do you want to build?</h1>
       <p>Describe your app and choose the platforms it should run on.</p>
     </section>
     <noscript><p class="notice">Enable JavaScript and reopen AppRivet to create a project.</p></noscript>
@@ -32,48 +32,27 @@
               <button id="import-brief" type="button" class="quiet" aria-describedby="brief-help">Import brief</button>
               <input id="brief-file" type="file" accept=".txt,.md,.markdown" hidden>
             </div>
-            <p class="field-help" id="brief-help">What should it do, and what should it remember? You can import a text or Markdown file.</p>
             <textarea id="brief" name="brief" rows="5" aria-describedby="brief-help" placeholder="A packing checklist for weekend trips. I want to add items, check them off, and keep the list when I reopen the app."></textarea>
-            <div class="examples" aria-label="Example app ideas">
-              <span>Try an example</span>
-              <button type="button" data-example="checklist">Packing checklist</button>
-              <button type="button" data-example="notes">Field notes</button>
-              <button type="button" data-example="counter">Rep counter</button>
+            <p class="field-help" id="brief-help">Describe what the app should do, or import a text or Markdown file.</p>
+            <div class="brief-meta">
+              <details class="examples">
+                <summary>Try an example</summary>
+                <div class="example-actions">
+                  <button type="button" data-example="checklist" class="quiet">Packing checklist</button>
+                  <button type="button" data-example="notes" class="quiet">Field notes</button>
+                  <button type="button" data-example="counter" class="quiet">Rep counter</button>
+                </div>
+              </details>
               <span id="brief-count" class="count" aria-hidden="true">0 characters</span>
             </div>
             <p id="import-status" class="message" role="status"></p>
           </div>
           <div class="project-fields">
-            <div>
-              <label for="name">Project name</label>
-              <input id="name" name="name" placeholder="MyFirstApp" required maxlength="50" pattern="[A-Za-z][A-Za-z0-9]{0,49}" aria-describedby="name-help" spellcheck="false">
-              <p class="field-help" id="name-help">Start with a letter. Use letters and numbers.</p>
-            </div>
-            <div id="creation-method-settings" hidden>
-              <label for="starter">Creation method</label>
-              <select id="starter" name="starter">
-                <option value="ai" selected>Generate with AI</option>
-                <optgroup label="Offline starters">
-                  <option value="auto">Offline starter from brief</option>
-                  <option value="checklist">Checklist</option>
-                  <option value="notes">Notes</option>
-                  <option value="counter">Counter</option>
-                  <option value="blank">Blank</option>
-                </optgroup>
-              </select>
-              <p id="selected-model" class="field-help"></p>
-              <div id="generation-settings" hidden>
-                <label class="trust-project"><input id="plan-components" type="checkbox" aria-describedby="generation-help"> Plan components before generating code</label>
-                <p id="generation-help" class="field-help"></p>
-              </div>
-            </div>
-          </div>
-          <div class="platform-settings">
-            <div id="format-settings" hidden>
+            <div id="format-settings" class="form-row" hidden>
               <label for="format">Project format</label>
               <select id="format" name="format"></select>
             </div>
-            <p id="flutter-sdk-help" class="field-help" hidden>Install the <a href="https://docs.flutter.dev/install/manual" target="_blank" rel="noopener noreferrer">Flutter SDK</a> to enable Flutter projects. Reopen AppRivet if you changed your Path. <button id="check-sdk" type="button" class="quiet">Check again</button></p>
+            <p id="flutter-sdk-help" class="field-help" role="status" hidden>Install the <a href="https://docs.flutter.dev/install/manual" target="_blank" rel="noopener noreferrer">Flutter SDK</a> to enable Flutter projects. Reopen AppRivet if you changed your Path. <button id="check-sdk" type="button" class="quiet">Check again</button></p>
             <fieldset id="platform-settings" hidden>
               <legend>App platforms</legend>
               <div class="platform-options">
@@ -85,12 +64,35 @@
                 <label><input type="checkbox" name="platform" value="linux"> Linux</label>
               </div>
             </fieldset>
+            <div id="creation-method-settings" hidden>
+              <div class="form-row">
+                <label for="starter">Creation method</label>
+                <select id="starter" name="starter" aria-describedby="selected-model">
+                  <option value="ai" selected>Generate with AI</option>
+                  <optgroup label="Offline starters">
+                    <option value="auto">Offline starter from brief</option>
+                    <option value="checklist">Checklist</option>
+                    <option value="notes">Notes</option>
+                    <option value="counter">Rep counter</option>
+                    <option value="blank">Blank</option>
+                  </optgroup>
+                </select>
+              </div>
+              <p id="selected-model" class="field-help form-note"></p>
+            </div>
+            <div class="form-row">
+              <label for="name">App name</label>
+              <input id="name" name="name" placeholder="MyFirstApp" required maxlength="50" pattern="[A-Za-z][A-Za-z0-9]{0,49}" title="Start with a letter. Use letters and numbers." spellcheck="false">
+            </div>
+            <div id="bundle-settings" class="form-row" hidden>
+              <label for="bundle">Bundle ID</label>
+              <input id="bundle" name="bundle" placeholder="Optional" maxlength="255" spellcheck="false">
+            </div>
+            <div id="generation-settings" hidden>
+              <label class="trust-project"><input id="plan-components" type="checkbox" aria-describedby="generation-help"> Plan components before generating code</label>
+              <p id="generation-help" class="field-help"></p>
+            </div>
           </div>
-          <details id="bundle-settings" class="advanced" hidden>
-            <summary>Bundle ID</summary>
-            <label for="bundle">Custom bundle ID <span class="muted">(optional)</span></label>
-            <input id="bundle" name="bundle" placeholder="com.example.myfirstapp" maxlength="255" spellcheck="false">
-          </details>
           <div class="form-footer">
             <button id="submit" type="submit" class="primary" disabled>Review prompt</button>
             <button id="generate-from-starter" type="button" class="quiet" hidden>Generate a new project from this brief</button>
@@ -128,38 +130,23 @@
           <ul id="publish-artifacts"></ul>
         </section>
       </section>
-      <aside class="sidebar" aria-label="Starter and project information">
-        <section id="starter-panel" class="starter-panel panel" aria-labelledby="starter-heading" hidden>
-          <h2 id="starter-heading">Project output</h2>
-          <p id="starter-title" class="starter-name"></p>
-          <p id="starter-copy" class="starter-copy"></p>
-          <div class="starter-files">
-            <div><strong id="output-title"></strong><span id="output-source"></span></div>
-            <div><strong>APP_BRIEF.md</strong><span>Included when you write a description</span></div>
-          </div>
-        </section>
-        <section class="projects panel" aria-labelledby="projects-heading">
-          <div class="projects-header">
-            <h2 id="projects-heading" tabindex="-1">Your projects</h2>
-            <button id="folder" type="button" class="quiet" disabled>Open Projects Folder</button>
-          </div>
-          <p id="workspace-path" class="workspace-path"></p>
-          <p id="project-instructions" class="field-help" hidden>Select a project name to reopen it.</p>
-          <ul id="projects" aria-label="Generated projects"></ul>
-          <p id="empty" class="muted">Projects you create will appear here.</p>
-        </section>
-        <section id="build-panel" class="next-step" aria-labelledby="run-heading" hidden>
-          <h2 id="run-heading">Build your app</h2>
-          <p id="run-copy">Pick a build target beside a saved project. Targets that require another host use the same project folder.</p>
-        </section>
-      </aside>
+      <section class="projects panel" aria-labelledby="projects-heading">
+        <div class="projects-header">
+          <h2 id="projects-heading" tabindex="-1">Your projects</h2>
+          <button id="folder" type="button" class="quiet" disabled>Open Projects Folder</button>
+        </div>
+        <p id="workspace-path" class="workspace-path"></p>
+        <p id="project-instructions" class="field-help" hidden>Select a project name to reopen it.</p>
+        <ul id="projects" aria-label="Generated projects"></ul>
+        <p id="empty" class="muted">Projects you create will appear here.</p>
+      </section>
     </div>
   </main>
   <footer class="app-version"><!-- APP_VERSION --></footer>
   <dialog id="admin" class="panel dialog" aria-labelledby="admin-heading">
     <form id="admin-form">
       <div class="settings-header">
-        <h2 id="admin-heading">Settings</h2>
+        <h2 id="admin-heading">Admin</h2>
         <button id="admin-open-stores" class="quiet" type="button">Store connections</button>
       </div>
       <p id="credential-storage" class="dialog-info"></p>

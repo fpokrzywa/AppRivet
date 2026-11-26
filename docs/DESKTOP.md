@@ -32,7 +32,7 @@ Click a project name under **Your projects** in the browser. On macOS, choose **
 
 For a project marked as an offline starter, choose **Generate a new project from this brief** to keep your description and create a separate AI project. AppRivet suggests a new name, which you can edit. Build and Run compiles the selected project's saved source. Older projects restore data from their saved brief and platform files. AppRivet restores the original provider and model when the project recorded them.
 
-**Settings → Appearance** in the browser and **Admin → Appearance** on Mac switch between the dark and light gradients for the current session. The header uses the ivory emblem on dark and the charcoal emblem on light.
+**Admin → Appearance** switches between the dark and light gradients for the current session. The header uses the ivory emblem on dark and the charcoal emblem on light. In the 0.4.14 Windows and Linux launchers, the **Admin** button is labeled **Settings**.
 
 ### One Flutter project, selected platforms
 
@@ -55,7 +55,7 @@ Copy the complete Flutter project folder to a matching host to build another tar
 
 ### Build for Store
 
-1. Open **Settings** in the browser or **Admin** on Mac, then **Store Connections**. For iOS signing, save your Apple Developer Team ID. For Android, save the SHA-256 fingerprint of your upload certificate.
+1. Open **Admin**, then **Store Connections**. For iOS signing, save your Apple Developer Team ID. For Android, save the SHA-256 fingerprint of your upload certificate.
 2. Open a project and choose **Publish**. Select iOS or Android, review the signing setup, and confirm that you trust the project’s build scripts. **Build for Store** prepares a local package and records its SHA-256 in the project’s release history.
 3. Reveal the signed package from **Publish**. Upload it through the store console when ready.
 
@@ -74,7 +74,7 @@ Only identifiers and signing fingerprints go in the local settings file. Store c
 
 ### Generate with AI
 
-1. Open **Settings** in the browser or **Admin** on Mac. Choose OpenAI or Anthropic and a model. Presets include GPT-6.2 Sol, GPT-6.2 Astra, Claude Opus 5.5 and Claude Fable 5.2. **Custom model ID** accepts another model on the selected provider that supports structured output.
+1. Open **Admin**. Choose OpenAI or Anthropic and a model. Presets include GPT-6.2 Sol, GPT-6.2 Astra, Claude Opus 5.5 and Claude Fable 5.2. **Custom model ID** accepts another model on the selected provider that supports structured output.
 2. Select the provider and paste its key, or choose **Import key (.txt)**. Use a UTF-8 plain-text file with just the key on one line. Click **Save settings** to add or replace that provider’s key. **Remove key** clears the selected provider’s saved credential.
 3. Keep **Generate with AI** under **Creation method** and choose **Review planning requests**. For a simple brief, you can turn off component planning and choose **Review AI prompt**. Check the provider, model, selected targets and full text. **Send & generate project** sends the approved single prompt and saves the returned SwiftUI or Dart source.
 4. Review the generated source before building. The compiler reports any errors. Complex apps can require source fixes or target-specific integrations.

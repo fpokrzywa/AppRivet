@@ -123,14 +123,6 @@ function hasProviderKey(id) {
   return savedKeys.has(id) || Boolean(profiles[id].key);
 }
 
-const starters = {
-  ai: ["AI-generated SwiftUI", "A model writes the app’s SwiftUI source from your brief. Review the source before building in Xcode."],
-  auto: ["Offline starter from brief", "Pick a checklist, saved note or counter template. Other ideas start with a blank SwiftUI screen."],
-  checklist: ["Checklist", "Add items, check them off, and swipe to delete. Items are saved on the device."],
-  notes: ["Notes", "Start with a note editor that saves your text on the device."],
-  counter: ["Counter", "Add, subtract or reset a saved count."],
-  blank: ["Blank", "Start with a SwiftUI screen you can extend in Xcode."],
-};
 const examples = {
   checklist: ["TripPack", "A packing checklist for weekend trips. I want to add items, check them off, and keep the list when I reopen the app."],
   notes: ["FieldNotes", "A notes app for jotting down observations on walks. Keep my note when I reopen the app."],
@@ -151,28 +143,12 @@ function updateBrief() {
   planComponents.checked = needsComponentPlan || preferComponentPlan;
   updateLoadedProject();
   byID("generation-help").textContent = needsComponentPlan
-    ? "Descriptions over 4,096 UTF-8 bytes use component planning."
-    : "Review a component plan before sending the code prompts.";
+    ? "This brief will use component planning before code generation."
+    : "";
   if (!format.value) return;
-  const isFlutter = format.value === "flutter";
-  const [title, description] = isFlutter
-    ? ai
-      ? ["AI-generated Flutter", "The selected model writes shared Dart code for the platforms you checked."]
-      : ["Offline Flutter starter", "A template screen and build files for the platforms you checked."]
-    : starters[starter.value];
-  byID("starter-title").textContent = title;
-  byID("starter-copy").textContent = description;
-  byID("output-title").textContent = isFlutter ? "Flutter project" : "Xcode project";
-  byID("output-source").textContent = isFlutter
-    ? ai && planComponents.checked ? "Shared Dart code in lib/" : "Shared Dart code in lib/main.dart"
-    : "Editable SwiftUI source";
-  byID("run-heading").textContent = isFlutter ? "Build your app" : "Run in Simulator";
-  byID("run-copy").textContent = isFlutter
-    ? "Pick a build target beside a saved project. Targets that require another host use the same project folder."
-    : "On your Mac, open the project in AppRivet and choose Build & Run.";
   const settings = profiles[activeProvider];
   byID("selected-model").textContent = ai
-    ? providers[activeProvider].name + " · " + settings.model + (hasProviderKey(activeProvider) ? "" : " · Add a key in Settings")
+    ? providers[activeProvider].name + " · " + settings.model + (hasProviderKey(activeProvider) ? "" : " · Add a key in Admin")
     : "Offline starters use template code. Choose Generate with AI to implement your brief.";
 }
 
@@ -195,8 +171,6 @@ function updateFormat() {
   byID("platform-settings").hidden = !isFlutter;
   byID("bundle-settings").hidden = format.value !== "swiftui";
   byID("creation-method-settings").hidden = !format.value;
-  byID("starter-panel").hidden = !format.value;
-  byID("build-panel").hidden = !format.value;
   for (const name of ["auto", "checklist", "notes", "counter"]) {
     starter.querySelector('option[value="' + name + '"]').hidden = isFlutter;
   }
@@ -617,7 +591,7 @@ function showStoreSettings(settings) {
 
 async function openStoreSettings(fromAdmin) {
   if (storeSettingsBusy || storeSettings.open || (fromAdmin && adminFields.disabled)) return;
-  byID("close-store-settings").textContent = fromAdmin ? "Back to Settings" : "Close";
+  byID("close-store-settings").textContent = fromAdmin ? "Back to Admin" : "Close";
   savedStoreSettings = undefined;
   storeSettingsBusy = true;
   byID("store-credential-storage").textContent = "";
@@ -847,6 +821,7 @@ for (const button of document.querySelectorAll("[data-example]")) {
     brief.value = sampleBrief;
     if (format.value !== "flutter" && starter.value !== "ai") starter.value = button.dataset.example;
     show(importStatus, "");
+    button.closest("details").open = false;
     updateBrief();
     brief.focus();
   });
@@ -1010,7 +985,7 @@ form.addEventListener("submit", async event => {
         + "). Approval sends " + (staged ? "the requests for this step" : "this prompt") + " using your API account."
       : "This project uses an offline template. Your brief is saved with the project.") + platforms;
     const blocker = isFlutter && !flutterSDK ? "Install the Flutter SDK before creating this project."
-      : ai && !hasProviderKey(project.provider) ? "Add a key for this provider in Settings before sending." : "";
+      : ai && !hasProviderKey(project.provider) ? "Add a key for this provider in Admin before sending." : "";
     confirmCreate.disabled = Boolean(blocker);
     show(reviewStatus, blocker, confirmCreate.disabled);
     show(message, "");
